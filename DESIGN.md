@@ -1,10 +1,11 @@
 # Dungeon-Keeper — Game Design Document
 
-**Version:** 0.8 (Draft)
+**Version:** 0.9 (Draft)
 **Date:** October 2026
 **Status:** Pre-production — open for revision
 
 **Changelog**
+- **0.9** — Added layout philosophy (§5.6): open caverns vs. guided hallways as equal first-class choices, with per-layout counters, trap taxonomy, and layout-blind scoring.
 - **0.8** — Added frontstage/backstage zoning (§5.5): Keeper's Seal doors, delve-route overlay, breaches as emergency gameplay, Heart placement doctrine.
 - **0.7** — Rescoped to a single-floor beta (§15): all systems on Floor 1, solo hero delves, champion-tier endgame; multi-floor, parties, and the raid move to post-beta.
 - **0.6** — Locked product direction (§1.1): PC/Steam, hardcore sim audience, solo developer, passion project, emergent story, single-player 1.0.
@@ -73,6 +74,8 @@ The core tension: convert stocks into flows before the stocks run out — while 
 | Heat | Faster forges, lava moats | Cooks mushroom farms, exhausts minions; must be vented or deliberately routed |
 | Themed decor & coherence | Efficiency, morale, hero dread, renown | Costs gold/labor; restricts object choice; the Director sends theme counters |
 | Backstage sealing (Keeper's Seal doors, zoning) | Farms and Heart stay safe; heroes stay on the ride | Doors + space cost; imperfect seals leak; sappers exist |
+| Open-area layout | Flanking, dynamic fights, exploration variety | Heroes bypass traps; flow hard to control; needs patrol coverage |
+| Guided-hallway layout | Trap efficiency, predictable flow, easy theming | Sappers/AoE counter it; less dynamic; one breach unzips the line |
 
 **Push/pull inversions:** the best moments come when a push becomes a pull through clever engineering — miasma routed into gas traps, forge heat feeding a lava moat, prisoners working the mines. Reward players who turn costs into weapons. Design systems so these inversions are *discoverable*, not documented.
 
@@ -222,6 +225,33 @@ The dungeon is vertical. Floors are discrete levels joined by stairs, shafts, an
 
 **The Dungeon Heart** sits in its chamber at the end of the ride, behind the boss arena — the final room of the dungeon, MMO-style. To even *see* the Heart, a hero must survive everything you built. If the Heart is destroyed, the game ends (§10) — so its approach is the most important level design in your dungeon: layered seals, guard posts, your best traps, and a boss who does not miss twice.
 
+### 5.6 Layout Philosophy: Open Caverns vs. Guided Halls
+
+**Both are first-class. You build what you want.**
+
+Some Keepers carve vast open caverns where heroes roam, choose routes, and get swarmed. Others build tight guided hallways that force every hero down the same gauntlet. The game doesn't pick for you — it makes both work, and judges both fairly.
+
+**Open-area dungeons**
+- Big caverns, multiple routes, room to maneuver — for heroes *and* your minions.
+- Defense is about **area control**: guard posts as patrol hubs, alarm totems, intercepting warbands, open-field traps (pit traps, gas clouds, rolling boulders).
+- Strengths: dynamic fights, flanking, exploration variety (scores well on Adventure Quality *variety*).
+- Weaknesses: heroes bypass traps and pick their fights; flow is hard to control.
+
+**Guided-hallway dungeons**
+- Linear corridors, chokepoints, forced paths — the classic gauntlet.
+- Defense is about **holding the line**: spike strips, boulder chutes, kill-boxes, layered seals.
+- Strengths: trap efficiency, predictable flow, easy per-section theming.
+- Weaknesses: sappers, burrowers, and AoE punish linearity; less dynamic; a single breach unzips the whole line.
+
+**The game supports both:**
+- **Trap taxonomy** splits corridor types (spike strips, boulder chutes) and area types (pit traps, gas clouds) — neither layout starves.
+- **Guard AI** adapts per guard post: station-and-hold in hallways, patrol-and-intercept in open ground.
+- **The Director counters both**: sappers and AoE against hallway turtles; skirmishers and ranged heroes against open caverns.
+- **The delve-route overlay** renders flow *fields* in open areas (likely paths as heat) and single lines in hallways.
+- **Adventure Quality is layout-blind**: tension, variety, climax, and mercy score in either. Open dungeons earn their points on variety; guided dungeons earn them on tension.
+
+**The meta is hybrid.** The best dungeons will mix both: a guided entrance gauntlet opening into a grand arena, a themed hallway feeding a boss chamber. Frontstage/backstage zoning (§5.5) works in either — backstage is backstage whether it's behind a sealed door or across a dark cavern.
+
 ---
 
 ## 6. Simulation Systems (the ONI half)
@@ -302,7 +332,7 @@ Here's the twist that makes the game: **the heroes are players, and you're their
 
 ## 8. Traps & Defenses
 
-- **Spike pits, boulder traps, poison-gas vents** (plumb miasma into them!), **lava moats** (route forge heat!), **sentry idols** (mana-powered), **fear totems** (break hero morale — heroes have morale too).
+- **Spike pits, boulder traps, poison-gas vents** (plumb miasma into them!), **lava moats** (route forge heat!), **sentry idols** (mana-powered), **fear totems** (break hero morale — heroes have morale too). Traps split into corridor types (spike strips, boulder chutes) and area types (pit traps, gas clouds) — see §5.6.
 - **Doors:** wooden → iron → magic-sealed. Doors buy time; time lets defenders arrive. **Keeper's Seal** doors are minion-only — heroes can't pass (sappers excepted, slowly and loudly). They're how the farm stays backstage (§5.5).
 - **Trap maintenance:** traps need rearming by imps — a spent boulder trap is just decor. This ties defense back into the job-priority economy.
 - **Kill-box design** is the endgame creative expression: the perfect gauntlet of gas, spikes, and warlocks is *art*. Stairs and shafts between floors are the premium trap real estate in the game — see §5.3.

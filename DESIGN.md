@@ -1,10 +1,11 @@
 # Dungeon-Keeper — Game Design Document
 
-**Version:** 0.4 (Draft)
+**Version:** 0.5 (Draft)
 **Date:** October 2026
 **Status:** Pre-production — open for revision
 
 **Changelog**
+- **0.5** — Added theming & coherence bonuses (§5.4): tag-based judging, tiered rewards, fusion combos; theme counters feed the Director.
 - **0.4** — Added the Fun Doctrine (§7.4): heroes as players, Adventure Quality scoring, renown & traffic, house styles, recurring hero cast. The Director (§17.2) now optimizes for drama, not slaughter.
 - **0.3** — Added multi-floor dungeon structure (§5.3): Floor 1 for single adventures, mid floors for higher-level/multi-party delves, Floor 4 as a 10-person raid with a player-designed floor boss.
 - **0.2** — Added the Push & Pull design law (§2.1), AI-driven direction (§17), Unity technical direction (§18).
@@ -58,6 +59,7 @@ The core tension: convert stocks into flows before the stocks run out — while 
 | Digging deeper | Richer veins, relics, space | Miasma pockets, heat, longer haul routes, stronger heroes, sealed horrors |
 | Miasma | *Weaponizable* — plumb it into gas traps; plague-imps thrive in it | Sickens minions, withers farms; venting is ongoing labor |
 | Heat | Faster forges, lava moats | Cooks mushroom farms, exhausts minions; must be vented or deliberately routed |
+| Themed decor & coherence | Efficiency, morale, hero dread, renown | Costs gold/labor; restricts object choice; the Director sends theme counters |
 
 **Push/pull inversions:** the best moments come when a push becomes a pull through clever engineering — miasma routed into gas traps, forge heat feeding a lava moat, prisoners working the mines. Reward players who turn costs into weapons. Design systems so these inversions are *discoverable*, not documented.
 
@@ -159,6 +161,31 @@ The dungeon is vertical. Floors are discrete levels joined by stairs, shafts, an
 - **Rising hazards:** miasma and heat rise. Deep floors run hotter and more toxic by default; ventilation must be engineered *upward* — the deeper you go, the harder the air is to breathe.
 - **Pacing:** Heart levels gate floor unlocks (§9). Each new floor is a soft reset of the colony loop — new space, new resources, new upkeep — while hero pressure never stops scaling.
 
+### 5.4 Theming: Coherence Bonuses
+
+**Principle:** a dungeon with a strong identity is more than the sum of its rooms. Fire, ice, nature, death, shadow, arcane — when a section commits to a theme, everything in it works better. Minions are inspired, traps hit harder, and heroes *feel* it (dread is a mechanic).
+
+**How theming is judged** — tag-based coherence, fully data-driven:
+
+1. **Everything placeable carries theme weights.** A magma vent is {fire: 3}; a frost rune {ice: 3}; a bone chandelier {death: 2, fire: 1}; moss carpeting {nature: 2}. Weights are designer-tuned data, not code — easy to balance, easy to mod.
+2. **Each room, section, or floor declares a theme** — or the game auto-detects it from the dominant tag. Declared themes are a commitment; auto-detect is the casual path.
+3. **Coherence score** = matching-theme weight ÷ total theme weight in the section, minus **dissonance** penalties for opposed pairs (fire×ice, holy×death).
+4. **Tier thresholds** grant escalating bonuses:
+   - *Themed* (60%+) — minor efficiency and morale boost.
+   - *Immersive* (80%+) — strong boost; heroes suffer dread while inside.
+   - *Paragon* (95%+) — legendary bonus plus renown; the Mentor names the section ("The Burning Deeps").
+5. **Fusions reward mastery.** Deliberate opposed pairings unlock crossover effects instead of penalties when built intentionally: fire+ice = *steam vents* (concealment), nature+death = *rotbloom* (heals undead, poisons heroes), shadow+arcane = *whispering dark* (hero confusion). The judge recognizes specific pairs — a combo system hiding inside the penalty system, waiting for advanced players to find it.
+
+**Bonuses cohere with everything else:**
+- Minions with matching affinity (fire imps in fire rooms) gain loyalty and work speed.
+- Theme-matched traps hit harder and cost less to rearm.
+- Heroes take a dread penalty in Immersive+ sections (feeds the morale mechanic).
+- Themed sections score heavily on Adventure Quality *variety* (§7.4) and generate renown — heroes tell stories about *places*, not corridors.
+
+**The push:** themed decor costs gold and builder labor, and committing to a theme restricts what fits — every brazier in the ice palace is a choice. And the Director notices: it starts sending fire-warded heroes against your beloved Burning Deeps. Counter-play is the sincerest form of flattery.
+
+**Starter theme set:** Fire, Ice, Nature, Death, Shadow, Arcane. (Holy exists only as a corruption target — desecrating it is the point.)
+
 ---
 
 ## 6. Simulation Systems (the ONI half)
@@ -218,7 +245,7 @@ Here's the twist that makes the game: **the heroes are players, and you're their
 
 **Adventure Quality.** The Director scores every delve on drama, not body count:
 - *Tension & release* — close fights, HP swings, narrow escapes.
-- *Variety* — traps triggered, rooms seen, mechanics experienced.
+- *Variety* — traps triggered, rooms seen, mechanics experienced. Themed sections (§5.4) score heavily here — heroes remember *places*.
 - *Climax* — the boss fight should be the story's peak, win or lose.
 - *Mercy* — did the party get a chance to retreat with their lives?
 

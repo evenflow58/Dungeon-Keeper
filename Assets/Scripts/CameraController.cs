@@ -196,16 +196,7 @@ public class CameraController : MonoBehaviour
 
         if (Mathf.Abs(scroll.y) > 0.01f)
         {
-            float rawY = scroll.y;
-            float scrollTicks;
-            if (Mathf.Abs(rawY) >= 30f)
-            {
-                scrollTicks = rawY / 120f;
-            }
-            else
-            {
-                scrollTicks = Mathf.Sign(rawY) * Mathf.Max(1f, Mathf.Abs(rawY));
-            }
+            float scrollTicks = scroll.y / 120f;
 
             // Exponential / percentage zoom is responsive and intuitive across all zoom levels
             float zoomFactor = Mathf.Pow(1.25f, -scrollTicks * (zoomSpeed * 0.75f));

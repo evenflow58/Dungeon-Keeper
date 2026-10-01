@@ -1,10 +1,11 @@
 # Dungeon-Keeper — Game Design Document
 
-**Version:** 0.3 (Draft)
+**Version:** 0.4 (Draft)
 **Date:** October 2026
 **Status:** Pre-production — open for revision
 
 **Changelog**
+- **0.4** — Added the Fun Doctrine (§7.4): heroes as players, Adventure Quality scoring, renown & traffic, house styles, recurring hero cast. The Director (§17.2) now optimizes for drama, not slaughter.
 - **0.3** — Added multi-floor dungeon structure (§5.3): Floor 1 for single adventures, mid floors for higher-level/multi-party delves, Floor 4 as a 10-person raid with a player-designed floor boss.
 - **0.2** — Added the Push & Pull design law (§2.1), AI-driven direction (§17), Unity technical direction (§18).
 - **0.1** — Initial draft.
@@ -28,6 +29,7 @@ A dungeon management sim fused with a colony base-builder. You are the Keeper: c
 3. **Greed invites ruin.** Digging deeper yields richer veins — gold, gems, ancient relics — but releases miasma, wakes buried things, and draws stronger heroes. Every expansion is a gamble.
 4. **Every defense tells a story.** Traps, choke points, kill-boxes, and ambushes are the player's creative expression. No two dungeons fall the same way.
 5. **Nothing is free.** Every system has a push and a pull — see §2.1. If it doesn't ask for something back, it's unfinished.
+6. **Heroes are players, not targets.** Design for their fun — drama, close calls, memorable bosses — not just their deaths. A dungeon nobody survives is a dungeon nobody visits. (See §7.4.)
 
 ### 2.1 The First Law: Every System Has a Push and a Pull
 
@@ -210,6 +212,27 @@ Knock heroes out (torture chamber, knockout gas) instead of killing them:
 - **Ransom** them back for gold,
 - or put them to work in the mines and hope the guards stay awake.
 
+### 7.4 The Fun Doctrine: Design for Delight, Not Just Death
+
+Here's the twist that makes the game: **the heroes are players, and you're their game master.** The goal isn't to kill every hero that shows up — it's to give them a great dungeon. Like an MMO dungeon, the best runs are challenging, dramatic, and memorable — not a meat grinder at the entrance. Some heroes will die, and that's fine. It might even be exactly what you want. But a dungeon that kills everyone at the door is a *failed* dungeon: no stories, no returning challengers, no legend.
+
+**Adventure Quality.** The Director scores every delve on drama, not body count:
+- *Tension & release* — close fights, HP swings, narrow escapes.
+- *Variety* — traps triggered, rooms seen, mechanics experienced.
+- *Climax* — the boss fight should be the story's peak, win or lose.
+- *Mercy* — did the party get a chance to retreat with their lives?
+
+**Renown & traffic (the push/pull).** Surviving heroes spread tales. A dungeon famous as *fair but deadly* draws ambitious, well-geared parties — more loot, more souls, more glorious fights. A pure slaughterhouse earns dread: traffic dries up, and whoever still comes is desperate, undergeared, or suicidal. Killing everyone is profitable tonight and starving next month. You manage your reputation the way you manage your gold.
+
+**House style.** Set per-floor intent and the dungeon behaves accordingly:
+- *Gauntlet* — balanced challenge. Minions fight to win; traps wound and kill in fair measure.
+- *Theater* — dramatic and survivable. Traps maim more than kill, minions accept surrenders, bosses monologue. Built for stories.
+- *Abattoir* — maximum lethality. For when you need souls *now*. Your renown will pay for it.
+
+**Recurring cast.** Heroes who survive level up — and remember. The fighter you spared on Floor 1 returns leading the raid on Floor 4 with a counter for your favorite trap. Mercy is a long-term strategy with a short-term cost, which is exactly the kind of decision this game is about.
+
+**Mercy mechanics:** ransoming or releasing captives boosts renown; sacrificing them yields souls now at a renown cost. The Torture Chamber isn't just evil — it's *marketing spend*.
+
 ---
 
 ## 8. Traps & Defenses
@@ -301,6 +324,8 @@ The Threat Meter is a **director**, not a timer — *Left 4 Dead*-style. It read
 - After a crushing player defeat, it eases off — dramatic, not punishing.
 
 The director is the purest expression of push & pull: whatever you underfeed becomes the thing that kills you.
+
+The Director's objective function is **drama, not slaughter**. It composes raids to maximize Adventure Quality (§7.4): parties scaled for close fights, pacing tuned for tension and release, and renown effects that reward dungeons heroes *enjoy* dying in. A total party kill in the entrance corridor is scored as a failure — boring for everyone, including you.
 
 ### 17.3 Generative layer — the dungeon that talks back (stretch)
 

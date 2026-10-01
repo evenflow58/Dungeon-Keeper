@@ -1,8 +1,12 @@
 # Dungeon-Keeper — Game Design Document
 
-**Version:** 0.1 (Draft)
+**Version:** 0.2 (Draft)
 **Date:** October 2026
 **Status:** Pre-production — open for revision
+
+**Changelog**
+- **0.2** — Added the Push & Pull design law (§2.1), AI-driven direction (§17), Unity technical direction (§18).
+- **0.1** — Initial draft.
 
 ---
 
@@ -22,6 +26,37 @@ A dungeon management sim fused with a colony base-builder. You are the Keeper: c
 2. **Monsters are people too (terrible people).** Minions have needs, moods, and breaking points. A starving troll is a liability, not an asset. Neglect is the real enemy.
 3. **Greed invites ruin.** Digging deeper yields richer veins — gold, gems, ancient relics — but releases miasma, wakes buried things, and draws stronger heroes. Every expansion is a gamble.
 4. **Every defense tells a story.** Traps, choke points, kill-boxes, and ambushes are the player's creative expression. No two dungeons fall the same way.
+5. **Nothing is free.** Every system has a push and a pull — see §2.1. If it doesn't ask for something back, it's unfinished.
+
+### 2.1 The First Law: Every System Has a Push and a Pull
+
+Nothing in the dungeon is free. Every benefit (**pull**) demands ongoing upkeep (**push**): worker time, a consumable resource, space, or risk. This is the *Oxygen Not Included* half of the game's soul — the dungeon is a machine you must keep feeding, and neglect is the real enemy.
+
+Resources fall into two classes:
+
+- **Stocks (non-renewable):** gold veins, gem seams, aquifers, sealed relics. They deplete. Expansion is a treadmill — you keep digging because the old veins run dry.
+- **Flows (renewable at a labor cost):** food, mana, souls, clean air. They never run out on their own, but every unit costs minion-hours — and minion-hours are the scarcest resource in the game.
+
+The core tension: convert stocks into flows before the stocks run out — while heroes arrive on a schedule set by your infamy, not your readiness.
+
+| System | Pull (benefit) | Push (upkeep / cost) |
+|---|---|---|
+| Dungeon Heart | Powers conduits, unlocks depth tiers, radiates dread | Must be fed souls regularly; a starved Heart causes conduit brownouts and minion panic |
+| Soul conduits | Deliver mana anywhere in the dungeon | Mana must be generated (prayer time, sacrifices); conduits leak and decay — imps must maintain them; overloads burst spectacularly |
+| Prayer (cultists) | Steady, safe mana income | Consumes minion work-hours; cultists need food, rest, and faith upkeep |
+| Ichor / water | Farms, forges, traps | Aquifers drain (stock!); pumps need tending; pipes leak and flood rooms |
+| Mushroom farms | Renewable food | Need water + darkness + fertilizer + farmer labor; blight risk where miasma seeps |
+| Meat / ranching | High-quality food (big morale) | Beetles eat and need space; heroes-as-livestock need guards and food |
+| Gold veins | Wealth for pay, building, research | Non-renewable; deeper veins mean miasma, heat, and threat; hauling eats labor |
+| Minions | Labor + defense | Every mouth eats, sleeps, and wants paying; crowding tanks loyalty |
+| Traps | Kill heroes cheaply | Rearming is imp labor; ammo is consumable (boulders, gas canisters) |
+| Prisoners | Labor, conversion, sacrifice | Need guards and food; escape risk; torture noise disturbs nearby lairs |
+| Research | Unlocks everything late-game | Researcher time; libraries need quiet and dark; advanced tiers demand relics |
+| Digging deeper | Richer veins, relics, space | Miasma pockets, heat, longer haul routes, stronger heroes, sealed horrors |
+| Miasma | *Weaponizable* — plumb it into gas traps; plague-imps thrive in it | Sickens minions, withers farms; venting is ongoing labor |
+| Heat | Faster forges, lava moats | Cooks mushroom farms, exhausts minions; must be vented or deliberately routed |
+
+**Push/pull inversions:** the best moments come when a push becomes a pull through clever engineering — miasma routed into gas traps, forge heat feeding a lava moat, prisoners working the mines. Reward players who turn costs into weapons. Design systems so these inversions are *discoverable*, not documented.
 
 ---
 
@@ -217,13 +252,50 @@ The dungeon needs a voice: a sarcastic, ancient narrator in the spirit of the or
 
 ---
 
-## 16. Open Questions
+## 17. AI-Driven Direction
 
-1. Engine: Godot vs Unity? (Godot keeps it lean and open.)
-2. Real-time with pause vs tick-based sim?
-3. How smart should hero AI be — scripted parties or dynamic planners?
-4. Multiplayer: shared dungeon co-op, or versus (one player raids as heroes)?
-5. Art pipeline: hand-drawn tiles vs procedural decoration?
+"AI-driven" means three layers, in priority order. The first two ship with the game; the third is a stretch goal.
+
+### 17.1 Simulation AI — the living dungeon (core)
+
+Minions and heroes run on **utility-based AI**: every agent continuously scores its needs, fears, and opportunities, then acts on the highest-scoring option. No scripts — a hungry orc standing between a bakery and a battlefield *chooses*, and you live with its choice.
+
+- **Minions:** needs (food, rest, loyalty, faith) + the job board + personality weights (brave/cowardly, gluttonous, devout, lazy). Behavior should be legible — the player can see *why* the troll is eating the beetles (because it's starving, and you knew that).
+- **Heroes:** role-based party planners. Scouts probe defenses and retreat; assault parties exploit what scouts learned (unmanned traps get disarmed, weak flanks get hit); wounded heroes flee and *report back*, making the next raid smarter.
+
+### 17.2 The AI Director — adaptive opposition
+
+The Threat Meter is a **director**, not a timer — *Left 4 Dead*-style. It reads live sim state (troop composition, trap coverage, which systems you're neglecting) and composes raids to exploit gaps, pacing tension and release:
+
+- Turtled behind spike traps? It sends sappers and burrowers.
+- Starved your warlocks? It sends wizards.
+- After a crushing player defeat, it eases off — dramatic, not punishing.
+
+The director is the purest expression of push & pull: whatever you underfeed becomes the thing that kills you.
+
+### 17.3 Generative layer — the dungeon that talks back (stretch)
+
+- **The Mentor, generated:** contextual narration of live events in the Mentor's voice — sacrifices, breaches, triumphs, and especially your incompetence. Ships with an authored line bank as fallback; generated lines pass a tone filter.
+- **Procedural identities:** heroes with names, titles, and grudges — *"Sir Aldric of the Vale — his brother was sacrificed in your Temple."* The overworld issues bounties and ultimatums that react to what you've actually done.
+- **Hard constraint:** the game runs fully offline. Every generative feature ships with a deterministic fallback. No cloud dependency in the critical path.
+
+## 18. Technical Direction
+
+- **Engine: Unity (decided).** C# across the board.
+- **World representation:** Unity Tilemaps for the dig/build grid; 2D lights plus a custom gloom pass for the light/darkness interplay.
+- **Simulation:** fixed-timestep sim decoupled from rendering — required for pause/speed controls. Deterministic tick for save/load and replays.
+- **Scale planning:** if agent counts strain per-frame updates, migrate hot paths to DOTS/ECS. Design systems data-oriented from the start to keep that door open.
+- **AI stack:** authored utility AI + the director ship with the game. Unity ML-Agents is reserved as an R&D experiment (e.g., training raider parties against player dungeons) — never a dependency.
+- **Saves:** versioned JSON snapshots of sim state; keep them human-inspectable for debugging.
+
+## 19. Open Questions
+
+1. ~~Engine~~ — **Unity, decided Oct 2026.**
+2. Sim granularity: individual needs per minion from day one, or abstracted crowds early with per-agent detail unlocked by scale?
+3. Hero AI: utility planners vs GOAP — prototype both before committing?
+4. Generative Mentor: is any cloud dependency acceptable, or local-only models?
+5. ML-Agents: worth the training overhead, or do authored systems carry the AI fantasy on their own?
+6. Multiplayer: co-op dungeon vs hero-raider versus — or neither for 1.0?
 
 ---
 

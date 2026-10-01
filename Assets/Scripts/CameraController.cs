@@ -55,8 +55,7 @@ public class CameraController : MonoBehaviour
 
     private void Awake()
     {
-        cam = GetComponent<Camera>();
-        if (cam == null) cam = Camera.main;
+        cam = GetComponent<Camera>() ?? Camera.main;
 
         if (cam != null)
         {
@@ -71,7 +70,7 @@ public class CameraController : MonoBehaviour
 
     private void OnEnable()
     {
-        if (wasdAction == null) CreateInputActions();
+        CreateInputActions();
         wasdAction?.Enable();
         arrowsAction?.Enable();
         middleDragAction?.Enable();
@@ -129,7 +128,7 @@ public class CameraController : MonoBehaviour
 
     private void Start()
     {
-        if (cam == null) cam = GetComponent<Camera>();
+        cam ??= GetComponent<Camera>();
 
         cam.orthographic = true;
         cam.transparencySortMode = TransparencySortMode.CustomAxis;
@@ -296,7 +295,7 @@ public class CameraController : MonoBehaviour
 
     public void UpdateCameraTransform()
     {
-        if (cam == null) cam = GetComponent<Camera>();
+        cam ??= GetComponent<Camera>();
         if (cam == null) return;
 
         // Orthographic, pitched pitchAngle degrees around X axis
@@ -397,7 +396,7 @@ public class CameraController : MonoBehaviour
     private void OnValidate()
     {
         pitchAngle = Mathf.Clamp(pitchAngle, 5f, 85f);
-        if (cam == null) cam = GetComponent<Camera>();
+        cam ??= GetComponent<Camera>();
         if (cam != null && !Application.isPlaying)
         {
             ComputeBaseOrthographicSize();

@@ -1,10 +1,11 @@
 # Dungeon-Keeper — Game Design Document
 
-**Version:** 0.7 (Draft)
+**Version:** 0.8 (Draft)
 **Date:** October 2026
 **Status:** Pre-production — open for revision
 
 **Changelog**
+- **0.8** — Added frontstage/backstage zoning (§5.5): Keeper's Seal doors, delve-route overlay, breaches as emergency gameplay, Heart placement doctrine.
 - **0.7** — Rescoped to a single-floor beta (§15): all systems on Floor 1, solo hero delves, champion-tier endgame; multi-floor, parties, and the raid move to post-beta.
 - **0.6** — Locked product direction (§1.1): PC/Steam, hardcore sim audience, solo developer, passion project, emergent story, single-player 1.0.
 - **0.5** — Added theming & coherence bonuses (§5.4): tag-based judging, tiered rewards, fusion combos; theme counters feed the Director.
@@ -71,6 +72,7 @@ The core tension: convert stocks into flows before the stocks run out — while 
 | Miasma | *Weaponizable* — plumb it into gas traps; plague-imps thrive in it | Sickens minions, withers farms; venting is ongoing labor |
 | Heat | Faster forges, lava moats | Cooks mushroom farms, exhausts minions; must be vented or deliberately routed |
 | Themed decor & coherence | Efficiency, morale, hero dread, renown | Costs gold/labor; restricts object choice; the Director sends theme counters |
+| Backstage sealing (Keeper's Seal doors, zoning) | Farms and Heart stay safe; heroes stay on the ride | Doors + space cost; imperfect seals leak; sappers exist |
 
 **Push/pull inversions:** the best moments come when a push becomes a pull through clever engineering — miasma routed into gas traps, forge heat feeding a lava moat, prisoners working the mines. Reward players who turn costs into weapons. Design systems so these inversions are *discoverable*, not documented.
 
@@ -199,6 +201,27 @@ The dungeon is vertical. Floors are discrete levels joined by stairs, shafts, an
 
 **Starter theme set:** Fire, Ice, Nature, Death, Shadow, Arcane. (Holy exists only as a corruption target — desecrating it is the point.)
 
+### 5.5 Frontstage and Backstage: Zoning the Dungeon
+
+**The problem:** your mushroom farm feeds your orcs, but a hero with a sword turns it into a salad bar. Your Dungeon Heart ends the game if it breaks. And yet heroes need a path to the boss — a great adventure, not a locked-door simulator.
+
+**The answer is zoning — think theme park.** Every dungeon has two layers:
+
+- **Frontstage (the ride):** entrance → trap gauntlet → arenas → boss → (behind the boss) the Heart chamber. This is the adventure path. Heroes walk it, fight through it, and tell stories about it.
+- **Backstage (the machine):** farms, lairs, workshops, treasury, barracks. Heroes should never see these rooms. Minions live here.
+
+**How you enforce it:**
+- **Keeper's Seal doors** (new door type, §8) — your minions pass freely; heroes cannot, period. Sappers and siege-class heroes can breach them, but slowly and loudly. You'll know.
+- **Layout funneling** — corridors, chokepoints, and locked doors shape the delve route. Level design *is* the solution: you are literally designing the ride.
+- **Delve-route overlay** (UI, §14) — the game predicts and shows the hero path from entrance to boss, so you design around it instead of guessing. If the overlay shows heroes walking through your farm, that's on you.
+
+**Breaches are a feature, not a bug.** Seals aren't perfect and heroes aren't stupid:
+- Scouts can spot service doors; sappers breach them; a panicked, fleeing hero might slip through a door your imp left propped open.
+- A rogue loose in the mushroom farm is an *emergency*, not a failure: alarms sound, guards respond, imps panic. Drama — recoverable, unless you ignored every warning.
+- The push/pull: perfect sealing costs doors, space, and labor. Every shortcut you take is a breach waiting to happen.
+
+**The Dungeon Heart** sits in its chamber at the end of the ride, behind the boss arena — the final room of the dungeon, MMO-style. To even *see* the Heart, a hero must survive everything you built. If the Heart is destroyed, the game ends (§10) — so its approach is the most important level design in your dungeon: layered seals, guard posts, your best traps, and a boss who does not miss twice.
+
 ---
 
 ## 6. Simulation Systems (the ONI half)
@@ -280,7 +303,7 @@ Here's the twist that makes the game: **the heroes are players, and you're their
 ## 8. Traps & Defenses
 
 - **Spike pits, boulder traps, poison-gas vents** (plumb miasma into them!), **lava moats** (route forge heat!), **sentry idols** (mana-powered), **fear totems** (break hero morale — heroes have morale too).
-- **Doors:** wooden → iron → magic-sealed. Doors buy time; time lets defenders arrive.
+- **Doors:** wooden → iron → magic-sealed. Doors buy time; time lets defenders arrive. **Keeper's Seal** doors are minion-only — heroes can't pass (sappers excepted, slowly and loudly). They're how the farm stays backstage (§5.5).
 - **Trap maintenance:** traps need rearming by imps — a spent boulder trap is just decor. This ties defense back into the job-priority economy.
 - **Kill-box design** is the endgame creative expression: the perfect gauntlet of gas, spikes, and warlocks is *art*. Stairs and shafts between floors are the premium trap real estate in the game — see §5.3.
 
@@ -296,7 +319,7 @@ Here's the twist that makes the game: **the heroes are players, and you're their
 
 ## 10. Win / Loss
 
-- **Loss:** the Dungeon Heart is destroyed. Minions scatter, the dark goes quiet. (Classic.)
+- **Loss:** the Dungeon Heart is destroyed. Minions scatter, the dark goes quiet. (Classic.) The Heart waits behind the boss arena (§5.5) — anything that reaches it has survived your whole dungeon, and earned the attempt.
 - **Beta:** no formal win condition — sandbox survival against escalating champion-tier heroes. The Heart's survival time and depth of development are the score.
 - **Campaign win (post-beta):** complete scenario objectives — e.g., corrupt the kingdom's capital, slay the Hero Guild's Grandmaster, or survive and corrupt the 10-person raid on the deepest floor.
 - **Sandbox:** endless escalation. Your score is how deep you got and how long the Heart kept beating.
@@ -332,6 +355,7 @@ The dungeon needs a voice: a sarcastic, ancient narrator in the spirit of the or
 - **Priority screen** (ONI-style) for job management.
 - **Alert system** with camera jump: miasma leak, starving minions, breached door, Heart under attack.
 - **Threat meter** always visible — the sword of Damocles should hang in plain sight.
+- **Delve-route overlay** — predicted hero path from entrance to boss (§5.5). Design the ride; don't guess it.
 
 ---
 

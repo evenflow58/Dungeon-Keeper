@@ -1,10 +1,11 @@
 # Dungeon-Keeper — Game Design Document
 
-**Version:** 0.2 (Draft)
+**Version:** 0.3 (Draft)
 **Date:** October 2026
 **Status:** Pre-production — open for revision
 
 **Changelog**
+- **0.3** — Added multi-floor dungeon structure (§5.3): Floor 1 for single adventures, mid floors for higher-level/multi-party delves, Floor 4 as a 10-person raid with a player-designed floor boss.
 - **0.2** — Added the Push & Pull design law (§2.1), AI-driven direction (§17), Unity technical direction (§18).
 - **0.1** — Initial draft.
 
@@ -130,6 +131,32 @@ ONI-style priority system, adapted:
 
 **Room efficiency** depends on size, shape, adjacency bonuses (Temple near Heart, Workshop near Treasury), and decor — evil banners, bone chandeliers, flayed-hero tapestries raise minion morale and *dread* intruders.
 
+### 5.3 The Deep Delve: Multi-Floor Structure
+
+The dungeon is vertical. Floors are discrete levels joined by stairs, shafts, and guarded chokepoints — each with its own character, economy, and threat profile. Digging down isn't just "more dungeon"; it's founding a new colony level, with its own upkeep. Depth multiplies everything: wealth, danger, and the grocery bill.
+
+**Floor 1 — The Threshold** (tutorial & early game)
+- Tuned for a **single adventure at a time**: solo adventurers and small parties.
+- Holds the essentials: entrance, trap gauntlet, guard post, basic lair / hatchery / treasury.
+- Hero tiers 1–2. Losing ground here stings; it isn't fatal.
+
+**Floors 2–3 — The Deeps** (mid game)
+- Tuned for **higher-level parties and multiple simultaneous adventures** — two or three hero parties can be inside the dungeon at once, on different floors, and each one needs an answer.
+- Themed per floor: e.g., Floor 2 — fungal farms and miasma works; Floor 3 — magma forges and lava moats.
+- Demands **floor-local infrastructure**: hauling food and stone down three floors is ruinous. Build local farms, lairs, and workshops on each floor — or engineer vertical logistics (dumbwaiter shafts, imp relay stations), each with its own costs. The push/pull, now vertical.
+
+**Floor 4 — The Throne Below** (endgame)
+- Tuned for the **10-person raid**: a full MMO-style raid party — tanks, healers, DPS — with raid mechanics: phases, adds, enrage timers.
+- The player designs a **floor boss**: promote a veteran minion to Boss, build its arena, choose its mechanics (summon adds, lava phases, fear auras). The boss is the centerpiece of the floor — feed it, gear it, give it a dramatic entrance.
+- The Dungeon Heart beats here. The raid's objective: kill the boss, smash the Heart.
+
+**Verticality systems**
+- **Chokepoints:** stairs and shafts are the best trap real estate in the game. A shaft lined with gas vents and a boulder at the top is a strategy, not a hallway.
+- **Logistics:** imp hauling slows with depth. Answer with local production or infrastructure — both cost.
+- **No skipping:** heroes must fight floor by floor; they can't tunnel straight to the Heart. Defense in depth, literally.
+- **Rising hazards:** miasma and heat rise. Deep floors run hotter and more toxic by default; ventilation must be engineered *upward* — the deeper you go, the harder the air is to breathe.
+- **Pacing:** Heart levels gate floor unlocks (§9). Each new floor is a soft reset of the colony loop — new space, new resources, new upkeep — while hero pressure never stops scaling.
+
 ---
 
 ## 6. Simulation Systems (the ONI half)
@@ -172,6 +199,8 @@ Everything you do is *noticed*: gold hoarded, heroes slain, depth dug, villagers
 
 Heroes pathfind toward the Dungeon Heart, looting the Treasury and freeing prisoners along the way. Wounded heroes retreat — and *report back*, making the next raid smarter.
 
+Hero tiers map to dungeon floors (§5.3): tiers 1–2 haunt Floor 1, tier 3 pushes into Floors 2–3 (often several parties at once), and the endgame is the 10-person raid descending on Floor 4.
+
 ### 7.3 Prisoners
 
 Knock heroes out (torture chamber, knockout gas) instead of killing them:
@@ -188,7 +217,7 @@ Knock heroes out (torture chamber, knockout gas) instead of killing them:
 - **Spike pits, boulder traps, poison-gas vents** (plumb miasma into them!), **lava moats** (route forge heat!), **sentry idols** (mana-powered), **fear totems** (break hero morale — heroes have morale too).
 - **Doors:** wooden → iron → magic-sealed. Doors buy time; time lets defenders arrive.
 - **Trap maintenance:** traps need rearming by imps — a spent boulder trap is just decor. This ties defense back into the job-priority economy.
-- **Kill-box design** is the endgame creative expression: the perfect gauntlet of gas, spikes, and warlocks is *art*.
+- **Kill-box design** is the endgame creative expression: the perfect gauntlet of gas, spikes, and warlocks is *art*. Stairs and shafts between floors are the premium trap real estate in the game — see §5.3.
 
 ---
 
@@ -203,7 +232,7 @@ Knock heroes out (torture chamber, knockout gas) instead of killing them:
 ## 10. Win / Loss
 
 - **Loss:** the Dungeon Heart is destroyed. Minions scatter, the dark goes quiet. (Classic.)
-- **Campaign win:** complete scenario objectives — e.g., corrupt the kingdom's capital, slay the Hero Guild's Grandmaster.
+- **Campaign win:** complete scenario objectives — e.g., corrupt the kingdom's capital, slay the Hero Guild's Grandmaster, or survive and corrupt the 10-person raid on the deepest floor.
 - **Sandbox:** endless escalation. Your score is how deep you got and how long the Heart kept beating.
 
 ---

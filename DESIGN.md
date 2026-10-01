@@ -1,10 +1,11 @@
 # Dungeon-Keeper — Game Design Document
 
-**Version:** 0.5 (Draft)
+**Version:** 0.6 (Draft)
 **Date:** October 2026
 **Status:** Pre-production — open for revision
 
 **Changelog**
+- **0.6** — Locked product direction (§1.1): PC/Steam, hardcore sim audience, solo developer, passion project, emergent story, single-player 1.0.
 - **0.5** — Added theming & coherence bonuses (§5.4): tag-based judging, tiered rewards, fusion combos; theme counters feed the Director.
 - **0.4** — Added the Fun Doctrine (§7.4): heroes as players, Adventure Quality scoring, renown & traffic, house styles, recurring hero cast. The Director (§17.2) now optimizes for drama, not slaughter.
 - **0.3** — Added multi-floor dungeon structure (§5.3): Floor 1 for single adventures, mid floors for higher-level/multi-party delves, Floor 4 as a 10-person raid with a player-designed floor boss.
@@ -20,6 +21,15 @@ A dungeon management sim fused with a colony base-builder. You are the Keeper: c
 **One-line pitch:** *Oxygen Not Included* meets *Dungeon Keeper*: run a dungeon like a colony, defend it like a fortress.
 
 **Fantasy:** You are a disembodied evil will bound to a Dungeon Heart. You never swing the sword yourself — you dig the chamber the sword is forged in, feed the smith who forges it, and make sure no hero ever reaches the Heart.
+
+### 1.1 Product Direction
+
+- **Platform: PC, Steam release.** Mouse-first UI with keyboard shortcuts for power users. No gamepad-first compromises, no mobile port on the roadmap.
+- **Audience: hardcore management/colony-sim fans** — the ONI / Dwarf Fortress / RimWorld crowd. Expect a steep-but-fair learning curve and respect the player's intelligence: deep systems, full transparency (overlays for everything), tutorials that teach without handholding.
+- **Team: single developer.** Scope discipline is a survival trait. Every system must be deep *and* implementable by one person — which means: data-driven over bespoke (tags, weights, tables — see §5.4), no feature that needs custom code without earning it, and mod support as a force multiplier so players can build what one dev can't.
+- **Business model: passion project.** No monetization design, no live-service hooks, no F2P mechanics. Steam is for reach and the Workshop, not revenue optimization.
+- **Story: minimal and emergent.** No authored campaign narrative — the player's dungeon *is* the story. The Mentor provides flavor and commentary, not plot. Scenario objectives give structure; the drama comes from the sim.
+- **Multiplayer: single-player for 1.0, decided.** No netcode, no co-op, no versus. Revisit only if 1.0 finds its people.
 
 ---
 
@@ -289,7 +299,7 @@ Here's the twist that makes the game: **the heroes are players, and you're their
 
 ## 11. Game Modes
 
-- **Campaign** — handcrafted scenarios teaching systems layer by layer, with story beats and the Mentor's commentary.
+- **Campaign** — handcrafted scenarios teaching systems layer by layer, with objectives and the Mentor's commentary. No authored narrative: the dungeon is the story.
 - **Sandbox** — full systems, endless, configurable difficulty and threat pacing.
 - *(Stretch)* **Possession mode** — classic DK: jump into a minion and fight first-hand.
 
@@ -328,6 +338,7 @@ The dungeon needs a voice: a sarcastic, ancient narrator in the spirit of the or
 
 ### Explicit Non-Goals (for now)
 - 3D graphics, mobile port, fully voiced Mentor.
+- Multiplayer/netcode of any kind (single-player 1.0, decided).
 
 ---
 
@@ -376,7 +387,8 @@ The Director's objective function is **drama, not slaughter**. It composes raids
 3. Hero AI: utility planners vs GOAP — prototype both before committing?
 4. Generative Mentor: is any cloud dependency acceptable, or local-only models?
 5. ML-Agents: worth the training overhead, or do authored systems carry the AI fantasy on their own?
-6. Multiplayer: co-op dungeon vs hero-raider versus — or neither for 1.0?
+6. ~~Multiplayer~~ — **single-player for 1.0, decided Oct 2026.**
+7. Steam Workshop mod support at launch or post-launch? (Data-driven design in §5.4 makes this cheap — but solo-dev time is still solo-dev time.)
 
 ---
 

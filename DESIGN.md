@@ -1,10 +1,11 @@
 # Dungeon-Keeper — Game Design Document
 
-**Version:** 0.6 (Draft)
+**Version:** 0.7 (Draft)
 **Date:** October 2026
 **Status:** Pre-production — open for revision
 
 **Changelog**
+- **0.7** — Rescoped to a single-floor beta (§15): all systems on Floor 1, solo hero delves, champion-tier endgame; multi-floor, parties, and the raid move to post-beta.
 - **0.6** — Locked product direction (§1.1): PC/Steam, hardcore sim audience, solo developer, passion project, emergent story, single-player 1.0.
 - **0.5** — Added theming & coherence bonuses (§5.4): tag-based judging, tiered rewards, fusion combos; theme counters feed the Director.
 - **0.4** — Added the Fun Doctrine (§7.4): heroes as players, Adventure Quality scoring, renown & traffic, house styles, recurring hero cast. The Director (§17.2) now optimizes for drama, not slaughter.
@@ -147,6 +148,8 @@ ONI-style priority system, adapted:
 
 ### 5.3 The Deep Delve: Multi-Floor Structure
 
+> **Post-beta.** The beta ships Floor 1 only — see §15. Everything below is the expansion roadmap, designed now so the beta's architecture doesn't block it.
+
 The dungeon is vertical. Floors are discrete levels joined by stairs, shafts, and guarded chokepoints — each with its own character, economy, and threat profile. Digging down isn't just "more dungeon"; it's founding a new colony level, with its own upkeep. Depth multiplies everything: wealth, danger, and the grocery bill.
 
 **Floor 1 — The Threshold** (tutorial & early game)
@@ -240,6 +243,8 @@ Heroes pathfind toward the Dungeon Heart, looting the Treasury and freeing priso
 
 Hero tiers map to dungeon floors (§5.3): tiers 1–2 haunt Floor 1, tier 3 pushes into Floors 2–3 (often several parties at once), and the endgame is the 10-person raid descending on Floor 4.
 
+**Beta scope:** solo delves only — one hero at a time, tiers 1–2, escalating to champion-tier solo heroes (named, brutal, single combatants) as the beta endgame. Parties, simultaneous multi-party delves, and the raid are post-beta (§15).
+
 ### 7.3 Prisoners
 
 Knock heroes out (torture chamber, knockout gas) instead of killing them:
@@ -284,7 +289,7 @@ Here's the twist that makes the game: **the heroes are players, and you're their
 ## 9. Research & Progression
 
 - **Library tech tree** branches: Architecture (bigger/better rooms), Traps, Dark Rituals, Creature Lore (attract advanced minions), Necromancy (late-game).
-- **Dungeon Heart levels:** feed the Heart souls and gems to level it up. Each level unlocks a depth tier, new rooms, and a chunk of max mana — and makes your infamy spike. The Heart is visible on the map; heroes can *feel* it.
+- **Dungeon Heart levels:** feed the Heart souls and gems to level it up. Each level unlocks new rooms and raises max mana — and, post-beta, new depth tiers (§5.3). Leveling the Heart spikes your infamy. The Heart is visible on the map; heroes can *feel* it.
 - **Relics:** sealed chambers sometimes hold artifacts (the Crown of Teeth, the Bell That Hungers) with dungeon-wide effects and… side effects.
 
 ---
@@ -292,14 +297,16 @@ Here's the twist that makes the game: **the heroes are players, and you're their
 ## 10. Win / Loss
 
 - **Loss:** the Dungeon Heart is destroyed. Minions scatter, the dark goes quiet. (Classic.)
-- **Campaign win:** complete scenario objectives — e.g., corrupt the kingdom's capital, slay the Hero Guild's Grandmaster, or survive and corrupt the 10-person raid on the deepest floor.
+- **Beta:** no formal win condition — sandbox survival against escalating champion-tier heroes. The Heart's survival time and depth of development are the score.
+- **Campaign win (post-beta):** complete scenario objectives — e.g., corrupt the kingdom's capital, slay the Hero Guild's Grandmaster, or survive and corrupt the 10-person raid on the deepest floor.
 - **Sandbox:** endless escalation. Your score is how deep you got and how long the Heart kept beating.
 
 ---
 
 ## 11. Game Modes
 
-- **Campaign** — handcrafted scenarios teaching systems layer by layer, with objectives and the Mentor's commentary. No authored narrative: the dungeon is the story.
+- **Tutorial + Sandbox (beta)** — teach the systems, then turn the player loose on Floor 1 with endless escalating delves.
+- **Campaign (post-beta)** — handcrafted scenarios teaching systems layer by layer, with objectives and the Mentor's commentary. No authored narrative: the dungeon is the story.
 - **Sandbox** — full systems, endless, configurable difficulty and threat pacing.
 - *(Stretch)* **Possession mode** — classic DK: jump into a minion and fight first-hand.
 
@@ -330,11 +337,31 @@ The dungeon needs a voice: a sarcastic, ancient narrator in the spirit of the or
 
 ## 15. Scope
 
-### MVP (vertical slice → early access)
-- Dig / claim / build; 6 minion types; needs (food, rest, loyalty); 8 rooms; job priorities + schedules; ichor + soul conduit utilities; miasma & heat; mushroom farming; 5 trap types; 3 hero tiers; prisoners (convert/sacrifice); Dungeon Heart + loss condition; sandbox endless mode; pause/speed; Mentor voice (text).
+### Beta (initial launch)
 
-### Post-MVP
-- Campaign scenarios, possession mode, necromancy branch, relics, legendary heroes, beetle ranching, multiplayer (co-op dungeon?), mod support.
+One floor. Every system. The beta proves the sim and the fun on a single floor — "The Threshold" (§5.3) — before anything goes vertical.
+
+**In:**
+- Dig / claim / build; full single-floor room set (Lair, Hatchery/Tavern, Treasury, Library, Workshop, Temple, Torture Chamber, Guard Post, Training Room)
+- 6 minion types; needs (food, rest, loyalty, faith); job priorities + schedules
+- Utilities: ichor pipes, soul conduits, miasma + ventilation, heat routing
+- Mushroom farming with the water/darkness/fertilizer loop
+- Trap set with rearming labor and consumable ammo
+- **Solo hero delves** — one hero at a time, utility-AI driven (scout, fight, flee, report); small class roster (fighter, rogue, cleric…); escalating to champion-tier solo heroes as the beta endgame
+- Prisoners: capture, convert, sacrifice, ransom
+- Fun Doctrine core: Adventure Quality scoring, renown & traffic, house styles (Gauntlet / Theater / Abattoir)
+- Theming & coherence bonuses (§5.4)
+- Dungeon Heart + loss condition; Heart levels gating unlocks within the floor
+- Research tree (core branches)
+- Mentor commentary (authored text lines)
+- Pause/speed, alert system, full overlay suite
+- Tutorial + sandbox endless
+
+**Out (post-beta):** floors 2–4, simultaneous multi-party delves, the 10-person raid + floor boss designer, vertical logistics, campaign scenarios, possession mode, necromancy branch, relics, beetle ranching, generative Mentor layer, Workshop mod support.
+
+### The solo-dev rule
+
+If a feature can't be data-driven, it must justify its code cost. When in doubt, cut — the beta earns the right to grow.
 
 ### Explicit Non-Goals (for now)
 - 3D graphics, mobile port, fully voiced Mentor.

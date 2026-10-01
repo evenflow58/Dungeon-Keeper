@@ -1,10 +1,11 @@
 # Dungeon-Keeper — Game Design Document
 
-**Version:** 0.9 (Draft)
+**Version:** 0.10 (Draft)
 **Date:** October 2026
 **Status:** Pre-production — open for revision
 
 **Changelog**
+- **0.10** — Added Appendix A: vertical slice spec ("First Dig") — board, mouse, digging, placement, minimal needs, solo hero, acceptance criteria, build order.
 - **0.9** — Added layout philosophy (§5.6): open caverns vs. guided hallways as equal first-class choices, with per-layout counters, trap taxonomy, and layout-blind scoring.
 - **0.8** — Added frontstage/backstage zoning (§5.5): Keeper's Seal doors, delve-route overlay, breaches as emergency gameplay, Heart placement doctrine.
 - **0.7** — Rescoped to a single-floor beta (§15): all systems on Floor 1, solo hero delves, champion-tier endgame; multi-floor, parties, and the raid move to post-beta.
@@ -470,6 +471,85 @@ The Director's objective function is **drama, not slaughter**. It composes raids
 5. ML-Agents: worth the training overhead, or do authored systems carry the AI fantasy on their own?
 6. ~~Multiplayer~~ — **single-player for 1.0, decided Oct 2026.**
 7. Steam Workshop mod support at launch or post-launch? (Data-driven design in §5.4 makes this cheap — but solo-dev time is still solo-dev time.)
+
+---
+
+## 20. Appendix A: Vertical Slice — "First Dig"
+
+**Purpose.** The smallest playable game that proves the core loop: designate → dig → build → sustain → survive. Everything in the beta (§15) must earn its way in *after* this slice is fun.
+
+**The slice in one sentence:** hollow out a dungeon, keep three goblins fed and rested, survive the first heroes.
+
+### A.1 The board
+
+- Fixed 48×32 tile grid. All rock except a 6×6 starter cavern holding the Heart.
+- Tile states: `Rock`, `Designated`, `Floor`. Digging frees space — no materials yet (that's the next iteration).
+- Rendering: Unity Tilemaps. Hovered tile highlights; designated tiles show a hatch overlay.
+
+### A.2 Mouse & camera
+
+- **Hover:** tile highlight + tooltip showing tile state.
+- **Left-drag on rock:** designate a dig rectangle. **Left-drag on floor** with a blueprint selected: place it.
+- **Right-click / Esc:** cancel designation or deselect.
+- **Left-click** a minion or hero: select it, show its needs bars (debug-readable minimal UI).
+- **Camera:** WASD/arrows or middle-drag to pan; mouse wheel to zoom (0.5×–2×); clamped to board bounds.
+
+### A.3 Digging
+
+- One imp. Dig orders queue in designation order; the imp paths with A* (4-directional, floor tiles plus rock adjacent to floor).
+- Dig time ~2.5s per tile (tuning placeholder). Nearest designated tile first.
+- Dug tiles become Floor. No rubble, no materials in the slice — keep the loop clean.
+
+### A.4 Building (placement)
+
+- Build bar (bottom of screen): **Lair Cot**, **Mushroom Plot**, **Spike Trap**. (Heart is pre-placed in the starter cavern.)
+- Placement rules: target tiles must be Floor, and reachable by the imp.
+- **No costs in the slice** — placement is free. The cost is space and time. (Economy arrives with the beta.)
+- **Lair Cot:** a goblin rest spot. **Mushroom Plot:** grows 1 food per ~30s, stores up to 5. **Spike Trap:** wounds the first hero that steps on it, then needs imp rearming (~8s). One trap type proves the whole trap system.
+
+### A.5 Minions & needs (minimal)
+
+- 3 goblins. Two needs: **Hunger** (0–100, empties over ~4 min) and **Energy** (empties over ~5 min).
+- Simplified utility AI: Hunger below 30 → seek a plot with food stock; else Energy below 25 → seek a free cot; else idle/wander.
+- Hunger at 0: goblin weakens (half move/fight speed); 60s later it dies. (Loyalty, faith, pay — that's beta.)
+- Goblins auto-attack heroes within 4 tiles.
+
+### A.6 The hero & the Heart
+
+- Trigger: player has placed ≥3 cots and ≥2 farm plots, or 5 minutes elapsed. Then the first hero spawns at the board edge: a Fighter, fixed stats.
+- Simplified hero AI: A* path to the Heart; attacks minions and traps blocking the path; at 30% HP flees toward the entrance. If it escapes, it *reports back* — the next hero comes sooner and tougher (a teaser of the Director, §17.2).
+- The Heart: 100 HP. The hero attacks it on arrival. Heart destroyed → game-over screen ("The dark goes quiet.").
+- Three heroes, escalating. Survive all three → victory screen. That's the slice.
+
+### A.7 UI (minimal)
+
+- Build bar (bottom), top bar (goblin count, food stock, next-hero timer), speed controls (pause / 1× / 2×).
+- Alert toasts: "Goblin starving!", "Hero approaching!", "Trap needs rearming."
+- No overlays in the slice — those are beta.
+
+### A.8 Acceptance criteria
+
+- [ ] Player can designate and dig out a 5×5 room in under 90 seconds at 1× speed.
+- [ ] Goblins eat and sleep with zero player orders.
+- [ ] A hero paths from the entrance to the Heart through player-dug tunnels, fights goblins, and can be killed, repelled, or escape.
+- [ ] Heart destroyed → game over. All three heroes dealt with → victory.
+- [ ] 60 fps on a mid-range PC at slice entity counts.
+
+### A.9 Explicitly out of the slice
+
+Materials from digging, water/miasma/heat, loyalty/faith/pay, research, theming bonuses, guard posts, prisoners, multiple simultaneous heroes, floors, Mentor voice, overlays, save/load.
+
+### A.10 Build order
+
+1. Grid + Tilemap rendering + camera + mouse. (A board you can look at and click.)
+2. Imp + A* pathfinding + dig orders. (A board you can change.)
+3. Placement + Lair/Farm/Spike blueprints.
+4. Goblin needs + eat/sleep + melee combat. (It's alive.)
+5. Hero spawn/path/AI + Heart + win/loss. (It's a game.)
+6. UI shell: build bar, top bar, speed controls, alerts, victory/defeat screens.
+7. Juice pass: dig particles, hover states, hit flashes, placeholder audio.
+
+Each step is playable and testable before the next begins. If step N isn't fun, stop — don't build step N+1.
 
 ---
 

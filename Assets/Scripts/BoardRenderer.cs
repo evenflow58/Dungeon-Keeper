@@ -57,23 +57,8 @@ public class BoardRenderer : MonoBehaviour
 
     public void InitializeReferences()
     {
-        if (dungeonBoard == null)
-        {
-            dungeonBoard = GetComponent<DungeonBoard>();
-            if (dungeonBoard == null)
-            {
-                dungeonBoard = FindAnyObjectByType<DungeonBoard>();
-            }
-        }
-
-        if (tilemap == null)
-        {
-            tilemap = GetComponentInChildren<Tilemap>();
-            if (tilemap == null)
-            {
-                tilemap = FindAnyObjectByType<Tilemap>();
-            }
-        }
+        dungeonBoard ??= GetComponent<DungeonBoard>() ?? FindAnyObjectByType<DungeonBoard>();
+        tilemap ??= GetComponentInChildren<Tilemap>() ?? FindAnyObjectByType<Tilemap>();
     }
 
     public void AlignGridPosition()

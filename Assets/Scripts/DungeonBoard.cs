@@ -20,13 +20,10 @@ public class DungeonBoard : MonoBehaviour
 
     private void Awake()
     {
-        if (tiles == null)
-        {
-            InitializeBoard();
-        }
+        tiles ??= InitializeBoard();
     }
 
-    public void InitializeBoard()
+    public TileState[,] InitializeBoard()
     {
         tiles = new TileState[width, height];
 
@@ -53,6 +50,8 @@ public class DungeonBoard : MonoBehaviour
                 }
             }
         }
+
+        return tiles;
     }
 
     public bool IsInBounds(int x, int y)
@@ -62,10 +61,7 @@ public class DungeonBoard : MonoBehaviour
 
     public TileState GetTile(int x, int y)
     {
-        if (tiles == null)
-        {
-            InitializeBoard();
-        }
+        tiles ??= InitializeBoard();
 
         if (!IsInBounds(x, y))
         {
@@ -77,10 +73,7 @@ public class DungeonBoard : MonoBehaviour
 
     public void SetTile(int x, int y, TileState state)
     {
-        if (tiles == null)
-        {
-            InitializeBoard();
-        }
+        tiles ??= InitializeBoard();
 
         if (!IsInBounds(x, y))
         {

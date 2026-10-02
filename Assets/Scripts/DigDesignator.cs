@@ -26,6 +26,7 @@ public class DigDesignator : MonoBehaviour
 
     // ---- drag state ----
     private bool isDragging;
+    private bool dragEnteredBoard;  // true once cursor enters the board; gates apply & preview
     private DesignateMode dragMode;
     private Vector2Int dragAnchor;
     private Vector2Int dragCurrent;
@@ -128,11 +129,12 @@ public class DigDesignator : MonoBehaviour
     private void TryStartDrag(Vector3 worldPos, DesignateMode mode)
     {
         Vector2Int coords = boardRenderer.WorldToBoardCoords(worldPos);
-        // Clamp so a press outside the board snaps to the nearest edge tile.
-        isDragging  = true;
-        dragMode    = mode;
-        dragAnchor  = ClampToBoard(coords, dungeonBoard.Width, dungeonBoard.Height);
-        dragCurrent = dragAnchor;
+        isDragging       = true;
+        dragMode         = mode;
+        dragAnchor       = ClampToBoard(coords, dungeonBoard.Width, dungeonBoard.Height);
+        dragCurrent      = dragAnchor;
+        // A press outside the board only commits once the cursor enters a board tile.
+        dragEnteredBoard = dungeonBoard.IsInBounds(coords.x, coords.y);
         UpdatePreview();
     }
 
@@ -156,6 +158,7 @@ public class DigDesignator : MonoBehaviour
         {
             Vector2Int raw = boardRenderer.WorldToBoardCoords(worldPos);
             dragCurrent = ClampToBoard(raw, dungeonBoard.Width, dungeonBoard.Height);
+            if (dungeonBoard.IsInBounds(raw.x, raw.y)) dragEnteredBoard = true;
         }
 
         UpdatePreview();
@@ -173,6 +176,7 @@ public class DigDesignator : MonoBehaviour
     private void UpdatePreview()
     {
         if (previewSprite == null) return;
+        if (!dragEnteredBoard) { previewSprite.enabled = false; return; }
 
         RectInt rect = NormalizeRect(dragAnchor, dragCurrent);
         Vector3 minCenter = boardRenderer.GetTileCenterWorldPosition(rect.x, rect.y);
@@ -186,7 +190,7 @@ public class DigDesignator : MonoBehaviour
 
     private void EndDrag(bool apply)
     {
-        if (apply)
+        if (apply && dragEnteredBoard)
         {
             RectInt rect = NormalizeRect(dragAnchor, dragCurrent);
             ApplyRect(dungeonBoard, rect, dragMode);

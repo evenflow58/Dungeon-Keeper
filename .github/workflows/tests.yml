@@ -1,11 +1,26 @@
-# Prerequisite: the UNITY_LICENSE repo secret must exist before this workflow
-# can pass. Run the "Acquire Unity Activation File" workflow first — see
-# .github/workflows/activation.yml for the full one-time setup instructions.
+# One-time license setup (do this before the first run):
+#
+#   1. On your Windows machine, open Unity Hub.
+#      Go to Preferences → Licenses → Add → Get a free personal license.
+#      Complete the flow so a .ulf file is written to disk at:
+#        C:\ProgramData\Unity\Unity_lic.ulf
+#      (If that file already exists from a prior activation you can use it.)
+#
+#   2. Open the .ulf in a text editor (Notepad is fine) and copy the full contents.
+#
+#   3. In this repo: Settings → Secrets and variables → Actions.
+#      Add three repository secrets:
+#        UNITY_LICENSE  →  full contents of the .ulf file (paste the XML text)
+#        UNITY_EMAIL    →  the email address on your Unity account
+#        UNITY_PASSWORD →  the password for your Unity account
+#
+#   4. Push any commit to a PR targeting main — this workflow will run.
+#
+# To rotate the license: re-activate in Unity Hub, repeat from step 2.
 #
 # Unity version: pinned to 6000.6.4f1 to match ProjectSettings/ProjectVersion.txt.
-# If GameCI does not yet publish a Docker image for this exact patch, update
-# unityVersion below to the nearest available 6000.6.x build and note the
-# change in the PR.
+# If GameCI has not yet published a Docker image for this exact patch, update
+# unityVersion below to the nearest available 6000.6.x build and note the change.
 
 name: EditMode Tests
 
@@ -46,6 +61,8 @@ jobs:
         id: tests
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           testMode: EditMode
           unityVersion: ${{ matrix.unityVersion }}

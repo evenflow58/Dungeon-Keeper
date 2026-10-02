@@ -461,6 +461,7 @@ GameObject:
   - component: {fileID: 565044520}
   - component: {fileID: 565044519}
   - component: {fileID: 565044522}
+  - component: {fileID: 565044523}
   m_Layer: 0
   m_Name: DungeonManager
   m_TagString: Untagged
@@ -532,6 +533,22 @@ MonoBehaviour:
   mainCamera: {fileID: 330585545}
   highlightColor: {r: 1, g: 1, b: 1, a: 0.35}
   tooltipOffset: {x: 15, y: -30}
+--- !u!114 &565044523
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5019f9b45d2c94245ac5dcdfc578bc37, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::DigDesignator
+  dungeonBoard: {fileID: 565044520}
+  boardRenderer: {fileID: 565044519}
+  mainCamera: {fileID: 330585545}
+  previewColor: {r: 0.85, g: 0.65, b: 0.15, a: 0.35}
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0

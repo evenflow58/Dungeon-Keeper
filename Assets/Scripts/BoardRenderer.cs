@@ -7,9 +7,6 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private DungeonBoard dungeonBoard;
     [SerializeField] private Tilemap tilemap;
 
-    [Header("Layout Settings")]
-    [SerializeField] private Vector3 boardOrigin = new Vector3(-24f, -16f, 0f);
-
     [Header("Tile Colors (Placeholder Art)")]
     [SerializeField] private Color rockColor = new Color(0.22f, 0.22f, 0.22f, 1f);       // Dark gray
     [SerializeField] private Color floorColor = new Color(0.48f, 0.32f, 0.18f, 1f);      // Brown
@@ -17,7 +14,9 @@ public class BoardRenderer : MonoBehaviour
 
     public DungeonBoard Board => dungeonBoard;
     public Tilemap Tilemap => tilemap;
-    public Vector3 BoardOrigin => boardOrigin;
+    public Vector3 BoardOrigin => dungeonBoard != null
+        ? new Vector3(-dungeonBoard.Width * 0.5f, -dungeonBoard.Height * 0.5f, 0f)
+        : Vector3.zero;
 
     private Tile rockTile;
     private Tile floorTile;
@@ -65,9 +64,9 @@ public class BoardRenderer : MonoBehaviour
     {
         if (tilemap == null) return;
 
-        // Position the parent Grid (or Tilemap itself) so tile (0,0) is at world position (-24, -16)
+        // Position the parent Grid (or Tilemap itself) so tile (0,0) is at BoardOrigin
         Transform gridTransform = tilemap.layoutGrid != null ? tilemap.layoutGrid.transform : tilemap.transform;
-        gridTransform.position = boardOrigin;
+        gridTransform.position = BoardOrigin;
     }
 
     public void EnsureTilesInitialized()
@@ -170,7 +169,7 @@ public class BoardRenderer : MonoBehaviour
         {
             return tilemap.CellToWorld(new Vector3Int(x, y, 0));
         }
-        return boardOrigin + new Vector3(x, y, 0);
+        return BoardOrigin + new Vector3(x, y, 0);
     }
 
     public Vector3 GetTileCenterWorldPosition(int x, int y)
@@ -179,7 +178,7 @@ public class BoardRenderer : MonoBehaviour
         {
             return tilemap.GetCellCenterWorld(new Vector3Int(x, y, 0));
         }
-        return boardOrigin + new Vector3(x + 0.5f, y + 0.5f, 0);
+        return BoardOrigin + new Vector3(x + 0.5f, y + 0.5f, 0);
     }
 
     public Vector2Int WorldToBoardCoords(Vector3 worldPosition)
@@ -189,9 +188,10 @@ public class BoardRenderer : MonoBehaviour
             Vector3Int cell = tilemap.WorldToCell(worldPosition);
             return new Vector2Int(cell.x, cell.y);
         }
+        Vector3 origin = BoardOrigin;
         return new Vector2Int(
-            Mathf.FloorToInt(worldPosition.x - boardOrigin.x),
-            Mathf.FloorToInt(worldPosition.y - boardOrigin.y)
+            Mathf.FloorToInt(worldPosition.x - origin.x),
+            Mathf.FloorToInt(worldPosition.y - origin.y)
         );
     }
 }

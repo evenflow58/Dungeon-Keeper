@@ -3,18 +3,15 @@ using UnityEngine;
 
 public class DungeonBoard : MonoBehaviour
 {
-    public const int DefaultWidth = 48;
-    public const int DefaultHeight = 32;
-    public const int DefaultCavernSize = 6;
-
-    [SerializeField] private int width = DefaultWidth;
-    [SerializeField] private int height = DefaultHeight;
-    [SerializeField] private int cavernSize = DefaultCavernSize;
+    [SerializeField] private int width = 48;
+    [SerializeField] private int height = 32;
+    [SerializeField] private int cavernSize = 6;
 
     private TileState[,] tiles;
 
     public int Width => width;
     public int Height => height;
+    public int CavernSize => cavernSize;
 
     public event Action<int, int, TileState> OnTileChanged;
 

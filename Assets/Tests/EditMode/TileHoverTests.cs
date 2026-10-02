@@ -18,7 +18,7 @@ public class TileHoverTests
         board = managerGo.AddComponent<DungeonBoard>();
         board.InitializeBoard();
         boardRenderer = managerGo.AddComponent<BoardRenderer>();
-        // Awake already called InitializeReferences; board found via GetComponent.
+        boardRenderer.Board = board; // explicit wiring, matching the CameraController test pattern
 
         tileHoverGo = new GameObject("TestTileHover");
         tileHover = tileHoverGo.AddComponent<TileHover>();

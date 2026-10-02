@@ -12,7 +12,7 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private Color floorColor = new Color(0.48f, 0.32f, 0.18f, 1f);      // Brown
     [SerializeField] private Color designatedColor = new Color(0.85f, 0.65f, 0.15f, 1f); // Amber/Gold
 
-    public DungeonBoard Board => dungeonBoard;
+    public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public Tilemap Tilemap => tilemap;
     public Vector3 BoardOrigin => dungeonBoard != null
         ? new Vector3(-dungeonBoard.Width * 0.5f, -dungeonBoard.Height * 0.5f, 0f)

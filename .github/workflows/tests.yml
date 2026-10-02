@@ -24,6 +24,11 @@
 
 name: EditMode Tests
 
+permissions:
+  contents: read
+  checks: write
+  pull-requests: read
+
 on:
   pull_request:
     branches:

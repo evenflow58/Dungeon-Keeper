@@ -1,0 +1,60 @@
+# Prerequisite: the UNITY_LICENSE repo secret must exist before this workflow
+# can pass. Run the "Acquire Unity Activation File" workflow first — see
+# .github/workflows/activation.yml for the full one-time setup instructions.
+#
+# Unity version: pinned to 6000.6.4f1 to match ProjectSettings/ProjectVersion.txt.
+# If GameCI does not yet publish a Docker image for this exact patch, update
+# unityVersion below to the nearest available 6000.6.x build and note the
+# change in the PR.
+
+name: EditMode Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: EditMode Tests (Unity ${{ matrix.unityVersion }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        unityVersion:
+          - 6000.6.4f1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      # Cache the Library folder so Unity does not reimport every asset on
+      # every run. Key on packages-lock.json — any package change invalidates
+      # the cache, which is the correct trade-off.
+      - name: Cache Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-${{ hashFiles('Packages/packages-lock.json') }}
+          restore-keys: |
+            Library-
+
+      - name: Run EditMode Tests
+        uses: game-ci/unity-test-runner@v4
+        id: tests
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        with:
+          testMode: EditMode
+          unityVersion: ${{ matrix.unityVersion }}
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          artifactsPath: test-results
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: EditMode-test-results
+          path: ${{ steps.tests.outputs.artifactsPath }}

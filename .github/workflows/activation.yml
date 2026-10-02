@@ -1,0 +1,35 @@
+# One-time setup — run this workflow ONCE to get the Unity license file.
+#
+# Steps (Evan only — requires your Unity account):
+#   1. Go to Actions → "Acquire Unity Activation File" → Run workflow.
+#   2. When the run finishes, download the "unity-activation-file" artifact.
+#      It contains a file ending in .alf.
+#   3. Open https://license.unity3d.com/manual and sign in with your Unity ID.
+#   4. Upload the .alf file and complete the manual activation wizard.
+#   5. Download the resulting .ulf file Unity gives you.
+#   6. In this repo: Settings → Secrets and variables → Actions → New repository secret.
+#      Name:  UNITY_LICENSE
+#      Value: the full text content of the .ulf file (open it in a text editor and paste).
+#   7. Save. The UNITY_LICENSE secret is now ready for the tests workflow.
+#
+# To rotate the license later, repeat from step 1.
+
+name: Acquire Unity Activation File
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  activation:
+    name: Request Unity .alf activation file
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request manual activation file
+        uses: game-ci/unity-request-activation-file@v2
+        id: getManualLicenseFile
+
+      - name: Upload activation file as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-activation-file
+          path: ${{ steps.getManualLicenseFile.outputs.filePath }}

@@ -4,25 +4,31 @@ using UnityEngine;
 public class CameraControllerTests
 {
     private GameObject cameraObject;
+    private GameObject boardObject;
     private Camera cam;
     private CameraController controller;
 
     [SetUp]
     public void SetUp()
     {
+        boardObject = new GameObject("TestDungeonBoard");
+        var board = boardObject.AddComponent<DungeonBoard>();
+        board.InitializeBoard();
+
         cameraObject = new GameObject("TestCamera");
         cam = cameraObject.AddComponent<Camera>();
         cam.orthographic = true;
         controller = cameraObject.AddComponent<CameraController>();
+        controller.Board = board;
     }
 
     [TearDown]
     public void TearDown()
     {
         if (cameraObject != null)
-        {
             Object.DestroyImmediate(cameraObject);
-        }
+        if (boardObject != null)
+            Object.DestroyImmediate(boardObject);
     }
 
     [Test]

@@ -4,6 +4,9 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(Camera))]
 public class CameraController : MonoBehaviour
 {
+    [Header("References")]
+    [SerializeField] private DungeonBoard dungeonBoard;
+
     [Header("Camera Tuning")]
     [SerializeField] private float panSpeed = 20f;
     [SerializeField] private float zoomSpeed = 2f;
@@ -15,14 +18,6 @@ public class CameraController : MonoBehaviour
 
     [Header("Distance")]
     [SerializeField] private float cameraDistance = 25f;
-
-    // Board bounds
-    private const float BoardMinX = -24f;
-    private const float BoardMaxX = 24f;
-    private const float BoardMinY = -16f;
-    private const float BoardMaxY = 16f;
-    private const float BoardWidth = 48f;
-    private const float BoardHeight = 32f;
 
     private Camera cam;
     private float baseOrthographicSize;
@@ -44,6 +39,7 @@ public class CameraController : MonoBehaviour
     private InputAction mousePositionAction;
 
     // Public properties
+    public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public float PanSpeed { get => panSpeed; set => panSpeed = value; }
     public float ZoomSpeed { get => zoomSpeed; set => zoomSpeed = value; }
     public float PitchAngle { get => pitchAngle; set => pitchAngle = value; }
@@ -148,19 +144,21 @@ public class CameraController : MonoBehaviour
 
     public void ComputeBaseOrthographicSize()
     {
+        if (dungeonBoard == null) return;
+
         // When looking at ground (z=0) with pitchAngle around X axis:
         // Visible ground height = (2 * orthoSize) / cos(pitchAngle)
         // Visible ground width = (2 * orthoSize) * aspect
-        // To frame the 48x32 board at 16:9:
-        // orthoSize for board height (32): 32 * cos(pitchAngle) / 2 = 16 * cos(pitchAngle) = 11.31 at 45°
-        // orthoSize for board width (48): 48 / (2 * (16/9)) = 24 / (16/9) = 13.5
+        // To frame the board at 16:9:
+        // orthoSize for board height: (Height/2) * cos(pitchAngle)
+        // orthoSize for board width: (Width/2) / targetAspect
         // Taking max frames the full board at 16:9 aspect.
         const float targetAspect = 16f / 9f;
         float rad = pitchAngle * Mathf.Deg2Rad;
         float cos = Mathf.Cos(rad);
 
-        float sizeForWidth = 24f / targetAspect;
-        float sizeForHeight = 16f * cos;
+        float sizeForWidth = dungeonBoard.Width * 0.5f / targetAspect;
+        float sizeForHeight = dungeonBoard.Height * 0.5f * cos;
 
         baseOrthographicSize = Mathf.Max(sizeForWidth, sizeForHeight);
         minOrthographicSize = baseOrthographicSize * 0.5f;
@@ -315,6 +313,14 @@ public class CameraController : MonoBehaviour
     public void ClampCamera()
     {
         if (cam == null) return;
+        if (dungeonBoard == null) return;
+
+        float boardWidth = dungeonBoard.Width;
+        float boardHeight = dungeonBoard.Height;
+        float minX = -boardWidth * 0.5f;
+        float maxX = minX + boardWidth;
+        float minY = -boardHeight * 0.5f;
+        float maxY = minY + boardHeight;
 
         // Raycast the 4 screen corners onto the z=0 plane to get the visible ground rect
         Ray rayBL = cam.ViewportPointToRay(new Vector3(0f, 0f, 0f));
@@ -330,19 +336,16 @@ public class CameraController : MonoBehaviour
             return;
         }
 
-        float minX = Mathf.Min(Mathf.Min(pBL.x, pBR.x), Mathf.Min(pTL.x, pTR.x));
-        float maxX = Mathf.Max(Mathf.Max(pBL.x, pBR.x), Mathf.Max(pTL.x, pTR.x));
-        float minY = Mathf.Min(Mathf.Min(pBL.y, pBR.y), Mathf.Min(pTL.y, pTR.y));
-        float maxY = Mathf.Max(Mathf.Max(pBL.y, pBR.y), Mathf.Max(pTL.y, pTR.y));
+        float visMinX = Mathf.Min(Mathf.Min(pBL.x, pBR.x), Mathf.Min(pTL.x, pTR.x));
+        float visMaxX = Mathf.Max(Mathf.Max(pBL.x, pBR.x), Mathf.Max(pTL.x, pTR.x));
+        float visMinY = Mathf.Min(Mathf.Min(pBL.y, pBR.y), Mathf.Min(pTL.y, pTR.y));
+        float visMaxY = Mathf.Max(Mathf.Max(pBL.y, pBR.y), Mathf.Max(pTL.y, pTR.y));
 
-        float visibleWidth = maxX - minX;
-        float visibleHeight = maxY - minY;
-
-        float preX = currentGroundPos.x;
-        float preY = currentGroundPos.y;
+        float visibleWidth = visMaxX - visMinX;
+        float visibleHeight = visMaxY - visMinY;
 
         // X axis clamping: if view is larger than board on an axis, center that axis on the board (0)
-        if (visibleWidth >= BoardWidth)
+        if (visibleWidth >= boardWidth)
         {
             targetGroundPos.x = 0f;
             currentGroundPos.x = 0f;
@@ -350,14 +353,12 @@ public class CameraController : MonoBehaviour
         else
         {
             float halfW = visibleWidth * 0.5f;
-            float minTargetX = BoardMinX + halfW;
-            float maxTargetX = BoardMaxX - halfW;
-            targetGroundPos.x = Mathf.Clamp(targetGroundPos.x, minTargetX, maxTargetX);
-            currentGroundPos.x = Mathf.Clamp(currentGroundPos.x, minTargetX, maxTargetX);
+            targetGroundPos.x = Mathf.Clamp(targetGroundPos.x, minX + halfW, maxX - halfW);
+            currentGroundPos.x = Mathf.Clamp(currentGroundPos.x, minX + halfW, maxX - halfW);
         }
 
         // Y axis clamping: if view is larger than board on an axis, center that axis on the board (0)
-        if (visibleHeight >= BoardHeight)
+        if (visibleHeight >= boardHeight)
         {
             targetGroundPos.y = 0f;
             currentGroundPos.y = 0f;
@@ -365,10 +366,8 @@ public class CameraController : MonoBehaviour
         else
         {
             float halfH = visibleHeight * 0.5f;
-            float minTargetY = BoardMinY + halfH;
-            float maxTargetY = BoardMaxY - halfH;
-            targetGroundPos.y = Mathf.Clamp(targetGroundPos.y, minTargetY, maxTargetY);
-            currentGroundPos.y = Mathf.Clamp(currentGroundPos.y, minTargetY, maxTargetY);
+            targetGroundPos.y = Mathf.Clamp(targetGroundPos.y, minY + halfH, maxY - halfH);
+            currentGroundPos.y = Mathf.Clamp(currentGroundPos.y, minY + halfH, maxY - halfH);
         }
     }
 

@@ -128,12 +128,11 @@ public class DigDesignator : MonoBehaviour
     private void TryStartDrag(Vector3 worldPos, DesignateMode mode)
     {
         Vector2Int coords = boardRenderer.WorldToBoardCoords(worldPos);
-        if (!dungeonBoard.IsInBounds(coords.x, coords.y)) return;
-
+        // Clamp so a press outside the board snaps to the nearest edge tile.
         isDragging  = true;
         dragMode    = mode;
-        dragAnchor  = coords;
-        dragCurrent = coords;
+        dragAnchor  = ClampToBoard(coords, dungeonBoard.Width, dungeonBoard.Height);
+        dragCurrent = dragAnchor;
         UpdatePreview();
     }
 
@@ -223,6 +222,7 @@ public class DigDesignator : MonoBehaviour
         {
             for (int y = rect.y; y < rect.yMax; y++)
             {
+                if (!board.IsInBounds(x, y)) continue;
                 TileState state = board.GetTile(x, y);
                 if (mode == DesignateMode.Designate && state == TileState.Rock)
                 {

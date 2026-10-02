@@ -57,9 +57,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: Library
-          key: Library-v2-${{ hashFiles('Packages/packages-lock.json') }}
+          key: Library-v3-${{ hashFiles('Packages/packages-lock.json') }}
           restore-keys: |
-            Library-v2-
+            Library-v3-
 
       - name: Runner memory diagnostics
         run: |

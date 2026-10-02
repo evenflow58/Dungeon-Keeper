@@ -69,12 +69,12 @@ jobs:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GAME_CI_COVERAGE_ENABLED: 'false'
         with:
           testMode: EditMode
           unityVersion: ${{ matrix.unityVersion }}
           githubToken: ${{ secrets.GITHUB_TOKEN }}
           artifactsPath: test-results
-          coverageEnabled: false
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4

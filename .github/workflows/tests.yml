@@ -57,9 +57,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: Library
-          key: Library-${{ hashFiles('Packages/packages-lock.json') }}
+          key: Library-v2-${{ hashFiles('Packages/packages-lock.json') }}
           restore-keys: |
-            Library-
+            Library-v2-
+
+      - name: Runner memory diagnostics
+        run: |
+          free -h
+          cat /sys/fs/cgroup/memory.max 2>/dev/null || cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo "no cgroup limit found"
+          df -h /dev/shm
 
       - name: Run EditMode Tests
         uses: game-ci/unity-test-runner@v4

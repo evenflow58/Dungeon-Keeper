@@ -56,6 +56,12 @@ public class DungeonBoard : MonoBehaviour
         return x >= 0 && x < width && y >= 0 && y < height;
     }
 
+    /// <summary>Terrain a unit can stand on and path through: in-bounds Floor.</summary>
+    public bool IsWalkable(int x, int y) => IsInBounds(x, y) && GetTile(x, y) == TileState.Floor;
+
+    /// <summary>Undesignated diggable terrain: in-bounds Rock. (Dig work items are Designated tiles.)</summary>
+    public bool IsDiggable(int x, int y) => IsInBounds(x, y) && GetTile(x, y) == TileState.Rock;
+
     public TileState GetTile(int x, int y)
     {
         tiles ??= InitializeBoard();

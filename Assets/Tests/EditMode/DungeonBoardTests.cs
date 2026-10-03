@@ -136,4 +136,31 @@ public class DungeonBoardTests
             }
         }
     }
+
+    // --- Terrain predicates ---
+
+    [Test]
+    public void IsWalkable_TrueOnlyForInBoundsFloor()
+    {
+        board.SetTile(0, 0, TileState.Designated);
+
+        Assert.IsTrue(board.IsWalkable(24, 16), "Cavern Floor");
+        Assert.IsFalse(board.IsWalkable(5, 5), "Rock");
+        Assert.IsFalse(board.IsWalkable(0, 0), "Designated");
+        Assert.IsFalse(board.IsWalkable(-1, 16), "Out of bounds (left)");
+        Assert.IsFalse(board.IsWalkable(48, 16), "Out of bounds (right)");
+        Assert.IsFalse(board.IsWalkable(24, 32), "Out of bounds (top)");
+    }
+
+    [Test]
+    public void IsDiggable_TrueOnlyForInBoundsRock()
+    {
+        board.SetTile(0, 0, TileState.Designated);
+
+        Assert.IsTrue(board.IsDiggable(5, 5), "Rock");
+        Assert.IsFalse(board.IsDiggable(24, 16), "Floor");
+        Assert.IsFalse(board.IsDiggable(0, 0), "Designated");
+        Assert.IsFalse(board.IsDiggable(-1, -1), "Out of bounds (GetTile reports Rock there)");
+        Assert.IsFalse(board.IsDiggable(48, 32), "Out of bounds (far corner)");
+    }
 }

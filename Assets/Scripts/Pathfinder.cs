@@ -17,7 +17,7 @@ public static class Pathfinder
     /// </summary>
     public static List<Vector2Int> FindPath(DungeonBoard board, Vector2Int start, Vector2Int goal)
     {
-        if (!board.IsInBounds(goal.x, goal.y) || board.GetTile(goal.x, goal.y) != TileState.Floor)
+        if (!board.IsWalkable(goal.x, goal.y))
             return new List<Vector2Int>();
 
         if (start == goal)
@@ -34,7 +34,7 @@ public static class Pathfinder
     /// </summary>
     public static List<Vector2Int> FindPathToAdjacent(DungeonBoard board, Vector2Int start, Vector2Int target)
     {
-        if (board.IsInBounds(target.x, target.y) && board.GetTile(target.x, target.y) == TileState.Floor)
+        if (board.IsWalkable(target.x, target.y))
             return FindPath(board, start, target);
 
         // Collect walkable neighbors in fixed direction order
@@ -42,7 +42,7 @@ public static class Pathfinder
         foreach (var dir in Dirs)
         {
             var n = target + dir;
-            if (board.IsInBounds(n.x, n.y) && board.GetTile(n.x, n.y) == TileState.Floor)
+            if (board.IsWalkable(n.x, n.y))
                 candidates.Add(n);
         }
 
@@ -102,7 +102,7 @@ public static class Pathfinder
     {
         if (!board.IsInBounds(pos.x, pos.y)) return false;
         if (pos == start) return true; // mover is always on their start tile
-        return board.GetTile(pos.x, pos.y) == TileState.Floor;
+        return board.IsWalkable(pos.x, pos.y);
     }
 
     private static Vector2Int PickLowestF(List<Vector2Int> openSet, Dictionary<Vector2Int, int> f)

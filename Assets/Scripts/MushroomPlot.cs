@@ -24,6 +24,8 @@ public class MushroomPlot : MonoBehaviour
     public float GrowthSecondsPerFood { get => growthSecondsPerFood; set => growthSecondsPerFood = value; }
     public int Capacity { get => capacity; set => capacity = value; }
 
+    public Vector2Int Tile => GetComponent<Placeable>().Tile;
+
     public int FoodCount { get; private set; }
 
     /// <summary>Progress in seconds toward the next food. Held at 0 while at capacity.</summary>

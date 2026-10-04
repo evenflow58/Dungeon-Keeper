@@ -83,9 +83,37 @@ public class PlacementManager : MonoBehaviour
         {
             if (p.Type == PlaceableType.SpikeTrap && p.TryGetComponent(out SpikeTrap trap)) traps.Add(trap);
         }
-        traps.Sort((a, b) => a.Tile.x != b.Tile.x ? a.Tile.x.CompareTo(b.Tile.x) : a.Tile.y.CompareTo(b.Tile.y));
+        traps.Sort((a, b) => CompareScanOrder(a.Tile, b.Tile));
         return traps;
     }
+
+    /// <summary>All placed Mushroom Plots (stocked or empty), sorted by tile in board scan order.</summary>
+    public List<MushroomPlot> GetMushroomPlots()
+    {
+        var plots = new List<MushroomPlot>();
+        foreach (Placeable p in placed.Values)
+        {
+            if (p.Type == PlaceableType.MushroomPlot && p.TryGetComponent(out MushroomPlot plot)) plots.Add(plot);
+        }
+        plots.Sort((a, b) => CompareScanOrder(a.Tile, b.Tile));
+        return plots;
+    }
+
+    /// <summary>All placed Lair Cots (claimed and free), sorted by tile in board scan order.</summary>
+    public List<Placeable> GetCots()
+    {
+        var cots = new List<Placeable>();
+        foreach (Placeable p in placed.Values)
+        {
+            if (p.Type == PlaceableType.LairCot) cots.Add(p);
+        }
+        cots.Sort((a, b) => CompareScanOrder(a.Tile, b.Tile));
+        return cots;
+    }
+
+    // Board scan order: x ascending, then y ascending.
+    private static int CompareScanOrder(Vector2Int a, Vector2Int b) =>
+        a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y);
 
     /// <summary>
     /// Valid target: in-bounds Floor, unoccupied, and reachable from fromTile (the imp's current tile).

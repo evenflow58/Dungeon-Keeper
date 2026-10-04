@@ -676,6 +676,7 @@ GameObject:
   m_Component:
   - component: {fileID: 708604855}
   - component: {fileID: 708604854}
+  - component: {fileID: 708604856}
   m_Layer: 0
   m_Name: Goblin3
   m_TagString: Untagged
@@ -705,6 +706,8 @@ MonoBehaviour:
   bodyColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
   bodySize: 0.75
   sortingOrder: 2
+  logStats: 1
+  logIntervalSeconds: 5
 --- !u!4 &708604855
 Transform:
   m_ObjectHideFlags: 0
@@ -720,6 +723,26 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &708604856
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 708604853}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 570d7f8d539d8af42a095fb92e9195b5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::GoblinAI
+  goblin: {fileID: 708604854}
+  placementManager: {fileID: 565044525}
+  hungerThreshold: 30
+  energyThreshold: 25
+  hungerPerFood: 50
+  sleepSecondsToFull: 10
+  decisionIntervalSeconds: 0.25
+  wanderPauseSeconds: 1.5
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -16899,6 +16922,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1781885713}
   - component: {fileID: 1781885712}
+  - component: {fileID: 1781885714}
   m_Layer: 0
   m_Name: Goblin1
   m_TagString: Untagged
@@ -16928,6 +16952,8 @@ MonoBehaviour:
   bodyColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
   bodySize: 0.75
   sortingOrder: 2
+  logStats: 1
+  logIntervalSeconds: 5
 --- !u!4 &1781885713
 Transform:
   m_ObjectHideFlags: 0
@@ -16943,6 +16969,26 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1781885714
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1781885711}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 570d7f8d539d8af42a095fb92e9195b5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::GoblinAI
+  goblin: {fileID: 1781885712}
+  placementManager: {fileID: 565044525}
+  hungerThreshold: 30
+  energyThreshold: 25
+  hungerPerFood: 50
+  sleepSecondsToFull: 10
+  decisionIntervalSeconds: 0.25
+  wanderPauseSeconds: 1.5
 --- !u!1 &1974660356
 GameObject:
   m_ObjectHideFlags: 0
@@ -16953,6 +16999,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1974660358}
   - component: {fileID: 1974660357}
+  - component: {fileID: 1974660359}
   m_Layer: 0
   m_Name: Goblin2
   m_TagString: Untagged
@@ -16982,6 +17029,8 @@ MonoBehaviour:
   bodyColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
   bodySize: 0.75
   sortingOrder: 2
+  logStats: 1
+  logIntervalSeconds: 5
 --- !u!4 &1974660358
 Transform:
   m_ObjectHideFlags: 0
@@ -16997,6 +17046,26 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1974660359
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1974660356}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 570d7f8d539d8af42a095fb92e9195b5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::GoblinAI
+  goblin: {fileID: 1974660357}
+  placementManager: {fileID: 565044525}
+  hungerThreshold: 30
+  energyThreshold: 25
+  hungerPerFood: 50
+  sleepSecondsToFull: 10
+  decisionIntervalSeconds: 0.25
+  wanderPauseSeconds: 1.5
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

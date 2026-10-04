@@ -39,8 +39,8 @@ public class PlacementManager : MonoBehaviour
             foreach (Placeable p in placed.Values)
             {
                 if (p.Type != PlaceableType.MushroomPlot) continue;
-                // TryGetComponent, not GetComponent()?.: in the editor a missing component comes back as a
-                // fake-null object that ?. doesn't catch. A plot without the component contributes 0.
+                // TryGetComponent rather than ?. on a UnityEngine.Object (?. skips Unity's null check, which
+                // matters for destroyed objects). A plot without the component contributes 0.
                 if (p.TryGetComponent(out MushroomPlot plot)) total += plot.FoodCount;
             }
             return total;

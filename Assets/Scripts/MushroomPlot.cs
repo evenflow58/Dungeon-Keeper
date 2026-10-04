@@ -16,8 +16,8 @@ public class MushroomPlot : MonoBehaviour
 
     [Header("Food Pips (Placeholder Art)")]
     [SerializeField] private Color pipColor = new Color(0.95f, 0.90f, 0.70f, 1f); // Light warm white
-    [SerializeField] private float pipSize = 0.14f;                               // Fraction of a tile
-    [SerializeField] private float pipSpacing = 0.18f;
+    [SerializeField] private float pipSize = 0.18f;                               // Fraction of a tile; legible at default zoom
+    [SerializeField] private float pipSpacing = 0.20f;                            // 5 pips span ~0.98 of a tile
     [SerializeField] private float pipRowY = -0.28f;                              // Local offset from tile center
     [SerializeField] private int pipSortingOrder = 2;                             // Above the plot body (1)
 

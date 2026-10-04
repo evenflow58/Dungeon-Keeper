@@ -14,6 +14,7 @@ public class Goblin : MonoBehaviour
     [Header("References")]
     [SerializeField] private DungeonBoard dungeonBoard;
     [SerializeField] private BoardRenderer boardRenderer;
+    [SerializeField] private Health health; // Optional: hit-point death alongside starvation; null = starvation only
 
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 3f; // Tiles per second (provisional: goblins amble slower than the imp)
@@ -38,6 +39,7 @@ public class Goblin : MonoBehaviour
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
+    public Health Health { get => health; set => health = value; }
     public float MoveSpeed { get => moveSpeed; set => moveSpeed = value; }
     public Vector2Int SpawnTile { get => spawnTile; set => spawnTile = value; }
     public float HungerSecondsToEmpty { get => hungerSecondsToEmpty; set => hungerSecondsToEmpty = value; }
@@ -85,6 +87,7 @@ public class Goblin : MonoBehaviour
     {
         dungeonBoard ??= FindAnyObjectByType<DungeonBoard>();
         boardRenderer ??= FindAnyObjectByType<BoardRenderer>();
+        health ??= GetComponent<Health>();
 
         CreateBody();
         Spawn();
@@ -99,6 +102,7 @@ public class Goblin : MonoBehaviour
     /// <summary>One-line snapshot of the goblin's state, used by the debug log.</summary>
     public string StatsLine() =>
         $"[Goblin] {name} tile={CurrentTile} hunger={Hunger:F1} energy={Energy:F1}" +
+        $"{(health != null ? $" hp={health.CurrentHealth}/{health.MaxHealth}" : "")}" +
         $" speed={EffectiveMoveSpeed:F1}{(IsMoving ? " moving->" + NextTile : "")}" +
         $"{(IsWeakened ? $" WEAKENED starving={StarvationElapsed:F1}/{starvationSecondsToDie:F0}s" : "")}" +
         $"{(IsDead ? " DEAD" : "")}";
@@ -109,7 +113,9 @@ public class Goblin : MonoBehaviour
     {
         if (IsDead)
         {
-            Debug.Log(StatsLine() + $" — starved after {StarvationElapsed:F1}s at Hunger 0", this);
+            Debug.Log(StatsLine() + (KilledByDamage
+                ? " — killed: 0 HP"
+                : $" — starved after {StarvationElapsed:F1}s at Hunger 0"), this);
             return;
         }
 
@@ -138,6 +144,11 @@ public class Goblin : MonoBehaviour
     public void Tick(float deltaTime)
     {
         if (IsDead) return;
+        if (KilledByDamage)
+        {
+            Die(); // Hit points ran out (since the last Tick)
+            return;
+        }
 
         Advance(deltaTime);
 
@@ -233,6 +244,9 @@ public class Goblin : MonoBehaviour
         }
     }
 
+    private bool KilledByDamage => health != null && health.IsDead;
+
+    /// <summary>The one death path, for starvation and for 0 HP alike.</summary>
     private void Die()
     {
         IsDead = true;

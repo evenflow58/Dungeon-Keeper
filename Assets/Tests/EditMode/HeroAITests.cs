@@ -273,6 +273,34 @@ public class HeroAITests
     }
 
     [Test]
+    public void HeadOnInTunnel_GoblinEngages_BothStandSideBySide_AndTradeHits()
+    {
+        // Regression: both used to close in at once, aim for the same tile between them, land on top of each
+        // other (not adjacent), step off together and repeat — "bouncing" with no hits landed.
+        for (int y = 19; y <= 24; y++) board.SetTile(24, y, TileState.Floor); // 1-wide tunnel above the cavern
+        AddHero(24, 22, entrance: new Vector2Int(24, 25));
+        Goblin goblin = AddGoblin(24, 18, withAI: true); // Manhattan 4: it engages him right away
+        Health gh = goblin.Health;
+        Health hh = hero.Health;
+
+        StepUntil(() => gh.CurrentHealth < 20 && hh.CurrentHealth < 30, 4f, "both to land a hit");
+        Assert.AreEqual(1, Manhattan(hero.CurrentTile, goblin.CurrentTile), "Side by side");
+
+        Vector2Int heroTile = hero.CurrentTile, goblinTile = goblin.CurrentTile;
+        int heroHp = hh.CurrentHealth, goblinHp = gh.CurrentHealth;
+        StepFor(3f, () =>
+        {
+            Assert.AreEqual(heroTile, hero.CurrentTile, "Hero holds his tile while fighting");
+            Assert.AreEqual(goblinTile, goblin.CurrentTile, "Goblin holds its tile while fighting");
+            Assert.IsFalse(hero.IsMoving);
+            Assert.IsFalse(goblin.IsMoving);
+            Assert.AreEqual(HeroAI.Goal.Fight, ai.CurrentGoal, "No Fight/Delve flip-flop");
+        });
+        Assert.AreEqual(heroHp - 3, hh.CurrentHealth, 1, "Goblin keeps hitting: 1 per second");
+        Assert.AreEqual(goblinHp - 6, gh.CurrentHealth, 2, "Hero keeps hitting: 2 per second");
+    }
+
+    [Test]
     public void GoblinOffPath_Ignored_HeartAttackedOnSchedule()
     {
         AddHero(24, 17);

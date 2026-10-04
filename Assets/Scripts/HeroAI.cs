@@ -174,6 +174,8 @@ public class HeroAI : MonoBehaviour
         CurrentGoal = Goal.Fight;
         CurrentTarget = blocker;
         repathNow = true;
+        // Stop delving: finish only the step in progress, then hold or close in from there.
+        if (hero.IsMoving) hero.SetDestination(hero.NextTile);
         return true;
     }
 
@@ -188,20 +190,31 @@ public class HeroAI : MonoBehaviour
         }
 
         Vector2Int targetTile = CurrentTarget.GetComponent<Goblin>().CurrentTile;
-        if (poll)
+        bool adjacent = Manhattan(hero.CurrentTile, targetTile) == 1;
+        bool comingForMe = IsTargetEngagingMe();
+        if (poll && !adjacent && !comingForMe)
         {
-            // Only blockers are worth fighting: one that stepped aside (not adjacent, off the route) is left.
+            // Only blockers are worth fighting: one that stepped aside (off the route) and isn't attacking
+            // him is left alone.
             if (heart != null) delvePath = Pathfinder.FindPathToNeighbor(Board, hero.CurrentTile, heart.Tile);
-            if (Manhattan(hero.CurrentTile, targetTile) > 1 && !delvePath.Contains(targetTile))
+            if (!delvePath.Contains(targetTile))
             {
                 BackToDelve();
                 return;
             }
         }
 
-        if (Manhattan(hero.CurrentTile, targetTile) != 1 || hero.IsMoving)
+        // Let the step in progress finish; decide once he's standing on a tile.
+        if (hero.IsMoving) return;
+
+        if (!adjacent)
         {
-            bool replan = repathNow || !hero.IsMoving || (poll && targetTile != pathedTargetTile);
+            // A goblin that's attacking him is walking over: hold ground and let it come. Closing in at the
+            // same time is what made both sides head for the same tile and never end up side by side.
+            if (comingForMe) return;
+
+            // A blocker that isn't fighting back (asleep, eating, standing there): walk up beside it.
+            bool replan = repathNow || targetTile != pathedTargetTile;
             if (!replan) return;
             repathNow = false;
             List<Vector2Int> path = Pathfinder.FindPathToNeighbor(Board, hero.CurrentTile, targetTile);
@@ -215,11 +228,17 @@ public class HeroAI : MonoBehaviour
             return;
         }
 
+        repathNow = false;
         if (attackCooldown > 0f) return;
         CurrentTarget.TakeDamage(attackDamage);
         attackCooldown = attackIntervalSeconds;
         if (CurrentTarget.IsDead) BackToDelve();
     }
+
+    /// <summary>True when the target goblin's own AI is fighting this hero (so it will come to him).</summary>
+    private bool IsTargetEngagingMe() =>
+        CurrentTarget.TryGetComponent(out GoblinAI goblinAI) && goblinAI.enabled && goblinAI.gameObject.activeInHierarchy &&
+        goblinAI.CurrentGoal == GoblinAI.Goal.Fight && goblinAI.CurrentTarget == hero.Health;
 
     private bool IsTargetValid() =>
         CurrentTarget != null &&                                    // Unity null: destroyed

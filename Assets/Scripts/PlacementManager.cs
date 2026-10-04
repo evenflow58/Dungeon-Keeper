@@ -1,0 +1,127 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+/// <summary>
+/// Registry of placed items, one per tile. Placement is instant and free (DESIGN §A.4):
+/// a target must be Floor, unoccupied, and reachable by the imp. TileState is never changed.
+/// </summary>
+[DisallowMultipleComponent]
+public class PlacementManager : MonoBehaviour
+{
+    [Header("References")]
+    [SerializeField] private DungeonBoard dungeonBoard;
+    [SerializeField] private BoardRenderer boardRenderer;
+
+    [Header("Placeable Visuals (Placeholder Art)")]
+    [SerializeField] private Color lairCotColor = new Color(0.40f, 0.60f, 0.90f, 1f);      // Blue
+    [SerializeField] private Color mushroomPlotColor = new Color(0.35f, 0.75f, 0.35f, 1f); // Green
+    [SerializeField] private Color spikeTrapColor = new Color(0.55f, 0.55f, 0.60f, 1f);    // Steel gray
+    [SerializeField] private float placeableSize = 0.8f;                                    // Fraction of a tile
+
+    public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
+    public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
+
+    public int Count => placed.Count;
+
+    private readonly Dictionary<Vector2Int, Placeable> placed = new Dictionary<Vector2Int, Placeable>();
+    private Transform holder;
+
+    private void Awake()
+    {
+        dungeonBoard ??= GetComponent<DungeonBoard>() ?? FindAnyObjectByType<DungeonBoard>();
+        boardRenderer ??= GetComponent<BoardRenderer>() ?? FindAnyObjectByType<BoardRenderer>();
+    }
+
+    public bool IsOccupied(Vector2Int tile) => placed.ContainsKey(tile);
+
+    public Placeable GetAt(Vector2Int tile) => placed.TryGetValue(tile, out Placeable p) ? p : null;
+
+    public int CountOfType(PlaceableType type)
+    {
+        int n = 0;
+        foreach (Placeable p in placed.Values)
+            if (p.Type == type) n++;
+        return n;
+    }
+
+    /// <summary>
+    /// Valid target: in-bounds Floor, unoccupied, and reachable from fromTile (the imp's current tile).
+    /// </summary>
+    public bool CanPlace(Vector2Int tile, Vector2Int fromTile)
+    {
+        if (dungeonBoard == null) return false;
+        if (!dungeonBoard.IsWalkable(tile.x, tile.y) || IsOccupied(tile)) return false;
+        return Pathfinder.FindPath(dungeonBoard, fromTile, tile).Count > 0;
+    }
+
+    public bool TryPlace(PlaceableType type, Vector2Int tile, Vector2Int fromTile, out Placeable placeable)
+    {
+        placeable = null;
+        if (!CanPlace(tile, fromTile)) return false;
+
+        var go = new GameObject($"{type} ({tile.x}, {tile.y})");
+        go.transform.SetParent(GetHolder(), false);
+        go.transform.position = TileCenter(tile);
+
+        placeable = go.AddComponent<Placeable>();
+        placeable.Initialize(type, tile, ColorFor(type), placeableSize);
+        placed[tile] = placeable;
+        return true;
+    }
+
+    /// <summary>
+    /// Places on every valid tile in the rect (invalid tiles are skipped). Returns how many were placed.
+    /// </summary>
+    public int ApplyRect(PlaceableType type, RectInt rect, Vector2Int fromTile)
+    {
+        int count = 0;
+        for (int x = rect.x; x < rect.xMax; x++)
+        {
+            for (int y = rect.y; y < rect.yMax; y++)
+            {
+                if (TryPlace(type, new Vector2Int(x, y), fromTile, out _)) count++;
+            }
+        }
+        return count;
+    }
+
+    /// <summary>True if at least one tile in the rect is a valid target (drives the drag preview tint).</summary>
+    public bool AnyPlaceable(RectInt rect, Vector2Int fromTile)
+    {
+        for (int x = rect.x; x < rect.xMax; x++)
+        {
+            for (int y = rect.y; y < rect.yMax; y++)
+            {
+                if (CanPlace(new Vector2Int(x, y), fromTile)) return true;
+            }
+        }
+        return false;
+    }
+
+    public Color ColorFor(PlaceableType type)
+    {
+        switch (type)
+        {
+            case PlaceableType.LairCot: return lairCotColor;
+            case PlaceableType.MushroomPlot: return mushroomPlotColor;
+            case PlaceableType.SpikeTrap: return spikeTrapColor;
+            default: return Color.magenta;
+        }
+    }
+
+    private Transform GetHolder()
+    {
+        if (holder == null)
+        {
+            holder = new GameObject("Placeables").transform;
+            holder.SetParent(transform, false);
+        }
+        return holder;
+    }
+
+    private Vector3 TileCenter(Vector2Int tile)
+    {
+        if (boardRenderer != null) return boardRenderer.GetTileCenterWorldPosition(tile.x, tile.y);
+        return new Vector3(tile.x + 0.5f, tile.y + 0.5f, 0f);
+    }
+}

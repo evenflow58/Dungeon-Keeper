@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 
 [DisallowMultipleComponent]
@@ -58,6 +59,10 @@ public class DigDesignator : MonoBehaviour
         rightPressAction?.Disable();
         escAction?.Disable();
         mousePosAction?.Disable();
+
+        // Disabled mid-drag (e.g. placement mode entered): drop the drag so it can't resume later.
+        isDragging = false;
+        if (previewSprite != null) previewSprite.enabled = false;
     }
 
     private void OnDestroy()
@@ -121,6 +126,9 @@ public class DigDesignator : MonoBehaviour
                          || (Mouse.current?.leftButton.wasPressedThisFrame  ?? false);
         bool rightPressed = (rightPressAction?.WasPressedThisFrame() ?? false)
                          || (Mouse.current?.rightButton.wasPressedThisFrame ?? false);
+
+        // Presses that start on UI (e.g. the build bar) never reach the board.
+        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
 
         if      (leftPressed  && hitGround) TryStartDrag(worldPos, DesignateMode.Designate);
         else if (rightPressed && hitGround) TryStartDrag(worldPos, DesignateMode.Clear);

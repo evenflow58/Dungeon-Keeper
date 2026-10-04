@@ -529,6 +529,8 @@ GameObject:
   - component: {fileID: 565044519}
   - component: {fileID: 565044522}
   - component: {fileID: 565044523}
+  - component: {fileID: 565044525}
+  - component: {fileID: 565044524}
   m_Layer: 0
   m_Name: DungeonManager
   m_TagString: Untagged
@@ -616,6 +618,49 @@ MonoBehaviour:
   boardRenderer: {fileID: 565044519}
   mainCamera: {fileID: 330585545}
   previewColor: {r: 0.85, g: 0.65, b: 0.15, a: 0.35}
+--- !u!114 &565044524
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 72e3e37e9cc1ee54aab11e7d597fa07f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::PlacementController
+  dungeonBoard: {fileID: 565044520}
+  boardRenderer: {fileID: 565044519}
+  imp: {fileID: 71735945}
+  digDesignator: {fileID: 565044523}
+  placementManager: {fileID: 565044525}
+  mainCamera: {fileID: 330585545}
+  buttonNormalColor: {r: 0.25, g: 0.25, b: 0.3, a: 1}
+  buttonSelectedColor: {r: 0.85, g: 0.65, b: 0.15, a: 1}
+  buttonSize: {x: 140, y: 36}
+  barPadding: 8
+  validPreviewColor: {r: 0.4, g: 0.9, b: 0.4, a: 0.35}
+  invalidPreviewColor: {r: 0.9, g: 0.3, b: 0.3, a: 0.35}
+  feedbackFlashSeconds: 0.25
+--- !u!114 &565044525
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d0b855293e8d73b41927e94f0c1a6b9f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::PlacementManager
+  dungeonBoard: {fileID: 565044520}
+  boardRenderer: {fileID: 565044519}
+  lairCotColor: {r: 0.4, g: 0.6, b: 0.9, a: 1}
+  mushroomPlotColor: {r: 0.35, g: 0.75, b: 0.35, a: 1}
+  spikeTrapColor: {r: 0.55, g: 0.55, b: 0.6, a: 1}
+  placeableSize: 0.8
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0

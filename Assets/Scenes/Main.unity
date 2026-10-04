@@ -533,6 +533,7 @@ GameObject:
   - component: {fileID: 565044523}
   - component: {fileID: 565044525}
   - component: {fileID: 565044524}
+  - component: {fileID: 565044526}
   m_Layer: 0
   m_Name: DungeonManager
   m_TagString: Untagged
@@ -666,6 +667,19 @@ MonoBehaviour:
   mushroomGrowthSecondsPerFood: 30
   mushroomCapacity: 5
   spikeDamage: 1
+--- !u!114 &565044526
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb80987ffd467874a9eb2577d65f1904, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::GameManager
+  heart: {fileID: 1804583410}
 --- !u!1 &708604853
 GameObject:
   m_ObjectHideFlags: 0
@@ -17031,6 +17045,74 @@ MonoBehaviour:
   m_EditorClassIdentifier: DungeonKeeper::Health
   maxHealth: 20
   team: 0
+--- !u!1 &1804583409
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1804583412}
+  - component: {fileID: 1804583411}
+  - component: {fileID: 1804583410}
+  m_Layer: 0
+  m_Name: Heart
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1804583410
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1804583409}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a3e483c18bc20d644b335a4c90c0055d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::Heart
+  dungeonBoard: {fileID: 565044520}
+  boardRenderer: {fileID: 565044519}
+  health: {fileID: 1804583411}
+  heartTile: {x: 24, y: 14}
+  bodyColor: {r: 0.8, g: 0.1, b: 0.35, a: 1}
+  outlineColor: {r: 0.25, g: 0.02, b: 0.1, a: 1}
+  outlineWidth: 0.12
+  bodySize: 1.2
+  sortingOrder: 1
+--- !u!114 &1804583411
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1804583409}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ec34630d086ac704fa6a42dcad15c20b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::Health
+  maxHealth: 100
+  team: 0
+--- !u!4 &1804583412
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1804583409}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.5, y: -1.5, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1974660356
 GameObject:
   m_ObjectHideFlags: 0
@@ -17142,3 +17224,4 @@ SceneRoots:
   - {fileID: 1781885713}
   - {fileID: 1974660358}
   - {fileID: 708604855}
+  - {fileID: 1804583412}

@@ -677,6 +677,7 @@ GameObject:
   - component: {fileID: 708604855}
   - component: {fileID: 708604854}
   - component: {fileID: 708604856}
+  - component: {fileID: 708604857}
   m_Layer: 0
   m_Name: Goblin3
   m_TagString: Untagged
@@ -698,6 +699,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: DungeonKeeper::Goblin
   dungeonBoard: {fileID: 565044520}
   boardRenderer: {fileID: 565044519}
+  health: {fileID: 708604857}
   moveSpeed: 3
   spawnTile: {x: 24, y: 17}
   hungerSecondsToEmpty: 240
@@ -706,6 +708,8 @@ MonoBehaviour:
   bodyColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
   bodySize: 0.75
   sortingOrder: 2
+  outlineColor: {r: 0.1, g: 0.18, b: 0.08, a: 1}
+  outlineWidth: 0.14
   logStats: 1
   logIntervalSeconds: 5
 --- !u!4 &708604855
@@ -743,6 +747,23 @@ MonoBehaviour:
   sleepSecondsToFull: 10
   decisionIntervalSeconds: 0.25
   wanderPauseSeconds: 1.5
+  aggroRange: 4
+  attackIntervalSeconds: 1
+  attackDamage: 1
+--- !u!114 &708604857
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 708604853}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ec34630d086ac704fa6a42dcad15c20b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::Health
+  maxHealth: 20
+  team: 0
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -16923,6 +16944,7 @@ GameObject:
   - component: {fileID: 1781885713}
   - component: {fileID: 1781885712}
   - component: {fileID: 1781885714}
+  - component: {fileID: 1781885715}
   m_Layer: 0
   m_Name: Goblin1
   m_TagString: Untagged
@@ -16944,6 +16966,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: DungeonKeeper::Goblin
   dungeonBoard: {fileID: 565044520}
   boardRenderer: {fileID: 565044519}
+  health: {fileID: 1781885715}
   moveSpeed: 3
   spawnTile: {x: 23, y: 15}
   hungerSecondsToEmpty: 240
@@ -16952,6 +16975,8 @@ MonoBehaviour:
   bodyColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
   bodySize: 0.75
   sortingOrder: 2
+  outlineColor: {r: 0.1, g: 0.18, b: 0.08, a: 1}
+  outlineWidth: 0.14
   logStats: 1
   logIntervalSeconds: 5
 --- !u!4 &1781885713
@@ -16989,6 +17014,23 @@ MonoBehaviour:
   sleepSecondsToFull: 10
   decisionIntervalSeconds: 0.25
   wanderPauseSeconds: 1.5
+  aggroRange: 4
+  attackIntervalSeconds: 1
+  attackDamage: 1
+--- !u!114 &1781885715
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1781885711}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ec34630d086ac704fa6a42dcad15c20b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::Health
+  maxHealth: 20
+  team: 0
 --- !u!1 &1974660356
 GameObject:
   m_ObjectHideFlags: 0
@@ -17000,6 +17042,7 @@ GameObject:
   - component: {fileID: 1974660358}
   - component: {fileID: 1974660357}
   - component: {fileID: 1974660359}
+  - component: {fileID: 1974660360}
   m_Layer: 0
   m_Name: Goblin2
   m_TagString: Untagged
@@ -17021,6 +17064,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: DungeonKeeper::Goblin
   dungeonBoard: {fileID: 565044520}
   boardRenderer: {fileID: 565044519}
+  health: {fileID: 1974660360}
   moveSpeed: 3
   spawnTile: {x: 25, y: 15}
   hungerSecondsToEmpty: 240
@@ -17029,6 +17073,8 @@ MonoBehaviour:
   bodyColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
   bodySize: 0.75
   sortingOrder: 2
+  outlineColor: {r: 0.1, g: 0.18, b: 0.08, a: 1}
+  outlineWidth: 0.14
   logStats: 1
   logIntervalSeconds: 5
 --- !u!4 &1974660358
@@ -17066,6 +17112,23 @@ MonoBehaviour:
   sleepSecondsToFull: 10
   decisionIntervalSeconds: 0.25
   wanderPauseSeconds: 1.5
+  aggroRange: 4
+  attackIntervalSeconds: 1
+  attackDamage: 1
+--- !u!114 &1974660360
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1974660356}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ec34630d086ac704fa6a42dcad15c20b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::Health
+  maxHealth: 20
+  team: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

@@ -29,6 +29,10 @@ public class Goblin : MonoBehaviour
     [SerializeField] private float bodySize = 0.75f;                               // Fraction of a tile
     [SerializeField] private int sortingOrder = 2;                                 // Above tiles (0) and placeables (1)
 
+    [Header("Debug")]
+    [SerializeField] private bool logStats = true;            // Console stats while playing (Update only; Tick stays silent)
+    [SerializeField] private float logIntervalSeconds = 5f;   // Game seconds between periodic stat lines
+
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
     public float MoveSpeed { get => moveSpeed; set => moveSpeed = value; }
@@ -36,6 +40,8 @@ public class Goblin : MonoBehaviour
     public float HungerSecondsToEmpty { get => hungerSecondsToEmpty; set => hungerSecondsToEmpty = value; }
     public float EnergySecondsToEmpty { get => energySecondsToEmpty; set => energySecondsToEmpty = value; }
     public float StarvationSecondsToDie { get => starvationSecondsToDie; set => starvationSecondsToDie = value; }
+    public bool LogStats { get => logStats; set => logStats = value; }
+    public float LogIntervalSeconds { get => logIntervalSeconds; set => logIntervalSeconds = value; }
 
     /// <summary>0–100; 100 is full. Clamped on every set.</summary>
     public float Hunger { get => hunger; set => hunger = Mathf.Clamp(value, 0f, MaxNeed); }
@@ -69,6 +75,8 @@ public class Goblin : MonoBehaviour
     private readonly List<Vector2Int> path = new List<Vector2Int>();
     private Vector2Int segmentStart;
     private SpriteRenderer bodySprite;
+    private float logTimer;
+    private bool wasWeakened;
 
     private void Start()
     {
@@ -82,6 +90,36 @@ public class Goblin : MonoBehaviour
     private void Update()
     {
         Tick(Time.deltaTime);
+        if (logStats) LogStatsStep(Time.deltaTime);
+    }
+
+    /// <summary>One-line snapshot of the goblin's state, used by the debug log.</summary>
+    public string StatsLine() =>
+        $"[Goblin] {name} tile={CurrentTile} hunger={Hunger:F1} energy={Energy:F1}" +
+        $" speed={EffectiveMoveSpeed:F1}{(IsMoving ? " moving->" + NextTile : "")}" +
+        $"{(IsWeakened ? $" WEAKENED starving={StarvationElapsed:F1}/{starvationSecondsToDie:F0}s" : "")}" +
+        $"{(IsDead ? " DEAD" : "")}";
+
+    // Logs state transitions immediately (weakened, recovered, died) and a full stat line every
+    // logIntervalSeconds. Runs after Tick in Update, so a death is logged in the frame it happens.
+    private void LogStatsStep(float deltaTime)
+    {
+        if (IsDead)
+        {
+            Debug.Log(StatsLine() + $" — starved after {StarvationElapsed:F1}s at Hunger 0", this);
+            return;
+        }
+
+        if (IsWeakened != wasWeakened)
+        {
+            wasWeakened = IsWeakened;
+            Debug.Log(StatsLine() + (IsWeakened ? " — hunger hit 0: weakened" : " — fed: no longer weakened"), this);
+        }
+
+        logTimer += deltaTime;
+        if (logTimer < logIntervalSeconds) return;
+        logTimer = 0f;
+        Debug.Log(StatsLine(), this);
     }
 
     /// <summary>Places the goblin on its spawn tile and clears any orders.</summary>

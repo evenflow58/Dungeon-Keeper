@@ -18,10 +18,34 @@ public class PlacementManager : MonoBehaviour
     [SerializeField] private Color spikeTrapColor = new Color(0.55f, 0.55f, 0.60f, 1f);    // Steel gray
     [SerializeField] private float placeableSize = 0.8f;                                    // Fraction of a tile
 
+    // Placeables are runtime-created (no Inspector presence), so their behavior config lives here.
+    [Header("Mushroom Plot")]
+    [SerializeField] private float mushroomGrowthSecondsPerFood = 30f;
+    [SerializeField] private int mushroomCapacity = 5;
+
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
+    public float MushroomGrowthSecondsPerFood { get => mushroomGrowthSecondsPerFood; set => mushroomGrowthSecondsPerFood = value; }
+    public int MushroomCapacity { get => mushroomCapacity; set => mushroomCapacity = value; }
 
     public int Count => placed.Count;
+
+    /// <summary>Food stored across all Mushroom Plots (the top bar's source).</summary>
+    public int TotalFood
+    {
+        get
+        {
+            int total = 0;
+            foreach (Placeable p in placed.Values)
+            {
+                if (p.Type != PlaceableType.MushroomPlot) continue;
+                // TryGetComponent rather than ?. on a UnityEngine.Object (?. skips Unity's null check, which
+                // matters for destroyed objects). A plot without the component contributes 0.
+                if (p.TryGetComponent(out MushroomPlot plot)) total += plot.FoodCount;
+            }
+            return total;
+        }
+    }
 
     private readonly Dictionary<Vector2Int, Placeable> placed = new Dictionary<Vector2Int, Placeable>();
     private Transform holder;
@@ -65,6 +89,8 @@ public class PlacementManager : MonoBehaviour
 
         placeable = go.AddComponent<Placeable>();
         placeable.Initialize(type, tile, ColorFor(type), placeableSize);
+        if (type == PlaceableType.MushroomPlot)
+            go.AddComponent<MushroomPlot>().Initialize(mushroomGrowthSecondsPerFood, mushroomCapacity);
         placed[tile] = placeable;
         return true;
     }

@@ -666,6 +666,60 @@ MonoBehaviour:
   mushroomGrowthSecondsPerFood: 30
   mushroomCapacity: 5
   spikeDamage: 1
+--- !u!1 &708604853
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 708604855}
+  - component: {fileID: 708604854}
+  m_Layer: 0
+  m_Name: Goblin3
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &708604854
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 708604853}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 12c3fe491fbc78e4f8f6973b6afbd361, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::Goblin
+  dungeonBoard: {fileID: 565044520}
+  boardRenderer: {fileID: 565044519}
+  moveSpeed: 3
+  spawnTile: {x: 24, y: 17}
+  hungerSecondsToEmpty: 240
+  energySecondsToEmpty: 300
+  starvationSecondsToDie: 60
+  bodyColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
+  bodySize: 0.75
+  sortingOrder: 2
+--- !u!4 &708604855
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 708604853}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.5, y: 1.5, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -16835,6 +16889,114 @@ MonoBehaviour:
   m_InstancedGameObject: {fileID: 0}
   m_Flags: 1
   m_ColliderType: 1
+--- !u!1 &1781885711
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1781885713}
+  - component: {fileID: 1781885712}
+  m_Layer: 0
+  m_Name: Goblin1
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1781885712
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1781885711}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 12c3fe491fbc78e4f8f6973b6afbd361, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::Goblin
+  dungeonBoard: {fileID: 565044520}
+  boardRenderer: {fileID: 565044519}
+  moveSpeed: 3
+  spawnTile: {x: 23, y: 15}
+  hungerSecondsToEmpty: 240
+  energySecondsToEmpty: 300
+  starvationSecondsToDie: 60
+  bodyColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
+  bodySize: 0.75
+  sortingOrder: 2
+--- !u!4 &1781885713
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1781885711}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.5, y: -0.5, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1974660356
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1974660358}
+  - component: {fileID: 1974660357}
+  m_Layer: 0
+  m_Name: Goblin2
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1974660357
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1974660356}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 12c3fe491fbc78e4f8f6973b6afbd361, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::Goblin
+  dungeonBoard: {fileID: 565044520}
+  boardRenderer: {fileID: 565044519}
+  moveSpeed: 3
+  spawnTile: {x: 25, y: 15}
+  hungerSecondsToEmpty: 240
+  energySecondsToEmpty: 300
+  starvationSecondsToDie: 60
+  bodyColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
+  bodySize: 0.75
+  sortingOrder: 2
+--- !u!4 &1974660358
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1974660356}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 1.5, y: -0.5, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -16845,3 +17007,6 @@ SceneRoots:
   - {fileID: 1236876756}
   - {fileID: 565044521}
   - {fileID: 71735946}
+  - {fileID: 1781885713}
+  - {fileID: 1974660358}
+  - {fileID: 708604855}

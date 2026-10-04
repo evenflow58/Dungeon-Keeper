@@ -1,0 +1,240 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+/// <summary>
+/// A goblin minion's body and needs clock: tile movement (same API and semantics as Imp's) plus
+/// Hunger and Energy that decay in real time. Hunger at 0 weakens it (half move speed); a further
+/// starvationSecondsToDie at 0 kills it. Decisions (eat / sleep / wander) live in a separate driver.
+/// </summary>
+[DisallowMultipleComponent]
+public class Goblin : MonoBehaviour
+{
+    public const float MaxNeed = 100f;
+
+    [Header("References")]
+    [SerializeField] private DungeonBoard dungeonBoard;
+    [SerializeField] private BoardRenderer boardRenderer;
+
+    [Header("Movement")]
+    [SerializeField] private float moveSpeed = 3f; // Tiles per second (provisional: goblins amble slower than the imp)
+    [SerializeField] private Vector2Int spawnTile;
+
+    [Header("Needs")]
+    [SerializeField] private float hungerSecondsToEmpty = 240f;  // ~4 min, DESIGN §A.5
+    [SerializeField] private float energySecondsToEmpty = 300f;  // ~5 min, DESIGN §A.5
+    [SerializeField] private float starvationSecondsToDie = 60f; // Time at Hunger 0 before death
+
+    [Header("Appearance (Placeholder Art)")]
+    [SerializeField] private Color bodyColor = new Color(0.45f, 0.80f, 0.35f, 1f); // Goblin green
+    [SerializeField] private float bodySize = 0.75f;                               // Fraction of a tile
+    [SerializeField] private int sortingOrder = 2;                                 // Above tiles (0) and placeables (1)
+
+    public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
+    public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
+    public float MoveSpeed { get => moveSpeed; set => moveSpeed = value; }
+    public Vector2Int SpawnTile { get => spawnTile; set => spawnTile = value; }
+    public float HungerSecondsToEmpty { get => hungerSecondsToEmpty; set => hungerSecondsToEmpty = value; }
+    public float EnergySecondsToEmpty { get => energySecondsToEmpty; set => energySecondsToEmpty = value; }
+    public float StarvationSecondsToDie { get => starvationSecondsToDie; set => starvationSecondsToDie = value; }
+
+    /// <summary>0–100; 100 is full. Clamped on every set.</summary>
+    public float Hunger { get => hunger; set => hunger = Mathf.Clamp(value, 0f, MaxNeed); }
+
+    /// <summary>0–100; 100 is fully rested. Clamped on every set.</summary>
+    public float Energy { get => energy; set => energy = Mathf.Clamp(value, 0f, MaxNeed); }
+
+    /// <summary>Starving: Hunger at 0. Halves move speed here; the combat story halves fight speed.</summary>
+    public bool IsWeakened => Hunger <= 0f;
+
+    public float EffectiveMoveSpeed => IsWeakened ? moveSpeed * 0.5f : moveSpeed;
+
+    /// <summary>Seconds spent continuously at Hunger 0; resets to 0 whenever Hunger is above 0.</summary>
+    public float StarvationElapsed { get; private set; }
+
+    /// <summary>Final for the slice: a dead goblin's GameObject is deactivated and it never acts again.</summary>
+    public bool IsDead { get; private set; }
+
+    /// <summary>The board tile whose cell contains the goblin's sprite.</summary>
+    public Vector2Int CurrentTile { get; private set; }
+
+    /// <summary>The waypoint the goblin is currently walking toward; equals CurrentTile when idle.</summary>
+    public Vector2Int NextTile { get; private set; }
+
+    public bool IsMoving => path.Count > 0;
+
+    private float hunger = MaxNeed;
+    private float energy = MaxNeed;
+
+    // Waypoints still to visit; path[0] is the tile being walked toward (NextTile).
+    private readonly List<Vector2Int> path = new List<Vector2Int>();
+    private Vector2Int segmentStart;
+    private SpriteRenderer bodySprite;
+
+    private void Start()
+    {
+        dungeonBoard ??= FindAnyObjectByType<DungeonBoard>();
+        boardRenderer ??= FindAnyObjectByType<BoardRenderer>();
+
+        CreateBody();
+        Spawn();
+    }
+
+    private void Update()
+    {
+        Tick(Time.deltaTime);
+    }
+
+    /// <summary>Places the goblin on its spawn tile and clears any orders.</summary>
+    public void Spawn()
+    {
+        PlaceOnTile(spawnTile);
+    }
+
+    /// <summary>
+    /// Advances movement and the needs clock by deltaTime. Called from Update; public so tests can
+    /// step it deterministically. No-op once dead.
+    /// </summary>
+    public void Tick(float deltaTime)
+    {
+        if (IsDead) return;
+
+        Advance(deltaTime);
+
+        Hunger -= MaxNeed / hungerSecondsToEmpty * deltaTime;
+        Energy -= MaxNeed / energySecondsToEmpty * deltaTime;
+
+        if (Hunger > 0f)
+        {
+            StarvationElapsed = 0f;
+            return;
+        }
+
+        StarvationElapsed += deltaTime;
+        if (StarvationElapsed >= starvationSecondsToDie) Die();
+    }
+
+    /// <summary>Snaps the goblin to the given tile's center and clears any orders.</summary>
+    public void PlaceOnTile(Vector2Int tile)
+    {
+        path.Clear();
+        CurrentTile = tile;
+        NextTile = tile;
+        segmentStart = tile;
+        transform.position = TileCenter(tile);
+    }
+
+    /// <summary>
+    /// Paths to the given tile and starts walking it, with Imp.SetDestination's semantics: mid-move the
+    /// new path starts from the waypoint ahead; with no path the request is ignored (current orders kept).
+    /// Returns whether a path was found. Always false once dead.
+    /// </summary>
+    public bool SetDestination(Vector2Int tile)
+    {
+        if (dungeonBoard == null || IsDead) return false;
+
+        // Between tile centers, the goblin is committed to the waypoint ahead; otherwise it
+        // stands on segmentStart's center (which is CurrentTile).
+        bool betweenTiles = IsMoving && transform.position != TileCenter(segmentStart);
+        Vector2Int origin = betweenTiles ? NextTile : segmentStart;
+
+        List<Vector2Int> newPath = Pathfinder.FindPath(dungeonBoard, origin, tile);
+        if (newPath.Count == 0) return false;
+
+        path.Clear();
+        if (betweenTiles)
+        {
+            // Finish the current segment first: newPath[0] is the waypoint ahead.
+            path.AddRange(newPath);
+        }
+        else
+        {
+            // newPath[0] is the tile the goblin is already standing on.
+            path.AddRange(newPath.GetRange(1, newPath.Count - 1));
+            CurrentTile = origin;
+        }
+
+        NextTile = path.Count > 0 ? path[0] : CurrentTile;
+        return true;
+    }
+
+    /// <summary>
+    /// Moves the goblin along its path by deltaTime seconds' worth of travel at EffectiveMoveSpeed.
+    /// Tick calls it; public so tests can step movement alone. No-op once dead.
+    /// </summary>
+    public void Advance(float deltaTime)
+    {
+        if (IsDead) return;
+
+        float remaining = EffectiveMoveSpeed * deltaTime; // In tiles (= world units, 1 unit per tile)
+
+        while (path.Count > 0 && remaining > 0f)
+        {
+            Vector3 target = TileCenter(path[0]);
+            float distance = Vector3.Distance(transform.position, target);
+
+            if (distance <= remaining)
+            {
+                // Reach this waypoint exactly, then carry leftover travel into the next one.
+                transform.position = target;
+                remaining -= distance;
+                segmentStart = path[0];
+                CurrentTile = path[0];
+                path.RemoveAt(0);
+                NextTile = path.Count > 0 ? path[0] : CurrentTile;
+            }
+            else
+            {
+                transform.position = Vector3.MoveTowards(transform.position, target, remaining);
+                // Mid-segment, the sprite's cell is whichever segment end it's closer to.
+                CurrentTile = distance - remaining < 0.5f * SegmentLength() ? path[0] : segmentStart;
+                remaining = 0f;
+            }
+        }
+    }
+
+    private void Die()
+    {
+        IsDead = true;
+        path.Clear();
+        NextTile = CurrentTile;
+        gameObject.SetActive(false); // Slice placeholder for death: no corpse system
+    }
+
+    private float SegmentLength() =>
+        Vector3.Distance(TileCenter(segmentStart), TileCenter(NextTile));
+
+    private Vector3 TileCenter(Vector2Int tile)
+    {
+        Vector3 center = boardRenderer != null
+            ? boardRenderer.GetTileCenterWorldPosition(tile.x, tile.y)
+            : new Vector3(tile.x + 0.5f, tile.y + 0.5f, 0f);
+        return new Vector3(center.x, center.y, transform.position.z);
+    }
+
+    private void CreateBody()
+    {
+        if (bodySprite != null) return;
+
+        var go = new GameObject("GoblinBody");
+        go.transform.SetParent(transform, false);
+        go.transform.localScale = new Vector3(bodySize, bodySize, 1f);
+        go.transform.localPosition = new Vector3(0f, 0f, -0.2f);
+        bodySprite = go.AddComponent<SpriteRenderer>();
+
+        const int res = 16;
+        var tex = new Texture2D(res, res, TextureFormat.RGBA32, false);
+        tex.name = "Goblin_Texture";
+        var pixels = new Color[res * res];
+        for (int i = 0; i < pixels.Length; i++) pixels[i] = Color.white;
+        tex.SetPixels(pixels);
+        tex.filterMode = FilterMode.Point;
+        tex.wrapMode = TextureWrapMode.Clamp;
+        tex.Apply();
+
+        var sprite = Sprite.Create(tex, new Rect(0, 0, res, res), new Vector2(0.5f, 0.5f), res);
+        sprite.name = "Goblin_Sprite";
+        bodySprite.sprite = sprite;
+        bodySprite.color = bodyColor;
+        bodySprite.sortingOrder = sortingOrder;
+    }
+}

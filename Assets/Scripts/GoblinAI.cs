@@ -76,7 +76,6 @@ public class GoblinAI : MonoBehaviour
     private float decisionTimer;
     private float combatScanTimer;     // Combat poll during non-Fight goals; also Fight's range/re-path poll
     private float attackCooldown;      // Fight: ≤ 0 means the next attack lands as soon as the goblin is adjacent
-    private Goblin targetBody;         // Fight: CurrentTarget's body, for its tile
     private Vector2Int pathedTargetTile;
 
     private DungeonBoard Board => goblin.Board;
@@ -192,13 +191,12 @@ public class GoblinAI : MonoBehaviour
     private bool TryStartFight()
     {
         Health target = TrySelectTarget(Board, goblin.CurrentTile, MyTeam, ScanCandidates(), aggroRange);
-        if (target == null || !target.TryGetComponent(out Goblin body)) return false;
+        if (target == null) return false;
 
         ReleaseCot();
         ResetGoalState();
         CurrentGoal = Goal.Fight;
         CurrentTarget = target;
-        targetBody = body;
         attackCooldown = 0f; // First attack lands as soon as the goblin is adjacent
         combatScanTimer = 0f;
         if (RepathToTarget()) return true;
@@ -209,21 +207,40 @@ public class GoblinAI : MonoBehaviour
 
     private HealthTeam MyTeam => goblin.Health != null ? goblin.Health.Team : HealthTeam.Monster;
 
-    // Active Health components with a body, sorted by body tile in board scan order so ties are deterministic.
+    // Active Health components with a body (goblin or hero), sorted by body tile in board scan order so ties
+    // are deterministic.
     private static List<Health> ScanCandidates()
     {
-        var candidates = new List<Health>();
+        var candidates = new List<(Health health, Vector2Int tile)>();
         foreach (Health h in FindObjectsByType<Health>())
         {
-            if (h.TryGetComponent(out Goblin _)) candidates.Add(h);
+            if (TryGetBodyTile(h, out Vector2Int tile)) candidates.Add((h, tile));
         }
-        candidates.Sort((a, b) =>
-        {
-            Vector2Int ta = a.GetComponent<Goblin>().CurrentTile, tb = b.GetComponent<Goblin>().CurrentTile;
-            return ta.x != tb.x ? ta.x.CompareTo(tb.x) : ta.y.CompareTo(tb.y);
-        });
-        return candidates;
+        candidates.Sort((a, b) => a.tile.x != b.tile.x ? a.tile.x.CompareTo(b.tile.x) : a.tile.y.CompareTo(b.tile.y));
+        return candidates.ConvertAll(c => c.health);
     }
+
+    /// <summary>The tile of a fightable body: a Goblin's or a Hero's CurrentTile. False when it has neither.</summary>
+    public static bool TryGetBodyTile(Health candidate, out Vector2Int tile)
+    {
+        if (candidate.TryGetComponent(out Goblin goblinBody))
+        {
+            tile = goblinBody.CurrentTile;
+            return true;
+        }
+        if (candidate.TryGetComponent(out Hero heroBody))
+        {
+            tile = heroBody.CurrentTile;
+            return true;
+        }
+        tile = default;
+        return false;
+    }
+
+    /// <summary>True when the candidate's body has already died (its Health may lag a frame behind).</summary>
+    public static bool IsBodyDead(Health candidate) =>
+        (candidate.TryGetComponent(out Goblin goblinBody) && goblinBody.IsDead) ||
+        (candidate.TryGetComponent(out Hero heroBody) && heroBody.IsDead);
 
     private void StartWander()
     {
@@ -243,7 +260,6 @@ public class GoblinAI : MonoBehaviour
     {
         TargetPlot = null;
         CurrentTarget = null;
-        targetBody = null;
         IsSleeping = false;
         wanderTraveling = false;
         wanderPauseTimer = 0f;
@@ -327,7 +343,7 @@ public class GoblinAI : MonoBehaviour
             return;
         }
 
-        Vector2Int targetTile = targetBody.CurrentTile;
+        TryGetBodyTile(CurrentTarget, out Vector2Int targetTile); // IsTargetValid guarantees a body
         attackCooldown -= deltaTime;
 
         combatScanTimer += deltaTime;
@@ -364,7 +380,7 @@ public class GoblinAI : MonoBehaviour
     /// <summary>Paths to a tile beside the target (never onto it). False when that's no longer possible.</summary>
     private bool RepathToTarget()
     {
-        Vector2Int targetTile = targetBody.CurrentTile;
+        if (!TryGetBodyTile(CurrentTarget, out Vector2Int targetTile)) return false;
         List<Vector2Int> path = Pathfinder.FindPathToNeighbor(Board, goblin.CurrentTile, targetTile);
         if (path.Count == 0 || !goblin.SetDestination(path[path.Count - 1])) return false;
         pathedTargetTile = targetTile;
@@ -372,9 +388,10 @@ public class GoblinAI : MonoBehaviour
     }
 
     private bool IsTargetValid() =>
-        CurrentTarget != null && targetBody != null &&            // Unity null: destroyed
+        CurrentTarget != null &&                                   // Unity null: destroyed
         CurrentTarget.gameObject.activeInHierarchy &&
-        !CurrentTarget.IsDead && !targetBody.IsDead;
+        !CurrentTarget.IsDead && !IsBodyDead(CurrentTarget) &&
+        TryGetBodyTile(CurrentTarget, out _);
 
     /// <summary>Drops the fight and lets needs take over in the same tick.</summary>
     private void Disengage()
@@ -422,7 +439,8 @@ public class GoblinAI : MonoBehaviour
 
     /// <summary>
     /// The nearest opposing-team, living Health within aggroRange (Manhattan) that can be stood beside.
-    /// A candidate's tile is its Goblin body's CurrentTile (candidates without one are skipped). Ties keep
+    /// A candidate's tile is its body's CurrentTile — a Goblin or a Hero (TryGetBodyTile); candidates without
+    /// a body are skipped. Ties keep
     /// candidate order. Unreachable hostiles are skipped — noted, not acted on. Null when there's none.
     /// </summary>
     public static Health TrySelectTarget(DungeonBoard board, Vector2Int fromTile, HealthTeam myTeam,
@@ -434,11 +452,11 @@ public class GoblinAI : MonoBehaviour
         foreach (Health candidate in candidates)
         {
             if (candidate == null || candidate.IsDead || candidate.Team == myTeam) continue;
-            if (!candidate.TryGetComponent(out Goblin body) || body.IsDead) continue;
+            if (!TryGetBodyTile(candidate, out Vector2Int bodyTile) || IsBodyDead(candidate)) continue;
 
-            int distance = Manhattan(fromTile, body.CurrentTile);
+            int distance = Manhattan(fromTile, bodyTile);
             if (distance > aggroRange || distance >= bestDistance) continue; // Out of range, or not strictly nearer
-            if (Pathfinder.FindPathToNeighbor(board, fromTile, body.CurrentTile).Count == 0) continue;
+            if (Pathfinder.FindPathToNeighbor(board, fromTile, bodyTile).Count == 0) continue;
 
             best = candidate;
             bestDistance = distance;

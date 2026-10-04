@@ -661,6 +661,8 @@ MonoBehaviour:
   mushroomPlotColor: {r: 0.35, g: 0.75, b: 0.35, a: 1}
   spikeTrapColor: {r: 0.55, g: 0.55, b: 0.6, a: 1}
   placeableSize: 0.8
+  mushroomGrowthSecondsPerFood: 30
+  mushroomCapacity: 5
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0

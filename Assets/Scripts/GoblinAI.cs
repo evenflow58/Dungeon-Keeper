@@ -36,6 +36,7 @@ public class GoblinAI : MonoBehaviour
     [SerializeField] private int aggroRange = 4;                // Tiles, Manhattan (DESIGN §A.5)
     [SerializeField] private float attackIntervalSeconds = 1f;  // Doubled while weakened (half attack rate)
     [SerializeField] private int attackDamage = 1;
+    [SerializeField] private float weakenedAttackIntervalMultiplier = 2f; // DESIGN §A.5: half attack rate at Hunger 0
 
     public Goblin Goblin { get => goblin; set => goblin = value; }
     public PlacementManager PlacementManager { get => placementManager; set => placementManager = value; }
@@ -48,6 +49,7 @@ public class GoblinAI : MonoBehaviour
     public int AggroRange { get => aggroRange; set => aggroRange = value; }
     public float AttackIntervalSeconds { get => attackIntervalSeconds; set => attackIntervalSeconds = value; }
     public int AttackDamage { get => attackDamage; set => attackDamage = value; }
+    public float WeakenedAttackIntervalMultiplier { get => weakenedAttackIntervalMultiplier; set => weakenedAttackIntervalMultiplier = value; }
 
     /// <summary>Random source for wander targets; tests replace it with a seeded one.</summary>
     public System.Random Rng { get; set; } = new System.Random();
@@ -66,9 +68,9 @@ public class GoblinAI : MonoBehaviour
     /// <summary>The hostile being fought (Fight goal only).</summary>
     public Health CurrentTarget { get; private set; }
 
-    /// <summary>The attack interval right now: attackIntervalSeconds, doubled while the goblin is weakened.</summary>
+    /// <summary>The attack interval right now: attackIntervalSeconds, × weakenedAttackIntervalMultiplier while weakened.</summary>
     public float EffectiveAttackInterval =>
-        goblin != null && goblin.IsWeakened ? attackIntervalSeconds * 2f : attackIntervalSeconds;
+        goblin != null && goblin.IsWeakened ? attackIntervalSeconds * weakenedAttackIntervalMultiplier : attackIntervalSeconds;
 
     private Vector2Int standPoint;   // Eat: the tile beside TargetPlot
     private bool wanderTraveling;    // Wander: false = pausing, true = walking the leg

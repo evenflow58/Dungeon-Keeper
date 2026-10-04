@@ -256,6 +256,16 @@ public class GoblinCombatTests
     }
 
     [Test]
+    public void WeakenedAttackIntervalMultiplier_IsTunable()
+    {
+        var (attacker, ai) = AddFighter(23, 16);
+        Assert.AreEqual(2f, ai.WeakenedAttackIntervalMultiplier, "DESIGN §A.5 default");
+        ai.WeakenedAttackIntervalMultiplier = 3f;
+        attacker.Hunger = 0f;
+        Assert.AreEqual(3f, ai.EffectiveAttackInterval);
+    }
+
+    [Test]
     public void WeakenedCadence_HalfTheAttackRate()
     {
         var (attacker, ai) = AddFighter(23, 16);

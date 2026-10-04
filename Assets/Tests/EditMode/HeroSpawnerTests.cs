@@ -89,10 +89,38 @@ public class HeroSpawnerTests
         Assert.AreEqual(2, ai.AttackDamage);
         Assert.AreEqual(1f, ai.AttackIntervalSeconds);
         Assert.AreEqual(new Vector2Int(24, 31), ai.EntranceTile);
+        Assert.AreEqual(0.3f, ai.FleeHealthFraction);
+        Assert.AreEqual(0.25f, ai.DecisionIntervalSeconds);
 
         TickFor(100);
         Assert.AreEqual(1, spawner.HeroesSpawned, "Only the first hero (waves are the next story)");
         Assert.AreEqual(1, Object.FindObjectsByType<Hero>().Length);
+    }
+
+    [Test]
+    public void SpawnerStats_FlowToTheSpawnedHero()
+    {
+        spawner.HeroMaxHealth = 45;
+        spawner.HeroMoveSpeed = 4.5f;
+        spawner.HeroAttackDamage = 5;
+        spawner.HeroAttackIntervalSeconds = 0.5f;
+        spawner.HeroFleeHealthFraction = 0.5f;
+        spawner.HeroDecisionIntervalSeconds = 0.1f;
+        spawner.EntranceTile = new Vector2Int(0, 16);
+
+        spawner.Tick(300f);
+        Hero hero = spawner.ActiveHero;
+        HeroAI ai = hero.GetComponent<HeroAI>();
+
+        Assert.AreEqual(45, hero.Health.MaxHealth);
+        Assert.AreEqual(45, hero.Health.CurrentHealth);
+        Assert.AreEqual(4.5f, hero.MoveSpeed);
+        Assert.AreEqual(5, ai.AttackDamage);
+        Assert.AreEqual(0.5f, ai.AttackIntervalSeconds);
+        Assert.AreEqual(0.5f, ai.FleeHealthFraction);
+        Assert.AreEqual(0.1f, ai.DecisionIntervalSeconds);
+        Assert.AreEqual(new Vector2Int(0, 16), hero.CurrentTile);
+        Assert.AreEqual(new Vector2Int(0, 16), ai.EntranceTile);
     }
 
     [Test]

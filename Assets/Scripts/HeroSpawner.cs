@@ -27,6 +27,8 @@ public class HeroSpawner : MonoBehaviour
     [SerializeField] private float heroMoveSpeed = 3f;
     [SerializeField] private int heroAttackDamage = 2;
     [SerializeField] private float heroAttackIntervalSeconds = 1f;
+    [SerializeField] private float heroFleeHealthFraction = 0.3f;     // DESIGN §A.6: flees at 30% HP
+    [SerializeField] private float heroDecisionIntervalSeconds = 0.25f; // How often he re-plans and looks for blockers
 
     public PlacementManager PlacementManager { get => placementManager; set => placementManager = value; }
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
@@ -39,6 +41,8 @@ public class HeroSpawner : MonoBehaviour
     public float HeroMoveSpeed { get => heroMoveSpeed; set => heroMoveSpeed = value; }
     public int HeroAttackDamage { get => heroAttackDamage; set => heroAttackDamage = value; }
     public float HeroAttackIntervalSeconds { get => heroAttackIntervalSeconds; set => heroAttackIntervalSeconds = value; }
+    public float HeroFleeHealthFraction { get => heroFleeHealthFraction; set => heroFleeHealthFraction = value; }
+    public float HeroDecisionIntervalSeconds { get => heroDecisionIntervalSeconds; set => heroDecisionIntervalSeconds = value; }
 
     public HeroOutcome Outcome { get; private set; }
     public int HeroesSpawned { get; private set; }
@@ -105,6 +109,8 @@ public class HeroSpawner : MonoBehaviour
         ai.PlacementManager = placementManager;
         ai.AttackDamage = heroAttackDamage;
         ai.AttackIntervalSeconds = heroAttackIntervalSeconds;
+        ai.FleeHealthFraction = heroFleeHealthFraction;
+        ai.DecisionIntervalSeconds = heroDecisionIntervalSeconds;
         ai.EntranceTile = entranceTile;
         // Heart and GameManager resolve through HeroAI's own Start fallbacks.
 

@@ -24,6 +24,9 @@ public class Goblin : MonoBehaviour
     [SerializeField] private float hungerSecondsToEmpty = 240f;  // ~4 min, DESIGN §A.5
     [SerializeField] private float energySecondsToEmpty = 300f;  // ~5 min, DESIGN §A.5
     [SerializeField] private float starvationSecondsToDie = 60f; // Time at Hunger 0 before death
+    [SerializeField] private float weakenedMoveSpeedMultiplier = 0.5f; // DESIGN §A.5: half speed at Hunger 0
+    [SerializeField] private float startingHunger = 100f;        // Needs on spawn (0–100)
+    [SerializeField] private float startingEnergy = 100f;
 
     [Header("Appearance (Placeholder Art)")]
     [SerializeField] private Color bodyColor = new Color(0.45f, 0.80f, 0.35f, 1f); // Goblin green
@@ -45,6 +48,9 @@ public class Goblin : MonoBehaviour
     public float HungerSecondsToEmpty { get => hungerSecondsToEmpty; set => hungerSecondsToEmpty = value; }
     public float EnergySecondsToEmpty { get => energySecondsToEmpty; set => energySecondsToEmpty = value; }
     public float StarvationSecondsToDie { get => starvationSecondsToDie; set => starvationSecondsToDie = value; }
+    public float WeakenedMoveSpeedMultiplier { get => weakenedMoveSpeedMultiplier; set => weakenedMoveSpeedMultiplier = value; }
+    public float StartingHunger { get => startingHunger; set => startingHunger = value; }
+    public float StartingEnergy { get => startingEnergy; set => startingEnergy = value; }
     public bool LogStats { get => logStats; set => logStats = value; }
     public float LogIntervalSeconds { get => logIntervalSeconds; set => logIntervalSeconds = value; }
 
@@ -57,7 +63,7 @@ public class Goblin : MonoBehaviour
     /// <summary>Starving: Hunger at 0. Halves move speed here; the combat story halves fight speed.</summary>
     public bool IsWeakened => Hunger <= 0f;
 
-    public float EffectiveMoveSpeed => IsWeakened ? moveSpeed * 0.5f : moveSpeed;
+    public float EffectiveMoveSpeed => IsWeakened ? moveSpeed * weakenedMoveSpeedMultiplier : moveSpeed;
 
     /// <summary>Seconds spent continuously at Hunger 0; resets to 0 whenever Hunger is above 0.</summary>
     public float StarvationElapsed { get; private set; }
@@ -88,6 +94,8 @@ public class Goblin : MonoBehaviour
         dungeonBoard ??= FindAnyObjectByType<DungeonBoard>();
         boardRenderer ??= FindAnyObjectByType<BoardRenderer>();
         health ??= GetComponent<Health>();
+        Hunger = startingHunger; // Clamped by the setters
+        Energy = startingEnergy;
 
         CreateBody();
         Spawn();

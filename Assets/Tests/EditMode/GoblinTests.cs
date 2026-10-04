@@ -237,6 +237,21 @@ public class GoblinTests
         Assert.AreEqual(0f, goblin.StarvationElapsed);
     }
 
+    // --- Debug stats line ---
+
+    [Test]
+    public void StatsLine_ReportsNeedsAndStates()
+    {
+        goblin.Tick(60f);
+        StringAssert.Contains("tile=(23, 15) hunger=75.0 energy=80.0 speed=3.0", goblin.StatsLine());
+        StringAssert.DoesNotContain("WEAKENED", goblin.StatsLine());
+
+        goblin.Hunger = 0f;
+        goblin.Tick(10f);
+        StringAssert.Contains("speed=1.5", goblin.StatsLine());
+        StringAssert.Contains("WEAKENED starving=10.0/60s", goblin.StatsLine());
+    }
+
     // --- Dead ---
 
     [Test]

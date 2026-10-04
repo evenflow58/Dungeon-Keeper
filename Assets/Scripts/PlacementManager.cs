@@ -23,10 +23,14 @@ public class PlacementManager : MonoBehaviour
     [SerializeField] private float mushroomGrowthSecondsPerFood = 30f;
     [SerializeField] private int mushroomCapacity = 5;
 
+    [Header("Spike Trap")]
+    [SerializeField] private int spikeDamage = 1; // Provisional: hero HP lands with Epic #5
+
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
     public float MushroomGrowthSecondsPerFood { get => mushroomGrowthSecondsPerFood; set => mushroomGrowthSecondsPerFood = value; }
     public int MushroomCapacity { get => mushroomCapacity; set => mushroomCapacity = value; }
+    public int SpikeDamage { get => spikeDamage; set => spikeDamage = value; }
 
     public int Count => placed.Count;
 
@@ -69,6 +73,21 @@ public class PlacementManager : MonoBehaviour
     }
 
     /// <summary>
+    /// All placed Spike Traps (Armed and Spent), sorted by tile in board scan order (x ascending, then
+    /// y ascending) so work selection is deterministic regardless of the registry's iteration order.
+    /// </summary>
+    public List<SpikeTrap> GetSpikeTraps()
+    {
+        var traps = new List<SpikeTrap>();
+        foreach (Placeable p in placed.Values)
+        {
+            if (p.Type == PlaceableType.SpikeTrap && p.TryGetComponent(out SpikeTrap trap)) traps.Add(trap);
+        }
+        traps.Sort((a, b) => a.Tile.x != b.Tile.x ? a.Tile.x.CompareTo(b.Tile.x) : a.Tile.y.CompareTo(b.Tile.y));
+        return traps;
+    }
+
+    /// <summary>
     /// Valid target: in-bounds Floor, unoccupied, and reachable from fromTile (the imp's current tile).
     /// </summary>
     public bool CanPlace(Vector2Int tile, Vector2Int fromTile)
@@ -91,6 +110,8 @@ public class PlacementManager : MonoBehaviour
         placeable.Initialize(type, tile, ColorFor(type), placeableSize);
         if (type == PlaceableType.MushroomPlot)
             go.AddComponent<MushroomPlot>().Initialize(mushroomGrowthSecondsPerFood, mushroomCapacity);
+        else if (type == PlaceableType.SpikeTrap)
+            go.AddComponent<SpikeTrap>().Initialize(spikeDamage);
         placed[tile] = placeable;
         return true;
     }

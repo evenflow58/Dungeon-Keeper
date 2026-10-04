@@ -197,4 +197,52 @@ public class PathfinderTests
         for (int i = 0; i < direct.Count; i++)
             Assert.AreEqual(direct[i], via[i], $"tile at index {i} differs");
     }
+
+    // ---- FindPathToNeighbor ----
+
+    [Test]
+    public void FindPathToNeighbor_WalkableTarget_EndsBesideIt_NotOnIt()
+    {
+        // Unlike FindPathToAdjacent, a Floor target is never the endpoint.
+        var start  = new Vector2Int(24, 16);
+        var target = new Vector2Int(22, 14);
+        var path   = Pathfinder.FindPathToNeighbor(board, start, target);
+
+        Assert.Greater(path.Count, 0);
+        Vector2Int end = path[path.Count - 1];
+        Assert.AreEqual(1, Mathf.Abs(end.x - target.x) + Mathf.Abs(end.y - target.y), "must end on a 4-neighbor");
+        CollectionAssert.DoesNotContain(path, target, "must not pass through the target either way");
+        Assert.AreEqual(4, path.Count, "shortest: (24,16) -> (23,14) or (22,15) is 3 steps");
+    }
+
+    [Test]
+    public void FindPathToNeighbor_StartOnTarget_StepsOffToANeighbor()
+    {
+        var target = new Vector2Int(24, 16);
+        var path   = Pathfinder.FindPathToNeighbor(board, target, target);
+
+        Assert.AreEqual(2, path.Count);
+        Assert.AreEqual(target, path[0]);
+        Assert.AreEqual(1, Mathf.Abs(path[1].x - target.x) + Mathf.Abs(path[1].y - target.y));
+    }
+
+    [Test]
+    public void FindPathToNeighbor_StartAlreadyAdjacent_ReturnsTrivialPath()
+    {
+        var start = new Vector2Int(23, 14);
+        var path  = Pathfinder.FindPathToNeighbor(board, start, new Vector2Int(22, 14));
+
+        Assert.AreEqual(1, path.Count);
+        Assert.AreEqual(start, path[0]);
+    }
+
+    [Test]
+    public void FindPathToNeighbor_RockTarget_MatchesFindPathToAdjacent()
+    {
+        var start  = new Vector2Int(24, 15);
+        var target = new Vector2Int(20, 15);
+
+        CollectionAssert.AreEqual(Pathfinder.FindPathToAdjacent(board, start, target),
+            Pathfinder.FindPathToNeighbor(board, start, target));
+    }
 }

@@ -184,8 +184,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: DungeonKeeper::ImpDigger
   dungeonBoard: {fileID: 565044520}
   imp: {fileID: 71735945}
+  placementManager: {fileID: 565044525}
   digSecondsPerTile: 2.5
   idleRecheckSeconds: 0.25
+  rearmSecondsPerTrap: 8
 --- !u!1 &330585543
 GameObject:
   m_ObjectHideFlags: 0
@@ -663,6 +665,7 @@ MonoBehaviour:
   placeableSize: 0.8
   mushroomGrowthSecondsPerFood: 30
   mushroomCapacity: 5
+  spikeDamage: 1
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0

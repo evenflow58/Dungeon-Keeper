@@ -69,6 +69,16 @@ public class HeroAI : MonoBehaviour
         Tick(Time.deltaTime);
     }
 
+    // Death deactivates the hero's GameObject (this component included), so Update stops before Tick could
+    // see IsDead. Mark the AI finished here so its state reads Done. Guarded on IsDead: escaping also
+    // deactivates, and Escape() has already set Done.
+    private void OnDisable()
+    {
+        if (hero == null || !hero.IsDead) return;
+        CurrentGoal = Goal.Done;
+        CurrentTarget = null;
+    }
+
     /// <summary>
     /// Advances the AI by deltaTime. Called from Update; public so tests can step it after Hero.Tick.
     /// </summary>

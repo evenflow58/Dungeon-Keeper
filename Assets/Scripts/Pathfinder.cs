@@ -37,6 +37,17 @@ public static class Pathfinder
         if (board.IsWalkable(target.x, target.y))
             return FindPath(board, start, target);
 
+        return FindPathToNeighbor(board, start, target);
+    }
+
+    /// <summary>
+    /// Returns the shortest path from start to a walkable 4-neighbor of target, never onto target itself,
+    /// whether or not target is walkable (e.g. a stand-point beside a trap on a Floor tile).
+    /// If start is already adjacent to target, returns the trivial one-tile path [start].
+    /// Returns an empty list when no reachable neighbor exists.
+    /// </summary>
+    public static List<Vector2Int> FindPathToNeighbor(DungeonBoard board, Vector2Int start, Vector2Int target)
+    {
         // Collect walkable neighbors in fixed direction order
         var candidates = new List<Vector2Int>();
         foreach (var dir in Dirs)

@@ -28,6 +28,9 @@ public class Goblin : MonoBehaviour
     [SerializeField] private Color bodyColor = new Color(0.45f, 0.80f, 0.35f, 1f); // Goblin green
     [SerializeField] private float bodySize = 0.75f;                               // Fraction of a tile
     [SerializeField] private int sortingOrder = 2;                                 // Above tiles (0) and placeables (1)
+    // Round with a dark rim so goblins read as creatures, not as the square green Mushroom Plots.
+    [SerializeField] private Color outlineColor = new Color(0.10f, 0.18f, 0.08f, 1f); // Near-black green
+    [SerializeField] private float outlineWidth = 0.14f;                               // Fraction of the body radius
 
     [Header("Debug")]
     [SerializeField] private bool logStats = true;            // Console stats while playing (Update only; Tick stays silent)
@@ -259,20 +262,30 @@ public class Goblin : MonoBehaviour
         go.transform.localPosition = new Vector3(0f, 0f, -0.2f);
         bodySprite = go.AddComponent<SpriteRenderer>();
 
-        const int res = 16;
+        // A filled disc with a dark rim, colors baked in (the renderer tint stays white).
+        const int res = 32;
         var tex = new Texture2D(res, res, TextureFormat.RGBA32, false);
         tex.name = "Goblin_Texture";
         var pixels = new Color[res * res];
-        for (int i = 0; i < pixels.Length; i++) pixels[i] = Color.white;
+        float radius = res * 0.5f;
+        float rimStart = radius * (1f - outlineWidth);
+        for (int y = 0; y < res; y++)
+        {
+            for (int x = 0; x < res; x++)
+            {
+                float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(radius, radius));
+                pixels[y * res + x] = d > radius ? Color.clear : d > rimStart ? outlineColor : bodyColor;
+            }
+        }
         tex.SetPixels(pixels);
-        tex.filterMode = FilterMode.Point;
+        tex.filterMode = FilterMode.Bilinear; // Smooth edge at small on-screen sizes
         tex.wrapMode = TextureWrapMode.Clamp;
         tex.Apply();
 
         var sprite = Sprite.Create(tex, new Rect(0, 0, res, res), new Vector2(0.5f, 0.5f), res);
         sprite.name = "Goblin_Sprite";
         bodySprite.sprite = sprite;
-        bodySprite.color = bodyColor;
+        bodySprite.color = Color.white;
         bodySprite.sortingOrder = sortingOrder;
     }
 }

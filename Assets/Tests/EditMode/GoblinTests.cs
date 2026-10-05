@@ -177,6 +177,22 @@ public class GoblinTests
     }
 
     [Test]
+    public void WeakenedMoveSpeedMultiplier_IsTunable()
+    {
+        Assert.AreEqual(0.5f, goblin.WeakenedMoveSpeedMultiplier, "DESIGN §A.5 default");
+        goblin.WeakenedMoveSpeedMultiplier = 0.25f;
+        goblin.Hunger = 0f;
+        Assert.AreEqual(0.75f, goblin.EffectiveMoveSpeed);
+    }
+
+    [Test]
+    public void StartingNeeds_DefaultFull()
+    {
+        Assert.AreEqual(100f, goblin.StartingHunger);
+        Assert.AreEqual(100f, goblin.StartingEnergy);
+    }
+
+    [Test]
     public void Weakened_TravelTakesTwiceAsLong()
     {
         Assert.IsTrue(goblin.SetDestination(new Vector2Int(26, 15))); // 3 tiles straight east

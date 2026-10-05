@@ -684,6 +684,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: DungeonKeeper::GameManager
   heart: {fileID: 1804583410}
+  heroSpawner: {fileID: 565044527}
 --- !u!114 &565044527
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -700,6 +701,7 @@ MonoBehaviour:
   dungeonBoard: {fileID: 565044520}
   boardRenderer: {fileID: 565044519}
   heart: {fileID: 1804583410}
+  gameManager: {fileID: 565044526}
   requiredCots: 3
   requiredPlots: 2
   firstHeroSeconds: 300
@@ -710,6 +712,13 @@ MonoBehaviour:
   heroAttackIntervalSeconds: 1
   heroFleeHealthFraction: 0.3
   heroDecisionIntervalSeconds: 0.25
+  totalHeroes: 3
+  nextHeroDelaySeconds: 120
+  escapedDelayMultiplier: 0.5
+  heroHealthPerWave: 15
+  heroDamagePerWave: 1
+  escapedHealthBonus: 10
+  escapedDamageBonus: 1
 --- !u!1 &708604853
 GameObject:
   m_ObjectHideFlags: 0

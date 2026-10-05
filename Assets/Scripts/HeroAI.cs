@@ -264,6 +264,8 @@ public class HeroAI : MonoBehaviour
 
     private void TickFlee(bool poll)
     {
+        // He leaves through the door: from its threshold (the dug tile beside it — the door itself isn't
+        // walkable, so it can't be pathed onto), or straight away if he's still standing on it.
         if (!hero.IsMoving && Manhattan(hero.CurrentTile, entranceTile) <= 1)
         {
             Escape();

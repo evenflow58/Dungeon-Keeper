@@ -38,8 +38,13 @@ public class DungeonBoardTests
             {
                 TileState state = board.GetTile(x, y);
                 bool inCavern = (x >= 21 && x < 21 + 6) && (y >= 13 && y < 13 + 6);
+                bool isDoor = x == 24 && y == 31; // The entrance door on the top edge (#56)
 
-                if (inCavern)
+                if (isDoor)
+                {
+                    Assert.AreEqual(TileState.Entrance, state, "The door at (24,31) should be Entrance");
+                }
+                else if (inCavern)
                 {
                     Assert.AreEqual(TileState.Floor, state, $"Tile at ({x},{y}) in cavern should be Floor");
                     floorCount++;
@@ -53,7 +58,7 @@ public class DungeonBoardTests
         }
 
         Assert.AreEqual(36, floorCount, "Cavern should have 6x6 = 36 Floor tiles");
-        Assert.AreEqual(48 * 32 - 36, rockCount, "Remaining tiles should all be Rock");
+        Assert.AreEqual(48 * 32 - 36 - 1, rockCount, "Remaining tiles, except the door, should all be Rock");
 
         // Specific corner checks of the 6x6 cavern: (21,13) to (26,18)
         Assert.AreEqual(TileState.Floor, board.GetTile(21, 13), "Cavern min corner (21,13) should be Floor");

@@ -81,15 +81,20 @@ public class HeroTests
     }
 
     [Test]
-    public void PathsOffARockStartTile()
+    public void PathsOffTheEntranceDoor()
     {
-        // He spawns on a Rock entrance tile; the start tile always counts as walkable.
-        board.SetTile(24, 19, TileState.Rock);
-        hero.PlaceOnTile(new Vector2Int(24, 19));
+        // He spawns on the door (TileState.Entrance), which isn't walkable; the start tile always counts as
+        // walkable, so he can step off it onto a dug tile — and never back onto it.
+        Vector2Int door = board.EntranceTile;
+        Assert.AreEqual(TileState.Entrance, board.GetTile(door.x, door.y));
+        for (int y = 19; y < door.y; y++) board.SetTile(24, y, TileState.Floor); // tunnel up to the door
+        hero.PlaceOnTile(door);
 
         Assert.IsTrue(hero.SetDestination(new Vector2Int(24, 17)));
-        for (int i = 0; i < 100 && hero.IsMoving; i++) hero.Advance(0.02f);
+        for (int i = 0; i < 1000 && hero.IsMoving; i++) hero.Advance(0.02f);
         Assert.AreEqual(new Vector2Int(24, 17), hero.CurrentTile);
+
+        Assert.IsFalse(hero.SetDestination(door), "The door isn't a walkable destination");
     }
 
     [Test]

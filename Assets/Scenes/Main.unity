@@ -559,6 +559,8 @@ MonoBehaviour:
   rockColor: {r: 0.22, g: 0.22, b: 0.22, a: 1}
   floorColor: {r: 0.48, g: 0.32, b: 0.18, a: 1}
   designatedColor: {r: 0.85, g: 0.65, b: 0.15, a: 1}
+  doorPanelColor: {r: 0.72, g: 0.46, b: 0.22, a: 1}
+  doorFrameColor: {r: 0.16, g: 0.09, b: 0.04, a: 1}
 --- !u!114 &565044520
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -574,6 +576,7 @@ MonoBehaviour:
   width: 48
   height: 32
   cavernSize: 6
+  entranceTile: {x: 24, y: 31}
 --- !u!4 &565044521
 Transform:
   m_ObjectHideFlags: 0
@@ -704,6 +707,8 @@ MonoBehaviour:
   heroMoveSpeed: 3
   heroAttackDamage: 2
   heroAttackIntervalSeconds: 1
+  heroFleeHealthFraction: 0.3
+  heroDecisionIntervalSeconds: 0.25
 --- !u!1 &708604853
 GameObject:
   m_ObjectHideFlags: 0
@@ -743,6 +748,9 @@ MonoBehaviour:
   hungerSecondsToEmpty: 240
   energySecondsToEmpty: 300
   starvationSecondsToDie: 60
+  weakenedMoveSpeedMultiplier: 0.5
+  startingHunger: 100
+  startingEnergy: 100
   bodyColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
   bodySize: 0.75
   sortingOrder: 2
@@ -788,6 +796,7 @@ MonoBehaviour:
   aggroRange: 4
   attackIntervalSeconds: 1
   attackDamage: 1
+  weakenedAttackIntervalMultiplier: 2
 --- !u!114 &708604857
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -17010,6 +17019,9 @@ MonoBehaviour:
   hungerSecondsToEmpty: 240
   energySecondsToEmpty: 300
   starvationSecondsToDie: 60
+  weakenedMoveSpeedMultiplier: 0.5
+  startingHunger: 100
+  startingEnergy: 100
   bodyColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
   bodySize: 0.75
   sortingOrder: 2
@@ -17055,6 +17067,7 @@ MonoBehaviour:
   aggroRange: 4
   attackIntervalSeconds: 1
   attackDamage: 1
+  weakenedAttackIntervalMultiplier: 2
 --- !u!114 &1781885715
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -17176,6 +17189,9 @@ MonoBehaviour:
   hungerSecondsToEmpty: 240
   energySecondsToEmpty: 300
   starvationSecondsToDie: 60
+  weakenedMoveSpeedMultiplier: 0.5
+  startingHunger: 100
+  startingEnergy: 100
   bodyColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
   bodySize: 0.75
   sortingOrder: 2
@@ -17221,6 +17237,7 @@ MonoBehaviour:
   aggroRange: 4
   attackIntervalSeconds: 1
   attackDamage: 1
+  weakenedAttackIntervalMultiplier: 2
 --- !u!114 &1974660360
 MonoBehaviour:
   m_ObjectHideFlags: 0

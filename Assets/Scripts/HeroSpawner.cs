@@ -20,7 +20,7 @@ public class HeroSpawner : MonoBehaviour
     [SerializeField] private int requiredCots = 3;
     [SerializeField] private int requiredPlots = 2;
     [SerializeField] private float firstHeroSeconds = 300f;           // 5 minutes
-    [SerializeField] private Vector2Int entranceTile = new Vector2Int(24, 31); // Top edge, above the cavern column
+    [SerializeField] private Vector2Int entranceTile = new Vector2Int(24, 31); // The door (DungeonBoard.EntranceTile): must agree
 
     [Header("Fighter (provisional: DESIGN fixes no numbers)")]
     [SerializeField] private int heroMaxHealth = 30;

@@ -699,6 +699,7 @@ MonoBehaviour:
   placementManager: {fileID: 565044525}
   dungeonBoard: {fileID: 565044520}
   boardRenderer: {fileID: 565044519}
+  heart: {fileID: 1804583410}
   requiredCots: 3
   requiredPlots: 2
   firstHeroSeconds: 300

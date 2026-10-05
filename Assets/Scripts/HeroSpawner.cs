@@ -2,9 +2,11 @@ using UnityEngine;
 
 /// <summary>
 /// Spawns the first hero (DESIGN §A.6): once the player has placed requiredCots Lair Cots AND requiredPlots
-/// Mushroom Plots, or after firstHeroSeconds, a Fighter enters at the entrance tile on the board edge.
-/// Then it watches for his outcome (killed or escaped) and goes quiet — waves and escalation are the next
-/// story's job. Multiple simultaneous heroes are out of the slice (§A.9).
+/// Mushroom Plots, or after firstHeroSeconds, a Fighter enters at the entrance tile on the board edge —
+/// but only if a route exists from the door to beside the Heart (#58). No route, no hero; a trigger that has
+/// already fired spawns him on the first later poll where the route exists. Then it watches for his outcome
+/// (killed or escaped) and goes quiet — waves and escalation are #53. Multiple simultaneous heroes are out of
+/// the slice (§A.9).
 /// </summary>
 [DisallowMultipleComponent]
 public class HeroSpawner : MonoBehaviour
@@ -15,6 +17,7 @@ public class HeroSpawner : MonoBehaviour
     [SerializeField] private PlacementManager placementManager;
     [SerializeField] private DungeonBoard dungeonBoard;
     [SerializeField] private BoardRenderer boardRenderer;
+    [SerializeField] private Heart heart; // The route gate's destination; no Heart = never spawn
 
     [Header("Trigger (DESIGN §A.6)")]
     [SerializeField] private int requiredCots = 3;
@@ -33,6 +36,7 @@ public class HeroSpawner : MonoBehaviour
     public PlacementManager PlacementManager { get => placementManager; set => placementManager = value; }
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
+    public Heart Heart { get => heart; set => heart = value; }
     public int RequiredCots { get => requiredCots; set => requiredCots = value; }
     public int RequiredPlots { get => requiredPlots; set => requiredPlots = value; }
     public float FirstHeroSeconds { get => firstHeroSeconds; set => firstHeroSeconds = value; }
@@ -56,6 +60,7 @@ public class HeroSpawner : MonoBehaviour
         placementManager ??= FindAnyObjectByType<PlacementManager>();
         dungeonBoard ??= FindAnyObjectByType<DungeonBoard>();
         boardRenderer ??= FindAnyObjectByType<BoardRenderer>();
+        heart ??= FindAnyObjectByType<Heart>();
     }
 
     private void Update()
@@ -73,8 +78,20 @@ public class HeroSpawner : MonoBehaviour
         }
 
         ElapsedSeconds += deltaTime;
-        if (BuildingsTriggerMet() || ElapsedSeconds >= firstHeroSeconds) Spawn();
+        // Both triggers are persistent (time only grows; buildings aren't removed in the slice), so a trigger that
+        // fired while the dungeon was sealed spawns him on the first poll after the route opens. The trigger is
+        // checked first so the path query only runs when it's hot.
+        if ((BuildingsTriggerMet() || ElapsedSeconds >= firstHeroSeconds) && RouteExists()) Spawn();
     }
+
+    /// <summary>
+    /// True when a hero could walk from the door to beside the Heart right now: the same FindPathToNeighbor
+    /// query HeroAI delves with, starting at the board's door (DungeonBoard.EntranceTile, the door's source of
+    /// truth). A tunnel that stops short of the Heart isn't a route.
+    /// </summary>
+    public bool RouteExists() =>
+        dungeonBoard != null && heart != null &&
+        Pathfinder.FindPathToNeighbor(dungeonBoard, dungeonBoard.EntranceTile, heart.Tile).Count > 0;
 
     /// <summary>True when requiredCots Lair Cots and requiredPlots Mushroom Plots are placed (both).</summary>
     public bool BuildingsTriggerMet() =>

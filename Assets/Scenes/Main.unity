@@ -537,6 +537,7 @@ GameObject:
   - component: {fileID: 565044527}
   - component: {fileID: 565044528}
   - component: {fileID: 565044529}
+  - component: {fileID: 565044530}
   m_Layer: 0
   m_Name: DungeonManager
   m_TagString: Untagged
@@ -758,6 +759,29 @@ MonoBehaviour:
   rowAboveBuildBar: 68
   buttonNormalColor: {r: 0.25, g: 0.25, b: 0.3, a: 1}
   buttonSelectedColor: {r: 0.85, g: 0.65, b: 0.15, a: 1}
+--- !u!114 &565044530
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0fd15f47ccc4a574892a8a8a4145fce0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::AlertToasts
+  placementManager: {fileID: 565044525}
+  heroSpawner: {fileID: 565044527}
+  pollIntervalSeconds: 0.25
+  toastVisibleSeconds: 4
+  maxVisibleToasts: 3
+  fontSize: 18
+  toastSize: {x: 240, y: 30}
+  gapBelowTopBar: 44
+  spacing: 6
+  edgePadding: 8
+  panelColor: {r: 0, g: 0, b: 0, a: 0.6}
 --- !u!1 &708604853
 GameObject:
   m_ObjectHideFlags: 0

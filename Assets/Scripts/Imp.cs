@@ -11,16 +11,19 @@ public class Imp : MonoBehaviour
     [Header("Movement")]
     [SerializeField] private float moveSpeedTilesPerSecond = 4f;
 
-    [Header("Appearance (Placeholder Art)")]
-    [SerializeField] private Color bodyColor = new Color(0.85f, 0.2f, 0.2f, 1f); // Imp red
-    [SerializeField] private float bodySize = 0.6f;                               // Fraction of a tile
-    [SerializeField] private GroundShadowStyle groundShadow = new GroundShadowStyle(0.55f, 0.4f); // Disc under the body (sprites cast no shadows)
+    [Header("Model (code-built, ticket #76)")]
+    [SerializeField] private float modelHeight = 0.6f;                                   // Tiles: the smallest creature
+    [SerializeField] private Color skinColor = new Color(0.85f, 0.2f, 0.2f, 1f);         // Imp red (its sprite-era color)
+    [SerializeField] private Color hornColor = new Color(0.35f, 0.08f, 0.06f, 1f);       // Dark horns
+    [SerializeField] private Color pickHandleColor = new Color(0.50f, 0.33f, 0.18f, 1f); // Wood
+    [SerializeField] private Color pickHeadColor = new Color(0.62f, 0.64f, 0.68f, 1f);   // Steel
+    [SerializeField] private float modelSmoothness = 0.35f;                              // Toy (vinyl) sheen
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
     public float MoveSpeed { get => moveSpeedTilesPerSecond; set => moveSpeedTilesPerSecond = value; }
 
-    /// <summary>The board tile whose cell contains the imp's sprite.</summary>
+    /// <summary>The board tile whose cell contains the imp (its ground point).</summary>
     public Vector2Int CurrentTile { get; private set; }
 
     /// <summary>The waypoint the imp is currently walking toward; equals CurrentTile when idle.</summary>
@@ -31,14 +34,14 @@ public class Imp : MonoBehaviour
     // Waypoints still to visit; path[0] is the tile being walked toward (NextTile).
     private readonly List<Vector2Int> path = new List<Vector2Int>();
     private Vector2Int segmentStart;
-    private SpriteRenderer bodySprite;
+    private GameObject model;
 
     private void Start()
     {
         dungeonBoard ??= FindAnyObjectByType<DungeonBoard>();
         boardRenderer ??= FindAnyObjectByType<BoardRenderer>();
 
-        CreateBody();
+        CreateModel();
         Spawn();
     }
 
@@ -130,7 +133,7 @@ public class Imp : MonoBehaviour
             else
             {
                 transform.position = Vector3.MoveTowards(transform.position, target, remaining);
-                // Mid-segment, the sprite's cell is whichever segment end it's closer to.
+                // Mid-segment, its cell is whichever segment end it's closer to.
                 CurrentTile = distance - remaining < 0.5f * SegmentLength() ? path[0] : segmentStart;
                 remaining = 0f;
             }
@@ -151,36 +154,19 @@ public class Imp : MonoBehaviour
     private float SegmentLength() =>
         Vector3.Distance(TileCenter(segmentStart), TileCenter(NextTile));
 
-    // The tile's ground point; the root stands there and the body sprite stands up from it.
+    // The tile's ground point; the root (and its model's base) stands there.
     private Vector3 TileCenter(Vector2Int tile) =>
         boardRenderer != null
             ? boardRenderer.GetTileCenterWorldPosition(tile.x, tile.y)
             : BoardRenderer.UnanchoredTileCenter(tile);
 
-    private void CreateBody()
+    /// <summary>The code-built model (null until CreateModel, which Start calls).</summary>
+    public GameObject Model => model;
+
+    /// <summary>Builds the 3D model once, standing on the ground point (its base at the root's y = 0).</summary>
+    public void CreateModel()
     {
-        if (bodySprite != null) return;
-
-        var go = new GameObject("ImpBody");
-        go.transform.SetParent(transform, false);
-        go.transform.localScale = new Vector3(bodySize, bodySize, 1f);
-        go.transform.localPosition = new Vector3(0f, bodySize * 0.5f, 0f); // Standing on the ground point
-        bodySprite = go.AddComponent<SpriteRenderer>();
-
-        const int res = 16;
-        var tex = new Texture2D(res, res, TextureFormat.RGBA32, false);
-        tex.name = "Imp_Texture";
-        var pixels = new Color[res * res];
-        for (int i = 0; i < pixels.Length; i++) pixels[i] = Color.white;
-        tex.SetPixels(pixels);
-        tex.filterMode = FilterMode.Point;
-        tex.wrapMode = TextureWrapMode.Clamp;
-        tex.Apply();
-
-        var sprite = Sprite.Create(tex, new Rect(0, 0, res, res), new Vector2(0.5f, 0.5f), res);
-        sprite.name = "Imp_Sprite";
-        bodySprite.sprite = sprite;
-        bodySprite.color = bodyColor;
-        GroundShadow.Create(transform, groundShadow, BoardRenderer.OverlayLiftOf(boardRenderer));
+        if (model != null) return;
+        model = CreatureModel.Build(transform, "ImpModel", CreatureModel.ImpRecipe(modelHeight, skinColor, hornColor, pickHandleColor, pickHeadColor), modelSmoothness);
     }
 }

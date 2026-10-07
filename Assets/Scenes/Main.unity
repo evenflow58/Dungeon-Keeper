@@ -755,7 +755,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: DungeonKeeper::GameSpeed
   buttonSize: {x: 140, y: 36}
   barPadding: 8
-  rowAboveBuildBar: 60
+  rowAboveBuildBar: 68
   buttonNormalColor: {r: 0.25, g: 0.25, b: 0.3, a: 1}
   buttonSelectedColor: {r: 0.85, g: 0.65, b: 0.15, a: 1}
 --- !u!1 &708604853

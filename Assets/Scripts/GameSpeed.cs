@@ -19,7 +19,7 @@ public class GameSpeed : MonoBehaviour
     [Header("Buttons (Placeholder Art)")]
     [SerializeField] private Vector2 buttonSize = new Vector2(140f, 36f);                    // As the build bar's
     [SerializeField] private float barPadding = 8f;
-    [SerializeField] private float rowAboveBuildBar = 60f; // Bottom-right, raised above the build bar's row so they never overlap
+    [SerializeField] private float rowAboveBuildBar = 68f; // Bottom of this row: build bar (8 + 52) + an 8 px gap
     [SerializeField] private Color buttonNormalColor = new Color(0.25f, 0.25f, 0.30f, 1f);
     [SerializeField] private Color buttonSelectedColor = new Color(0.85f, 0.65f, 0.15f, 1f); // Amber marks the active speed
 
@@ -76,9 +76,10 @@ public class GameSpeed : MonoBehaviour
         var panel = panelGo.AddComponent<Image>();
         panel.color = new Color(0f, 0f, 0f, 0.6f);
         var panelRect = panelGo.GetComponent<RectTransform>();
-        panelRect.anchorMin = panelRect.anchorMax = new Vector2(1f, 0f);
-        panelRect.pivot = new Vector2(1f, 0f);
-        panelRect.anchoredPosition = new Vector2(-barPadding, rowAboveBuildBar);
+        // Centered directly above the build bar: same width and center, so the two read as one two-row dock.
+        panelRect.anchorMin = panelRect.anchorMax = new Vector2(0.5f, 0f);
+        panelRect.pivot = new Vector2(0.5f, 0f);
+        panelRect.anchoredPosition = new Vector2(0f, rowAboveBuildBar);
         panelRect.sizeDelta = new Vector2(
             Speeds.Length * buttonSize.x + (Speeds.Length + 1) * barPadding,
             buttonSize.y + 2f * barPadding);

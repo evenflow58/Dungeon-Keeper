@@ -28,6 +28,10 @@ public class Goblin : MonoBehaviour
     [SerializeField] private float startingHunger = 100f;        // Needs on spawn (0–100)
     [SerializeField] private float startingEnergy = 100f;
 
+    [Header("Appearance (Art)")]
+    [SerializeField] private string artSpritePath = ArtSprites.GoblinPath; // Resources path; missing = placeholder token
+    [SerializeField] private float spriteHeightTiles = 1.15f;              // Art sprite's height in tiles; width follows its aspect
+
     [Header("Appearance (Placeholder Art)")]
     [SerializeField] private Color bodyColor = new Color(0.45f, 0.80f, 0.35f, 1f); // Goblin green
     [SerializeField] private float bodySize = 0.75f;                               // Fraction of a tile
@@ -53,6 +57,11 @@ public class Goblin : MonoBehaviour
     public float StartingEnergy { get => startingEnergy; set => startingEnergy = value; }
     public bool LogStats { get => logStats; set => logStats = value; }
     public float LogIntervalSeconds { get => logIntervalSeconds; set => logIntervalSeconds = value; }
+    public string ArtSpritePath { get => artSpritePath; set => artSpritePath = value; }
+    public float SpriteHeightTiles { get => spriteHeightTiles; set => spriteHeightTiles = value; }
+
+    /// <summary>The body's renderer once CreateBody has run (Start); null before.</summary>
+    public SpriteRenderer Body => bodySprite;
 
     /// <summary>0–100; 100 is full. Clamped on every set.</summary>
     public float Hunger { get => hunger; set => hunger = Mathf.Clamp(value, 0f, MaxNeed); }
@@ -274,15 +283,29 @@ public class Goblin : MonoBehaviour
         return new Vector3(center.x, center.y, transform.position.z);
     }
 
-    private void CreateBody()
+    /// <summary>Builds the body sprite once (Start calls it): the art sprite when it loads, else the round token.</summary>
+    public void CreateBody()
     {
         if (bodySprite != null) return;
 
         var go = new GameObject("GoblinBody");
         go.transform.SetParent(transform, false);
-        go.transform.localScale = new Vector3(bodySize, bodySize, 1f);
         go.transform.localPosition = new Vector3(0f, 0f, -0.2f);
         bodySprite = go.AddComponent<SpriteRenderer>();
+
+        // Art sprite: feet-pivoted, so the figure stands on the tile center the movement logic uses.
+        Sprite art = ArtSprites.Load(artSpritePath);
+        if (art != null)
+        {
+            float scale = ArtSprites.ScaleForHeight(art.bounds.size.y, spriteHeightTiles);
+            go.transform.localScale = new Vector3(scale, scale, 1f);
+            bodySprite.sprite = art;
+            bodySprite.color = Color.white;
+            bodySprite.sortingOrder = sortingOrder;
+            return;
+        }
+
+        go.transform.localScale = new Vector3(bodySize, bodySize, 1f);
 
         // A filled disc with a dark rim, colors baked in (the renderer tint stays white).
         const int res = 32;

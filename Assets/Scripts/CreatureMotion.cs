@@ -5,7 +5,7 @@ using UnityEngine;
 public class MotionTuning
 {
     [Header("Walk")]
-    public float strideLength = 0.35f;     // Tiles of travel per full cycle (two steps): feet track the ground
+    public float strideLength = 0.6f;      // Tiles of travel per full cycle (two steps): ~5 steps/s at a goblin's 3 t/s
     public float swingDegrees = 28f;       // Boot swing at the ankles
     public float armSwingDegrees = 24f;    // Arms counter-swing against the same-side boot
     public float bobHeight = 0.03f;        // Tiles, twice per cycle
@@ -50,8 +50,8 @@ public class MotionTuning
     public float sleepBreathingFactor = 0.5f; // Slower breathing asleep
 
     public static MotionTuning Goblin() => new MotionTuning();
-    public static MotionTuning Imp() => new MotionTuning { strideLength = 0.28f, bobHeight = 0.025f };
-    public static MotionTuning Hero() => new MotionTuning { strideLength = 0.4f, swingDegrees = 25f, armSwingDegrees = 18f, bobHeight = 0.025f };
+    public static MotionTuning Imp() => new MotionTuning { strideLength = 0.55f, bobHeight = 0.025f };
+    public static MotionTuning Hero() => new MotionTuning { strideLength = 0.7f, swingDegrees = 25f, armSwingDegrees = 18f, bobHeight = 0.025f };
 }
 
 /// <summary>

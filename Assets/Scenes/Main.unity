@@ -164,6 +164,36 @@ MonoBehaviour:
     PickHandle: {r: 0.5, g: 0.33, b: 0.18, a: 1}
     PickHead: {r: 0.62, g: 0.64, b: 0.68, a: 1}
   modelSmoothness: 0.35
+  motion:
+    strideLength: 0.55
+    swingDegrees: 28
+    armSwingDegrees: 24
+    bobHeight: 0.025
+    leanDegrees: 5
+    headBobDegrees: 2
+    fullWalkSpeed: 1
+    breathingRate: 0.25
+    breathingAmount: 0.02
+    headSwayDegrees: 1.5
+    poseBlendSeconds: 0.2
+    tipOverSeconds: 0.35
+    tipOverDegrees: 85
+    tipOverLift: 0.12
+    lungeOutSeconds: 0.12
+    lungeRecoverSeconds: 0.18
+    lungeDistance: 0.15
+    lungeDegrees: 12
+    eatDipSeconds: 0.4
+    eatDipDegrees: 20
+    digRaiseSeconds: 0.25
+    digStrikeSeconds: 0.1
+    digRecoverSeconds: 0.25
+    digRaiseDegrees: 110
+    digStrikeDegrees: -15
+    digBodyDegrees: 6
+    sleepRollDegrees: 80
+    sleepOffset: {x: 0.38, y: 0.3, z: 0}
+    sleepBreathingFactor: 0.5
 --- !u!4 &71735946
 Transform:
   m_ObjectHideFlags: 0
@@ -828,6 +858,36 @@ MonoBehaviour:
     Mouth: {r: 0.11372549, g: 0.16862746, b: 0.07058824, a: 1}
     Fang: {r: 1, g: 1, b: 1, a: 1}
   modelSmoothness: 0.35
+  motion:
+    strideLength: 0.6
+    swingDegrees: 28
+    armSwingDegrees: 24
+    bobHeight: 0.03
+    leanDegrees: 5
+    headBobDegrees: 2
+    fullWalkSpeed: 1
+    breathingRate: 0.25
+    breathingAmount: 0.02
+    headSwayDegrees: 1.5
+    poseBlendSeconds: 0.2
+    tipOverSeconds: 0.35
+    tipOverDegrees: 85
+    tipOverLift: 0.12
+    lungeOutSeconds: 0.12
+    lungeRecoverSeconds: 0.18
+    lungeDistance: 0.15
+    lungeDegrees: 12
+    eatDipSeconds: 0.4
+    eatDipDegrees: 20
+    digRaiseSeconds: 0.25
+    digStrikeSeconds: 0.1
+    digRecoverSeconds: 0.25
+    digRaiseDegrees: 110
+    digStrikeDegrees: -15
+    digBodyDegrees: 6
+    sleepRollDegrees: 80
+    sleepOffset: {x: 0.38, y: 0.3, z: 0}
+    sleepBreathingFactor: 0.5
   logStats: 1
   logIntervalSeconds: 5
 --- !u!4 &708604855
@@ -989,6 +1049,36 @@ MonoBehaviour:
     Mouth: {r: 0.11372549, g: 0.16862746, b: 0.07058824, a: 1}
     Fang: {r: 1, g: 1, b: 1, a: 1}
   modelSmoothness: 0.35
+  motion:
+    strideLength: 0.6
+    swingDegrees: 28
+    armSwingDegrees: 24
+    bobHeight: 0.03
+    leanDegrees: 5
+    headBobDegrees: 2
+    fullWalkSpeed: 1
+    breathingRate: 0.25
+    breathingAmount: 0.02
+    headSwayDegrees: 1.5
+    poseBlendSeconds: 0.2
+    tipOverSeconds: 0.35
+    tipOverDegrees: 85
+    tipOverLift: 0.12
+    lungeOutSeconds: 0.12
+    lungeRecoverSeconds: 0.18
+    lungeDistance: 0.15
+    lungeDegrees: 12
+    eatDipSeconds: 0.4
+    eatDipDegrees: 20
+    digRaiseSeconds: 0.25
+    digStrikeSeconds: 0.1
+    digRecoverSeconds: 0.25
+    digRaiseDegrees: 110
+    digStrikeDegrees: -15
+    digBodyDegrees: 6
+    sleepRollDegrees: 80
+    sleepOffset: {x: 0.38, y: 0.3, z: 0}
+    sleepBreathingFactor: 0.5
   logStats: 1
   logIntervalSeconds: 5
 --- !u!4 &1781885713
@@ -1171,6 +1261,36 @@ MonoBehaviour:
     Mouth: {r: 0.11372549, g: 0.16862746, b: 0.07058824, a: 1}
     Fang: {r: 1, g: 1, b: 1, a: 1}
   modelSmoothness: 0.35
+  motion:
+    strideLength: 0.6
+    swingDegrees: 28
+    armSwingDegrees: 24
+    bobHeight: 0.03
+    leanDegrees: 5
+    headBobDegrees: 2
+    fullWalkSpeed: 1
+    breathingRate: 0.25
+    breathingAmount: 0.02
+    headSwayDegrees: 1.5
+    poseBlendSeconds: 0.2
+    tipOverSeconds: 0.35
+    tipOverDegrees: 85
+    tipOverLift: 0.12
+    lungeOutSeconds: 0.12
+    lungeRecoverSeconds: 0.18
+    lungeDistance: 0.15
+    lungeDegrees: 12
+    eatDipSeconds: 0.4
+    eatDipDegrees: 20
+    digRaiseSeconds: 0.25
+    digStrikeSeconds: 0.1
+    digRecoverSeconds: 0.25
+    digRaiseDegrees: 110
+    digStrikeDegrees: -15
+    digBodyDegrees: 6
+    sleepRollDegrees: 80
+    sleepOffset: {x: 0.38, y: 0.3, z: 0}
+    sleepBreathingFactor: 0.5
   logStats: 1
   logIntervalSeconds: 5
 --- !u!4 &1974660358

@@ -6,8 +6,11 @@ using UnityEngine.UI;
 /// pollIntervalSeconds. Built in code like the build bar (own overlay Canvas, no scene-authored UI) and
 /// display-only: no raycaster and raycastTarget off on everything, so it never blocks board input — the
 /// player digs right under it (the door column).
+/// Updates after the simulation each frame (execution order), so a poll never catches a half-updated frame,
+/// e.g. the route opening before the spawner has spawned the hero it unlocks.
 /// </summary>
 [DisallowMultipleComponent]
+[DefaultExecutionOrder(1000)]
 public class TopBar : MonoBehaviour
 {
     public const string Dash = "—";

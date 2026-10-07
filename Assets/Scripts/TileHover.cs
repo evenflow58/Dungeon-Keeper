@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.InputSystem;
 
 [DisallowMultipleComponent]
 public class TileHover : MonoBehaviour
@@ -24,12 +23,12 @@ public class TileHover : MonoBehaviour
     private Canvas tooltipCanvas;
     private Text tooltipText;
     private RectTransform tooltipRect;
-    private InputAction mousePositionAction;
+    private InputConfig.Actions input; // Bindings come from InputConfig (rebindable)
 
     private void Awake()
     {
-        mousePositionAction = new InputAction("TileHoverMousePos", InputActionType.Value, "<Mouse>/position");
-        mousePositionAction.Enable();
+        input = InputConfig.CreateActions();
+        input.Enable();
     }
 
     private void Start()
@@ -40,8 +39,8 @@ public class TileHover : MonoBehaviour
 
     private void OnDestroy()
     {
-        mousePositionAction?.Disable();
-        mousePositionAction?.Dispose();
+        input?.Disable();
+        input?.Dispose();
         if (highlightSprite != null) Destroy(highlightSprite.gameObject);
         if (tooltipCanvas != null) Destroy(tooltipCanvas.gameObject);
     }
@@ -109,9 +108,7 @@ public class TileHover : MonoBehaviour
             return;
         }
 
-        Vector2 mouseScreen = mousePositionAction?.ReadValue<Vector2>() ?? Vector2.zero;
-        if (mouseScreen == Vector2.zero && Mouse.current != null)
-            mouseScreen = Mouse.current.position.ReadValue();
+        Vector2 mouseScreen = input?.PointerPosition.ReadValue<Vector2>() ?? Vector2.zero;
 
         Ray ray = mainCamera.ScreenPointToRay(mouseScreen);
         if (!RaycastGroundPlane(ray, out Vector3 worldPos))

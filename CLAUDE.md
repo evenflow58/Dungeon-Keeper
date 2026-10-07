@@ -58,10 +58,3 @@ source of truth — read the relevant section before implementing a story.
   precisely which object and field to set.
 - When you create new C# files outside the editor, Unity generates matching
   `.meta` files on import — make sure they are committed with the scripts.
-
-## Repo layout
-
-- `Assets/Scripts/` — game code (`DungeonKeeper` asmdef)
-- `Assets/Tests/EditMode/` — EditMode tests
-- `Assets/Scenes/Main.unity` — the only scene in the slice
-- `DESIGN.md` — design doc (source of truth); `CONTRIBUTING.md` — full standards

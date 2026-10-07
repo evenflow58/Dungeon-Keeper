@@ -20,10 +20,7 @@ public class DigDesignator : MonoBehaviour
     public enum DesignateMode { Designate, Clear }
 
     // ---- input ----
-    private InputAction leftPressAction;
-    private InputAction rightPressAction;
-    private InputAction escAction;
-    private InputAction mousePosAction;
+    private InputConfig.Actions input; // Bindings come from InputConfig (rebindable); enabled with this component
 
     // ---- drag state ----
     private bool isDragging;
@@ -39,26 +36,17 @@ public class DigDesignator : MonoBehaviour
 
     private void Awake()
     {
-        leftPressAction  = new InputAction("DigLeft",  InputActionType.Button, "<Mouse>/leftButton");
-        rightPressAction = new InputAction("DigRight", InputActionType.Button, "<Mouse>/rightButton");
-        escAction        = new InputAction("DigEsc",   InputActionType.Button, "<Keyboard>/escape");
-        mousePosAction   = new InputAction("DigMouse", InputActionType.Value,  "<Mouse>/position");
+        input = InputConfig.CreateActions();
     }
 
     private void OnEnable()
     {
-        leftPressAction?.Enable();
-        rightPressAction?.Enable();
-        escAction?.Enable();
-        mousePosAction?.Enable();
+        input?.Enable();
     }
 
     private void OnDisable()
     {
-        leftPressAction?.Disable();
-        rightPressAction?.Disable();
-        escAction?.Disable();
-        mousePosAction?.Disable();
+        input?.Disable();
 
         // Disabled mid-drag (e.g. placement mode entered): drop the drag so it can't resume later.
         isDragging = false;
@@ -67,10 +55,7 @@ public class DigDesignator : MonoBehaviour
 
     private void OnDestroy()
     {
-        leftPressAction?.Dispose();
-        rightPressAction?.Dispose();
-        escAction?.Dispose();
-        mousePosAction?.Dispose();
+        input?.Dispose();
         if (previewSprite != null) Destroy(previewSprite.gameObject);
     }
 
@@ -107,9 +92,7 @@ public class DigDesignator : MonoBehaviour
     {
         if (dungeonBoard == null || boardRenderer == null || mainCamera == null) return;
 
-        Vector2 mouseScreen = mousePosAction?.ReadValue<Vector2>() ?? Vector2.zero;
-        if (mouseScreen == Vector2.zero && Mouse.current != null)
-            mouseScreen = Mouse.current.position.ReadValue();
+        Vector2 mouseScreen = input?.PointerPosition.ReadValue<Vector2>() ?? Vector2.zero;
 
         Ray ray = mainCamera.ScreenPointToRay(mouseScreen);
         bool hitGround = TileHover.RaycastGroundPlane(ray, out Vector3 worldPos);
@@ -122,10 +105,8 @@ public class DigDesignator : MonoBehaviour
 
     private void HandleIdleInput(bool hitGround, Vector3 worldPos)
     {
-        bool leftPressed  = (leftPressAction?.WasPressedThisFrame()  ?? false)
-                         || (Mouse.current?.leftButton.wasPressedThisFrame  ?? false);
-        bool rightPressed = (rightPressAction?.WasPressedThisFrame() ?? false)
-                         || (Mouse.current?.rightButton.wasPressedThisFrame ?? false);
+        bool leftPressed  = input?.Designate.WasPressedThisFrame() ?? false;
+        bool rightPressed = input?.ClearOrAbort.WasPressedThisFrame() ?? false;
 
         // Presses that start on UI (e.g. the build bar) never reach the board.
         if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
@@ -148,10 +129,8 @@ public class DigDesignator : MonoBehaviour
 
     private void HandleDragInput(bool hitGround, Vector3 worldPos)
     {
-        bool esc = (escAction?.WasPressedThisFrame() ?? false)
-                || (Keyboard.current?.escapeKey.wasPressedThisFrame ?? false);
-        bool rightPressed = (rightPressAction?.WasPressedThisFrame() ?? false)
-                         || (Mouse.current?.rightButton.wasPressedThisFrame ?? false);
+        bool esc = input?.Abort.WasPressedThisFrame() ?? false;
+        bool rightPressed = input?.ClearOrAbort.WasPressedThisFrame() ?? false;
 
         // Right-click or Esc aborts a left (Designate) drag; Esc also aborts a right drag.
         bool abort = esc || (dragMode == DesignateMode.Designate && rightPressed);
@@ -171,10 +150,8 @@ public class DigDesignator : MonoBehaviour
 
         UpdatePreview();
 
-        bool leftReleased  = (leftPressAction?.WasReleasedThisFrame()  ?? false)
-                          || (Mouse.current?.leftButton.wasReleasedThisFrame  ?? false);
-        bool rightReleased = (rightPressAction?.WasReleasedThisFrame() ?? false)
-                          || (Mouse.current?.rightButton.wasReleasedThisFrame ?? false);
+        bool leftReleased  = input?.Designate.WasReleasedThisFrame() ?? false;
+        bool rightReleased = input?.ClearOrAbort.WasReleasedThisFrame() ?? false;
 
         bool released = dragMode == DesignateMode.Designate ? leftReleased : rightReleased;
         if (released)

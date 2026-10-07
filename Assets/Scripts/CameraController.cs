@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(Camera))]
 public class CameraController : MonoBehaviour
@@ -31,12 +30,8 @@ public class CameraController : MonoBehaviour
     private Vector2 lastMouseScreenPos;
     private bool isDragging;
 
-    // New Input System actions
-    private InputAction wasdAction;
-    private InputAction arrowsAction;
-    private InputAction middleDragAction;
-    private InputAction scrollAction;
-    private InputAction mousePositionAction;
+    // Bindings come from InputConfig (rebindable); this component owns its own set's enable/disable.
+    private InputConfig.Actions input;
 
     // Public properties
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
@@ -67,59 +62,22 @@ public class CameraController : MonoBehaviour
     private void OnEnable()
     {
         CreateInputActions();
-        wasdAction?.Enable();
-        arrowsAction?.Enable();
-        middleDragAction?.Enable();
-        scrollAction?.Enable();
-        mousePositionAction?.Enable();
+        input.Enable();
     }
 
     private void OnDisable()
     {
-        wasdAction?.Disable();
-        arrowsAction?.Disable();
-        middleDragAction?.Disable();
-        scrollAction?.Disable();
-        mousePositionAction?.Disable();
+        input?.Disable();
     }
 
     private void OnDestroy()
     {
-        wasdAction?.Dispose();
-        arrowsAction?.Dispose();
-        middleDragAction?.Dispose();
-        scrollAction?.Dispose();
-        mousePositionAction?.Dispose();
+        input?.Dispose();
     }
 
     private void CreateInputActions()
     {
-        if (wasdAction != null) return;
-
-        // WASD composite
-        wasdAction = new InputAction("PanWASD", InputActionType.Value);
-        wasdAction.AddCompositeBinding("2DVector")
-            .With("Up", "<Keyboard>/w")
-            .With("Down", "<Keyboard>/s")
-            .With("Left", "<Keyboard>/a")
-            .With("Right", "<Keyboard>/d");
-
-        // Arrow keys composite
-        arrowsAction = new InputAction("PanArrows", InputActionType.Value);
-        arrowsAction.AddCompositeBinding("2DVector")
-            .With("Up", "<Keyboard>/upArrow")
-            .With("Down", "<Keyboard>/downArrow")
-            .With("Left", "<Keyboard>/leftArrow")
-            .With("Right", "<Keyboard>/rightArrow");
-
-        // Middle mouse drag
-        middleDragAction = new InputAction("MiddleDrag", InputActionType.Button, "<Mouse>/middleButton");
-
-        // Mouse wheel scroll
-        scrollAction = new InputAction("ZoomScroll", InputActionType.Value, "<Mouse>/scroll");
-
-        // Mouse pointer position
-        mousePositionAction = new InputAction("MousePosition", InputActionType.Value, "<Mouse>/position");
+        input ??= InputConfig.CreateActions();
     }
 
     private void Start()
@@ -180,16 +138,7 @@ public class CameraController : MonoBehaviour
 
     private void HandleZoom()
     {
-        Vector2 scroll = Vector2.zero;
-        if (scrollAction != null)
-        {
-            scroll = scrollAction.ReadValue<Vector2>();
-        }
-
-        if (scroll == Vector2.zero && Mouse.current != null)
-        {
-            scroll = Mouse.current.scroll.ReadValue();
-        }
+        Vector2 scroll = input?.Zoom.ReadValue<Vector2>() ?? Vector2.zero;
 
         if (Mathf.Abs(scroll.y) > 0.01f)
         {
@@ -205,33 +154,12 @@ public class CameraController : MonoBehaviour
 
     private void HandleMiddleMouseDrag()
     {
-        bool middlePressedThisFrame = false;
-        bool middleHeld = false;
-        bool middleReleased = false;
+        if (input == null) return;
 
-        if (middleDragAction != null)
-        {
-            middlePressedThisFrame = middleDragAction.WasPressedThisFrame();
-            middleHeld = middleDragAction.IsPressed();
-            middleReleased = middleDragAction.WasReleasedThisFrame();
-        }
-
-        if (Mouse.current != null)
-        {
-            if (Mouse.current.middleButton.wasPressedThisFrame) middlePressedThisFrame = true;
-            if (Mouse.current.middleButton.isPressed) middleHeld = true;
-            if (Mouse.current.middleButton.wasReleasedThisFrame) middleReleased = true;
-        }
-
-        Vector2 mousePos = Vector2.zero;
-        if (mousePositionAction != null)
-        {
-            mousePos = mousePositionAction.ReadValue<Vector2>();
-        }
-        if (mousePos == Vector2.zero && Mouse.current != null)
-        {
-            mousePos = Mouse.current.position.ReadValue();
-        }
+        bool middlePressedThisFrame = input.PanDrag.WasPressedThisFrame();
+        bool middleHeld = input.PanDrag.IsPressed();
+        bool middleReleased = input.PanDrag.WasReleasedThisFrame();
+        Vector2 mousePos = input.PointerPosition.ReadValue<Vector2>();
 
         if (middlePressedThisFrame)
         {
@@ -266,20 +194,8 @@ public class CameraController : MonoBehaviour
     {
         if (isDragging) return;
 
-        Vector2 moveInput = Vector2.zero;
-        if (wasdAction != null) moveInput += wasdAction.ReadValue<Vector2>();
-        if (arrowsAction != null) moveInput += arrowsAction.ReadValue<Vector2>();
-
-        // Direct Keyboard fallback
-        if (moveInput == Vector2.zero && Keyboard.current != null)
-        {
-            var kb = Keyboard.current;
-            if (kb.wKey.isPressed || kb.upArrowKey.isPressed) moveInput.y += 1f;
-            if (kb.sKey.isPressed || kb.downArrowKey.isPressed) moveInput.y -= 1f;
-            if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) moveInput.x -= 1f;
-            if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) moveInput.x += 1f;
-            if (moveInput.sqrMagnitude > 1f) moveInput.Normalize();
-        }
+        // One Pan action holds both the WASD and arrow-key composites (InputConfig).
+        Vector2 moveInput = input?.Pan.ReadValue<Vector2>() ?? Vector2.zero;
 
         if (moveInput.sqrMagnitude > 0.001f)
         {

@@ -13,10 +13,7 @@ public class Imp : MonoBehaviour
 
     [Header("Model (code-built, ticket #76)")]
     [SerializeField] private float modelHeight = 0.6f;                                   // Tiles: the smallest creature
-    [SerializeField] private Color skinColor = new Color(0.85f, 0.2f, 0.2f, 1f);         // Imp red (its sprite-era color)
-    [SerializeField] private Color hornColor = new Color(0.35f, 0.08f, 0.06f, 1f);       // Dark horns
-    [SerializeField] private Color pickHandleColor = new Color(0.50f, 0.33f, 0.18f, 1f); // Wood
-    [SerializeField] private Color pickHeadColor = new Color(0.62f, 0.64f, 0.68f, 1f);   // Steel
+    [SerializeField] private CreatureModel.ImpPalette palette = CreatureModel.ImpPalette.Default; // Red skin, dark horns, leather, pickaxe (#84)
     [SerializeField] private float modelSmoothness = 0.35f;                              // Toy (vinyl) sheen
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
@@ -167,6 +164,6 @@ public class Imp : MonoBehaviour
     public void CreateModel()
     {
         if (model != null) return;
-        model = CreatureModel.Build(transform, "ImpModel", CreatureModel.ImpRecipe(modelHeight, skinColor, hornColor, pickHandleColor, pickHeadColor), modelSmoothness);
+        model = CreatureModel.Build(transform, "ImpModel", CreatureModel.ImpRecipe(modelHeight, palette), modelSmoothness);
     }
 }

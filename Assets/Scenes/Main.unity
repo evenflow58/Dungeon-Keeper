@@ -152,11 +152,12 @@ MonoBehaviour:
   dungeonBoard: {fileID: 565044520}
   boardRenderer: {fileID: 565044519}
   moveSpeedTilesPerSecond: 4
-  bodyColor: {r: 0.85, g: 0.2, b: 0.2, a: 1}
-  bodySize: 0.6
-  groundShadow:
-    Diameter: 0.55
-    Opacity: 0.4
+  modelHeight: 0.6
+  skinColor: {r: 0.85, g: 0.2, b: 0.2, a: 1}
+  hornColor: {r: 0.35, g: 0.08, b: 0.06, a: 1}
+  pickHandleColor: {r: 0.5, g: 0.33, b: 0.18, a: 1}
+  pickHeadColor: {r: 0.62, g: 0.64, b: 0.68, a: 1}
+  modelSmoothness: 0.35
 --- !u!4 &71735946
 Transform:
   m_ObjectHideFlags: 0
@@ -808,13 +809,10 @@ MonoBehaviour:
   weakenedMoveSpeedMultiplier: 0.5
   startingHunger: 100
   startingEnergy: 100
-  bodyColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
-  bodySize: 0.75
-  groundShadow:
-    Diameter: 0.7
-    Opacity: 0.4
-  outlineColor: {r: 0.1, g: 0.18, b: 0.08, a: 1}
-  outlineWidth: 0.14
+  modelHeight: 0.8
+  skinColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
+  bellyColor: {r: 0.33, g: 0.62, b: 0.25, a: 1}
+  modelSmoothness: 0.35
   logStats: 1
   logIntervalSeconds: 5
 --- !u!4 &708604855
@@ -961,13 +959,10 @@ MonoBehaviour:
   weakenedMoveSpeedMultiplier: 0.5
   startingHunger: 100
   startingEnergy: 100
-  bodyColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
-  bodySize: 0.75
-  groundShadow:
-    Diameter: 0.7
-    Opacity: 0.4
-  outlineColor: {r: 0.1, g: 0.18, b: 0.08, a: 1}
-  outlineWidth: 0.14
+  modelHeight: 0.8
+  skinColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
+  bellyColor: {r: 0.33, g: 0.62, b: 0.25, a: 1}
+  modelSmoothness: 0.35
   logStats: 1
   logIntervalSeconds: 5
 --- !u!4 &1781885713
@@ -1135,13 +1130,10 @@ MonoBehaviour:
   weakenedMoveSpeedMultiplier: 0.5
   startingHunger: 100
   startingEnergy: 100
-  bodyColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
-  bodySize: 0.75
-  groundShadow:
-    Diameter: 0.7
-    Opacity: 0.4
-  outlineColor: {r: 0.1, g: 0.18, b: 0.08, a: 1}
-  outlineWidth: 0.14
+  modelHeight: 0.8
+  skinColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
+  bellyColor: {r: 0.33, g: 0.62, b: 0.25, a: 1}
+  modelSmoothness: 0.35
   logStats: 1
   logIntervalSeconds: 5
 --- !u!4 &1974660358

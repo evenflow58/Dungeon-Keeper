@@ -456,7 +456,7 @@ The Director's objective function is **drama, not slaughter**. It composes raids
 ## 18. Technical Direction
 
 - **Engine: Unity (decided).** C# across the board.
-- **World representation:** Unity Tilemaps for the dig/build grid; 2D lights plus a custom gloom pass for the light/darkness interplay.
+- **World representation:** a logical 48×32 grid (the simulation) rendered as true 3D geometry on a Y-up ground plane, with 3D lighting for the light/darkness interplay. *(Pivot, Oct 7, 2026: the slice was first built on Unity Tilemaps + 2D sprites under a pitched camera; on Evan's call the presentation converted to full 3D — the toyetic diorama look — while the simulation layer carried over unchanged. See the 3D conversion epic on GitHub.)*
 - **Simulation:** fixed-timestep sim decoupled from rendering — required for pause/speed controls. Deterministic tick for save/load and replays.
 - **Scale planning:** if agent counts strain per-frame updates, migrate hot paths to DOTS/ECS. Design systems data-oriented from the start to keep that door open.
 - **AI stack:** authored utility AI + the director ship with the game. Unity ML-Agents is reserved as an R&D experiment (e.g., training raider parties against player dungeons) — never a dependency.
@@ -484,7 +484,7 @@ The Director's objective function is **drama, not slaughter**. It composes raids
 
 - Fixed 48×32 tile grid. All rock except a 6×6 starter cavern holding the Heart.
 - Tile states: `Rock`, `Designated`, `Floor`. Digging frees space — no materials yet (that's the next iteration).
-- Rendering: Unity Tilemaps. Hovered tile highlights; designated tiles show a hatch overlay.
+- Rendering: 3D tile geometry (see §18). Hovered tile highlights; designated tiles show a hatch overlay.
 
 ### A.2 Mouse & camera
 

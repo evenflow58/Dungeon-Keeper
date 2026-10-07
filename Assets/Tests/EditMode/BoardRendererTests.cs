@@ -121,19 +121,75 @@ public class BoardRendererTests
     {
         boardRenderer.RenderFullBoard();
         GameObject view = boardRenderer.GetTileView(27, 15);
-        Mesh rockMesh = view.GetComponent<MeshFilter>().sharedMesh;
+        var meshRenderer = view.GetComponent<MeshRenderer>();
+        Assert.AreSame(boardRenderer.MaterialFor(boardRenderer.ColorFor(TileState.Rock)), meshRenderer.sharedMaterial);
 
         board.SetTile(27, 15, TileState.Designated);
         boardRenderer.RefreshTile(27, 15);
         Assert.AreSame(view, boardRenderer.GetTileView(27, 15));
-        Assert.AreNotSame(rockMesh, view.GetComponent<MeshFilter>().sharedMesh, "Restyled amber");
+        Assert.AreSame(boardRenderer.MaterialFor(boardRenderer.ColorFor(TileState.Designated)), meshRenderer.sharedMaterial, "Restyled amber");
         Assert.AreEqual(0.6f, view.transform.localScale.y, 1e-6f, "Still a block");
 
         board.SetTile(27, 15, TileState.Floor);
         boardRenderer.RefreshTile(27, 15);
         Assert.AreSame(view, boardRenderer.GetTileView(27, 15));
+        Assert.AreSame(boardRenderer.MaterialFor(boardRenderer.ColorFor(TileState.Floor)), meshRenderer.sharedMaterial);
         Assert.AreEqual(0.1f, view.transform.localScale.y, 1e-6f, "Dug out to a slab");
         Assert.AreEqual(0f, view.transform.position.y + view.transform.localScale.y * 0.5f, 1e-6f, "Top at the ground");
+    }
+
+    // --- Lit materials (#75) ---
+
+    [Test]
+    public void MaterialFor_OneLitMaterialPerColor_CarryingThatColor()
+    {
+        Color rock = boardRenderer.ColorFor(TileState.Rock);
+        Material a = boardRenderer.MaterialFor(rock);
+        Assert.AreSame(a, boardRenderer.MaterialFor(rock), "Cached per color");
+        Assert.AreNotSame(a, boardRenderer.MaterialFor(boardRenderer.ColorFor(TileState.Floor)));
+        Assert.AreEqual(BoardRenderer.LitShaderName, a.shader.name);
+        Color baseColor = a.GetColor("_BaseColor");
+        Assert.AreEqual(rock.r, baseColor.r, 1e-4f);
+        Assert.AreEqual(rock.g, baseColor.g, 1e-4f);
+        Assert.AreEqual(rock.b, baseColor.b, 1e-4f);
+    }
+
+    [Test]
+    public void Views_CastAndReceiveShadows_AndShareOneLitMaterialPerState()
+    {
+        boardRenderer.RenderFullBoard();
+
+        var rock = boardRenderer.GetTileView(0, 0).GetComponent<MeshRenderer>();
+        var otherRock = boardRenderer.GetTileView(1, 0).GetComponent<MeshRenderer>();
+        Assert.AreEqual(UnityEngine.Rendering.ShadowCastingMode.On, rock.shadowCastingMode);
+        Assert.IsTrue(rock.receiveShadows);
+        Assert.AreSame(rock.sharedMaterial, otherRock.sharedMaterial, "Same state, same material");
+
+        var floor = boardRenderer.GetTileView(24, 16).GetComponent<MeshRenderer>();
+        Assert.AreEqual(UnityEngine.Rendering.ShadowCastingMode.On, floor.shadowCastingMode);
+        Assert.IsTrue(floor.receiveShadows);
+
+        Mesh mesh = boardRenderer.GetTileView(0, 0).GetComponent<MeshFilter>().sharedMesh;
+        Assert.AreEqual(24, mesh.vertexCount, "Unit box, 4 vertices per face");
+        Assert.AreEqual(24, mesh.normals.Length, "Per-face normals for lighting");
+        Assert.AreEqual(0, mesh.colors.Length, "No baked vertex shading");
+        Assert.AreSame(mesh, boardRenderer.GetTileView(24, 16).GetComponent<MeshFilter>().sharedMesh, "One shared box mesh");
+    }
+
+    [Test]
+    public void BoxFaces_FaceOutward()
+    {
+        boardRenderer.RenderFullBoard();
+        Mesh mesh = boardRenderer.GetTileView(0, 0).GetComponent<MeshFilter>().sharedMesh;
+        Vector3[] v = mesh.vertices;
+        Vector3[] n = mesh.normals;
+        int[] t = mesh.triangles;
+        for (int i = 0; i < t.Length; i += 3)
+        {
+            // Unity front faces wind clockwise seen from outside, so Cross(b - a, c - a) points along the outward normal.
+            Vector3 cross = Vector3.Cross(v[t[i + 1]] - v[t[i]], v[t[i + 2]] - v[t[i]]);
+            Assert.Greater(Vector3.Dot(cross, n[t[i]]), 0f, $"Triangle {i / 3} faces outward");
+        }
     }
 
     // --- Picking: the tile the ray actually lands on ---

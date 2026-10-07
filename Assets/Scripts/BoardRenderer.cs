@@ -7,10 +7,16 @@ using UnityEngine;
 /// with the origin at (−Width/2, 0, −Height/2). Each tile is one code-built box view, created once under a
 /// code-made root and restyled from OnTileChanged (never destroyed/recreated): Floor a thin slab whose top is
 /// the ground, Rock/Designated a raised block, Entrance a slab with a simple box-built door.
+/// Lit (ticket #75): every box is a URP Lit surface, one shared material per color, casting and receiving
+/// shadows, so faces shade from the scene's light instead of baked tints.
 /// </summary>
 public class BoardRenderer : MonoBehaviour
 {
-    public const string ShaderResourcePath = "Shaders/BoardVertexColor";
+    public const string LitShaderName = "Universal Render Pipeline/Lit";
+    public const float DefaultOverlayLift = 0.01f; // overlayLift's default; also the lift for code without a renderer
+
+    /// <summary>The overlay lift of a renderer, or the default when there's none (tests, unwired objects).</summary>
+    public static float OverlayLiftOf(BoardRenderer renderer) => renderer != null ? renderer.OverlayLift : DefaultOverlayLift;
     private const int PickSamples = 32; // Ray steps between the block-top plane and the ground in RaycastBoard
 
     [Header("References")]
@@ -19,7 +25,7 @@ public class BoardRenderer : MonoBehaviour
     [Header("Tile Shapes")]
     [SerializeField] private float rockHeight = 0.6f;     // Rock and designated blocks, in tiles
     [SerializeField] private float floorThickness = 0.1f; // Floor slab; its top face is the ground (y = 0)
-    [SerializeField] private float overlayLift = 0.01f;   // Hover highlight and drag previews sit this far above a surface
+    [SerializeField] private float overlayLift = DefaultOverlayLift; // Highlight, previews, ground shadows sit this far above a surface
 
     [Header("Tile Colors (Placeholder Art)")]
     [SerializeField] private Color rockColor = new Color(0.22f, 0.22f, 0.22f, 1f);       // Dark gray
@@ -32,10 +38,8 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private float doorHeight = 0.9f;  // Taller than the rock so the entrance reads from afar
     [SerializeField] private float doorPostWidth = 0.12f;
 
-    [Header("Face Shading (until lighting, story 2)")]
-    [SerializeField] private float frontBackShade = 0.70f; // ±Z faces, relative to the top
-    [SerializeField] private float sideShade = 0.84f;      // ±X faces
-    [SerializeField] private float bottomShade = 0.50f;
+    [Header("Surface")]
+    [SerializeField] private float surfaceSmoothness = 0f; // Lit materials: matte rock and earth (no highlights, no reflections)
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public float RockHeight { get => rockHeight; set => rockHeight = value; }
@@ -61,8 +65,8 @@ public class BoardRenderer : MonoBehaviour
     private Transform viewRoot;
     private GameObject[,] tileViews;
     private readonly Dictionary<Vector2Int, GameObject> doors = new Dictionary<Vector2Int, GameObject>();
-    private readonly Dictionary<Color, Mesh> boxMeshes = new Dictionary<Color, Mesh>();
-    private Material boardMaterial;
+    private readonly Dictionary<Color, Material> materials = new Dictionary<Color, Material>();
+    private Mesh boxMesh;
 
     private void Awake()
     {
@@ -93,9 +97,9 @@ public class BoardRenderer : MonoBehaviour
 
     private void OnDestroy()
     {
-        foreach (Mesh mesh in boxMeshes.Values) DestroyRuntimeObject(mesh);
-        boxMeshes.Clear();
-        DestroyRuntimeObject(boardMaterial); // The views are children of this object and go with it
+        foreach (Material material in materials.Values) DestroyRuntimeObject(material);
+        materials.Clear();
+        DestroyRuntimeObject(boxMesh); // The views are children of this object and go with it
     }
 
     public void InitializeReferences()
@@ -156,7 +160,7 @@ public class BoardRenderer : MonoBehaviour
         GameObject view = tileViews[x, y];
         view.transform.position = new Vector3(center.x, shape.CenterY, center.z);
         view.transform.localScale = shape.Scale;
-        view.GetComponent<MeshFilter>().sharedMesh = BoxMesh(ColorFor(state));
+        view.GetComponent<MeshRenderer>().sharedMaterial = MaterialFor(ColorFor(state));
 
         Vector2Int tile = new Vector2Int(x, y);
         bool isEntrance = state == TileState.Entrance;
@@ -167,6 +171,24 @@ public class BoardRenderer : MonoBehaviour
     /// <summary>The tile's view object (its box), or null before RenderFullBoard / out of bounds.</summary>
     public GameObject GetTileView(int x, int y) =>
         tileViews != null && dungeonBoard != null && dungeonBoard.IsInBounds(x, y) ? tileViews[x, y] : null;
+
+    /// <summary>The shared lit material for a color: one per distinct color, created on first use.</summary>
+    public Material MaterialFor(Color color)
+    {
+        if (materials.TryGetValue(color, out Material cached) && cached != null) return cached;
+
+        Shader shader = Shader.Find(LitShaderName) ?? Shader.Find("Universal Render Pipeline/Simple Lit");
+        var material = new Material(shader) { name = "Tile " + ColorUtility.ToHtmlStringRGB(color) };
+        material.SetColor("_BaseColor", color); // Material colors are sRGB-authored; Unity converts for linear
+        material.SetFloat("_Smoothness", surfaceSmoothness);
+        // Matte surfaces: no specular highlights or environment (skybox) reflections on a dungeon floor.
+        material.SetFloat("_SpecularHighlights", 0f);
+        material.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+        material.SetFloat("_EnvironmentReflections", 0f);
+        material.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
+        materials[color] = material;
+        return material;
+    }
 
     /// <summary>The door built on an Entrance tile (active while the tile is the Entrance), else null.</summary>
     public GameObject GetDoorView(int x, int y) =>
@@ -227,51 +249,43 @@ public class BoardRenderer : MonoBehaviour
     {
         var go = new GameObject(boxName);
         go.transform.SetParent(parent, false);
-        go.AddComponent<MeshFilter>().sharedMesh = BoxMesh(color);
+        go.AddComponent<MeshFilter>().sharedMesh = BoxMesh();
         var meshRenderer = go.AddComponent<MeshRenderer>();
-        meshRenderer.sharedMaterial = BoardMaterial();
-        meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        meshRenderer.receiveShadows = false;
+        meshRenderer.sharedMaterial = MaterialFor(color);
+        meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+        meshRenderer.receiveShadows = true;
         return go;
     }
 
-    private Material BoardMaterial()
+    // One unit box centered on the origin, shared by every view: per-face normals for lighting, UVs per face.
+    private Mesh BoxMesh()
     {
-        if (boardMaterial != null) return boardMaterial;
-
-        Shader shader = Resources.Load<Shader>(ShaderResourcePath)
-            ?? Shader.Find("DungeonKeeper/BoardVertexColor")
-            ?? Shader.Find("Universal Render Pipeline/Unlit");
-        boardMaterial = new Material(shader) { name = "BoardVertexColor (runtime)" };
-        return boardMaterial;
-    }
-
-    // A unit box centered on the origin, the color baked into vertex colors with a fixed per-face shade.
-    private Mesh BoxMesh(Color color)
-    {
-        if (boxMeshes.TryGetValue(color, out Mesh cached) && cached != null) return cached;
+        if (boxMesh != null) return boxMesh;
 
         var vertices = new List<Vector3>(24);
-        var colors = new List<Color>(24);
+        var normals = new List<Vector3>(24);
+        var uvs = new List<Vector2>(24);
         var triangles = new List<int>(36);
-        AddFace(vertices, colors, triangles, Vector3.up, Vector3.right, Vector3.forward, color, 1f);
-        AddFace(vertices, colors, triangles, Vector3.down, Vector3.right, Vector3.back, color, bottomShade);
-        AddFace(vertices, colors, triangles, Vector3.back, Vector3.right, Vector3.up, color, frontBackShade);
-        AddFace(vertices, colors, triangles, Vector3.forward, Vector3.left, Vector3.up, color, frontBackShade);
-        AddFace(vertices, colors, triangles, Vector3.right, Vector3.forward, Vector3.up, color, sideShade);
-        AddFace(vertices, colors, triangles, Vector3.left, Vector3.back, Vector3.up, color, sideShade);
+        AddFace(vertices, normals, uvs, triangles, Vector3.up, Vector3.right, Vector3.forward);
+        AddFace(vertices, normals, uvs, triangles, Vector3.down, Vector3.right, Vector3.back);
+        AddFace(vertices, normals, uvs, triangles, Vector3.back, Vector3.right, Vector3.up);
+        AddFace(vertices, normals, uvs, triangles, Vector3.forward, Vector3.left, Vector3.up);
+        AddFace(vertices, normals, uvs, triangles, Vector3.right, Vector3.forward, Vector3.up);
+        AddFace(vertices, normals, uvs, triangles, Vector3.left, Vector3.back, Vector3.up);
 
-        var mesh = new Mesh { name = "TileBox " + ColorUtility.ToHtmlStringRGB(color) };
-        mesh.SetVertices(vertices);
-        mesh.SetColors(colors);
-        mesh.SetTriangles(triangles, 0);
-        mesh.RecalculateBounds();
-        boxMeshes[color] = mesh;
-        return mesh;
+        boxMesh = new Mesh { name = "TileBox" };
+        boxMesh.SetVertices(vertices);
+        boxMesh.SetNormals(normals);
+        boxMesh.SetUVs(0, uvs);
+        boxMesh.SetTriangles(triangles, 0);
+        boxMesh.RecalculateBounds();
+        boxMesh.RecalculateTangents();
+        return boxMesh;
     }
 
-    private static void AddFace(List<Vector3> vertices, List<Color> colors, List<int> triangles,
-        Vector3 normal, Vector3 u, Vector3 v, Color color, float shade)
+    // One outward face: u x v = -normal, so the two triangles wind clockwise seen from outside (Unity's front face).
+    private static void AddFace(List<Vector3> vertices, List<Vector3> normals, List<Vector2> uvs, List<int> triangles,
+        Vector3 normal, Vector3 u, Vector3 v)
     {
         int start = vertices.Count;
         Vector3 c = normal * 0.5f;
@@ -279,11 +293,8 @@ public class BoardRenderer : MonoBehaviour
         vertices.Add(c - u * 0.5f + v * 0.5f);
         vertices.Add(c + u * 0.5f + v * 0.5f);
         vertices.Add(c + u * 0.5f - v * 0.5f);
-
-        // Vertex colors bypass the color-space conversion sprites get, so bake in linear when the project is linear.
-        Color shaded = new Color(color.r * shade, color.g * shade, color.b * shade, 1f);
-        if (QualitySettings.activeColorSpace == ColorSpace.Linear) shaded = shaded.linear;
-        for (int i = 0; i < 4; i++) colors.Add(shaded);
+        for (int i = 0; i < 4; i++) normals.Add(normal);
+        uvs.Add(new Vector2(0f, 0f)); uvs.Add(new Vector2(0f, 1f)); uvs.Add(new Vector2(1f, 1f)); uvs.Add(new Vector2(1f, 0f));
 
         triangles.Add(start); triangles.Add(start + 1); triangles.Add(start + 2);
         triangles.Add(start); triangles.Add(start + 2); triangles.Add(start + 3);

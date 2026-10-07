@@ -17,6 +17,7 @@ public class PlacementManager : MonoBehaviour
     [SerializeField] private Color mushroomPlotColor = new Color(0.35f, 0.75f, 0.35f, 1f); // Green
     [SerializeField] private Color spikeTrapColor = new Color(0.55f, 0.55f, 0.60f, 1f);    // Steel gray
     [SerializeField] private float placeableSize = 0.8f;                                    // Fraction of a tile
+    [SerializeField] private GroundShadowStyle placeableShadow = new GroundShadowStyle(0.85f, 0.35f); // Disc under each placeable
 
     // Placeables are runtime-created (no Inspector presence), so their behavior config lives here.
     [Header("Mushroom Plot")]
@@ -136,6 +137,7 @@ public class PlacementManager : MonoBehaviour
 
         placeable = go.AddComponent<Placeable>();
         placeable.Initialize(type, tile, ColorFor(type), placeableSize);
+        GroundShadow.Create(go.transform, placeableShadow, BoardRenderer.OverlayLiftOf(boardRenderer));
         if (type == PlaceableType.MushroomPlot)
             go.AddComponent<MushroomPlot>().Initialize(mushroomGrowthSecondsPerFood, mushroomCapacity);
         else if (type == PlaceableType.SpikeTrap)

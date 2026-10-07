@@ -64,7 +64,6 @@ public class TileHover : MonoBehaviour
         sprite.name = "TileHighlight_Sprite";
         highlightSprite.sprite = sprite;
         highlightSprite.color = highlightColor;
-        highlightSprite.sortingOrder = 1;
         highlightSprite.enabled = false;
     }
 

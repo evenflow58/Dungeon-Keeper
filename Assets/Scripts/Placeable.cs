@@ -74,6 +74,5 @@ public class Placeable : MonoBehaviour
         sprite.name = Type + "_Sprite";
         bodySprite.sprite = sprite;
         bodySprite.color = color;
-        bodySprite.sortingOrder = 1; // Above tiles (0); below the imp and drag previews (2)
     }
 }

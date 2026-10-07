@@ -26,7 +26,7 @@ public class Heart : MonoBehaviour
     [SerializeField] private Color outlineColor = new Color(0.25f, 0.02f, 0.10f, 1f); // Near-black crimson
     [SerializeField] private float outlineWidth = 0.12f;                               // Fraction of the half-size
     [SerializeField] private float bodySize = 1.2f;                                    // Tiles
-    [SerializeField] private int sortingOrder = 1;                                     // Static-body layer, under minions (2)
+    [SerializeField] private GroundShadowStyle groundShadow = new GroundShadowStyle(1.0f, 0.4f); // Disc under the body (sprites cast no shadows)
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
@@ -100,6 +100,6 @@ public class Heart : MonoBehaviour
         sprite.name = "Heart_Sprite";
         bodySprite.sprite = sprite;
         bodySprite.color = Color.white;
-        bodySprite.sortingOrder = sortingOrder;
+        GroundShadow.Create(transform, groundShadow, BoardRenderer.OverlayLiftOf(boardRenderer));
     }
 }

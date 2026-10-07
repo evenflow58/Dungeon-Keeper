@@ -83,7 +83,6 @@ public class DigDesignator : MonoBehaviour
         sprite.name = "DigPreview_Sprite";
         previewSprite.sprite = sprite;
         previewSprite.color = previewColor;
-        previewSprite.sortingOrder = 2;
         previewSprite.enabled = false;
     }
 

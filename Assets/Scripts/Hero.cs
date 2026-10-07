@@ -22,7 +22,7 @@ public class Hero : MonoBehaviour
     [SerializeField] private Color outlineColor = new Color(0.12f, 0.14f, 0.20f, 1f); // Dark slate
     [SerializeField] private float outlineWidth = 0.12f;                               // Fraction of the half-size
     [SerializeField] private float bodySize = 0.8f;                                    // Tiles
-    [SerializeField] private int sortingOrder = 2;                                     // Minion layer
+    [SerializeField] private GroundShadowStyle groundShadow = new GroundShadowStyle(0.75f, 0.4f); // Disc under the body (sprites cast no shadows)
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
@@ -209,6 +209,6 @@ public class Hero : MonoBehaviour
         sprite.name = "Hero_Sprite";
         bodySprite.sprite = sprite;
         bodySprite.color = Color.white;
-        bodySprite.sortingOrder = sortingOrder;
+        GroundShadow.Create(transform, groundShadow, BoardRenderer.OverlayLiftOf(boardRenderer));
     }
 }

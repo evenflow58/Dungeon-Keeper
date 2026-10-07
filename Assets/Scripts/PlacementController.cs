@@ -304,7 +304,6 @@ public class PlacementController : MonoBehaviour
         previewSprite = go.AddComponent<SpriteRenderer>();
         previewSprite.sprite = CreateWhiteSprite("PlacementPreview_Sprite");
         previewSprite.color = validPreviewColor;
-        previewSprite.sortingOrder = 2;
         previewSprite.enabled = false;
     }
 

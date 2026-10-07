@@ -20,11 +20,11 @@ RenderSettings:
   m_FogDensity: 0.01
   m_LinearFogStart: 0
   m_LinearFogEnd: 300
-  m_AmbientSkyColor: {r: 0.212, g: 0.227, b: 0.259, a: 1}
-  m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
-  m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
+  m_AmbientSkyColor: {r: 0.78, g: 0.8, b: 0.86, a: 1}
+  m_AmbientEquatorColor: {r: 0.62, g: 0.6, b: 0.57, a: 1}
+  m_AmbientGroundColor: {r: 0.3, g: 0.27, b: 0.24, a: 1}
   m_AmbientIntensity: 1
-  m_AmbientMode: 0
+  m_AmbientMode: 1
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
   m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
   m_HaloStrength: 0.5
@@ -154,7 +154,9 @@ MonoBehaviour:
   moveSpeedTilesPerSecond: 4
   bodyColor: {r: 0.85, g: 0.2, b: 0.2, a: 1}
   bodySize: 0.6
-  sortingOrder: 2
+  groundShadow:
+    Diameter: 0.55
+    Opacity: 0.4
 --- !u!4 &71735946
 Transform:
   m_ObjectHideFlags: 0
@@ -373,8 +375,8 @@ Light:
   m_Enabled: 1
   serializedVersion: 13
   m_Type: 1
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_Intensity: 2
+  m_Color: {r: 1, g: 0.96, b: 0.9, a: 1}
+  m_Intensity: 1.3
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
@@ -383,9 +385,9 @@ Light:
     m_Type: 2
     m_Resolution: -1
     m_CustomResolution: -1
-    m_Strength: 1
+    m_Strength: 0.85
     m_Bias: 0.05
-    m_NormalBias: 0.4
+    m_NormalBias: 0.3
     m_NearPlane: 0.2
     m_CullingMatrixOverride:
       e00: 1
@@ -418,7 +420,7 @@ Light:
   m_AreaSize: {x: 1, y: 1}
   m_BounceIntensity: 1
   m_ColorTemperature: 5000
-  m_UseColorTemperature: 1
+  m_UseColorTemperature: 0
   m_BoundingSphereOverride: {x: 0, y: 0, z: 0, w: 0}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
@@ -436,7 +438,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 410087039}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.40821788, y: -0.23456968, z: 0.10938163, w: 0.8754261}
+  m_LocalRotation: {x: 0.09147136, y: 0.8848247, z: -0.41260055, w: 0.19616094}
   m_LocalPosition: {x: 0, y: 3, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -455,7 +457,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 474bcb49853aa07438625e644c072ee6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_UsePipelineSettings: 1
+  m_UsePipelineSettings: 0
   m_AdditionalLightsShadowResolutionTier: 2
   m_CustomShadowLayers: 0
   m_LightCookieSize: {x: 1, y: 1}
@@ -523,9 +525,7 @@ MonoBehaviour:
   doorFrameColor: {r: 0.16, g: 0.09, b: 0.04, a: 1}
   doorHeight: 0.9
   doorPostWidth: 0.12
-  frontBackShade: 0.7
-  sideShade: 0.84
-  bottomShade: 0.5
+  surfaceSmoothness: 0
 --- !u!114 &565044520
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -633,6 +633,9 @@ MonoBehaviour:
   mushroomPlotColor: {r: 0.35, g: 0.75, b: 0.35, a: 1}
   spikeTrapColor: {r: 0.55, g: 0.55, b: 0.6, a: 1}
   placeableSize: 0.8
+  placeableShadow:
+    Diameter: 0.85
+    Opacity: 0.35
   mushroomGrowthSecondsPerFood: 30
   mushroomCapacity: 5
   spikeDamage: 1
@@ -807,7 +810,9 @@ MonoBehaviour:
   startingEnergy: 100
   bodyColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
   bodySize: 0.75
-  sortingOrder: 2
+  groundShadow:
+    Diameter: 0.7
+    Opacity: 0.4
   outlineColor: {r: 0.1, g: 0.18, b: 0.08, a: 1}
   outlineWidth: 0.14
   logStats: 1
@@ -958,7 +963,9 @@ MonoBehaviour:
   startingEnergy: 100
   bodyColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
   bodySize: 0.75
-  sortingOrder: 2
+  groundShadow:
+    Diameter: 0.7
+    Opacity: 0.4
   outlineColor: {r: 0.1, g: 0.18, b: 0.08, a: 1}
   outlineWidth: 0.14
   logStats: 1
@@ -1054,7 +1061,9 @@ MonoBehaviour:
   outlineColor: {r: 0.25, g: 0.02, b: 0.1, a: 1}
   outlineWidth: 0.12
   bodySize: 1.2
-  sortingOrder: 1
+  groundShadow:
+    Diameter: 1
+    Opacity: 0.4
 --- !u!114 &1804583411
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1128,7 +1137,9 @@ MonoBehaviour:
   startingEnergy: 100
   bodyColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
   bodySize: 0.75
-  sortingOrder: 2
+  groundShadow:
+    Diameter: 0.7
+    Opacity: 0.4
   outlineColor: {r: 0.1, g: 0.18, b: 0.08, a: 1}
   outlineWidth: 0.14
   logStats: 1

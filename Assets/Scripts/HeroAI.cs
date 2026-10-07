@@ -153,6 +153,7 @@ public class HeroAI : MonoBehaviour
             repathNow = false;
             if (attackCooldown > 0f) return;
             if (heart.Health != null) heart.Health.TakeDamage(attackDamage); // Unity null check, not ?.
+            hero.NotifyAttack(heart.transform.position); // Presentation only: lunge
             attackCooldown = attackIntervalSeconds;
             if (heart.IsDestroyed) Finish();
             return;
@@ -231,6 +232,7 @@ public class HeroAI : MonoBehaviour
         repathNow = false;
         if (attackCooldown > 0f) return;
         CurrentTarget.TakeDamage(attackDamage);
+        hero.NotifyAttack(CurrentTarget.transform.position); // Presentation only: lunge
         attackCooldown = attackIntervalSeconds;
         if (CurrentTarget.IsDead) BackToDelve();
     }

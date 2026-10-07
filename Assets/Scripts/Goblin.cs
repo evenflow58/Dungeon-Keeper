@@ -32,6 +32,7 @@ public class Goblin : MonoBehaviour
     [SerializeField] private float modelHeight = 0.8f;                              // Tiles: the stockiest creature
     [SerializeField] private CreatureModel.GoblinPalette palette = CreatureModel.GoblinPalette.Default; // The approved design's colors (#84)
     [SerializeField] private float modelSmoothness = 0.35f;                         // Toy (vinyl) sheen
+    [SerializeField] private MotionTuning motion = MotionTuning.Goblin();           // Walk, idle, sleep, eat, lunge, tip-over (#87)
 
     [Header("Debug")]
     [SerializeField] private bool logStats = true;            // Console stats while playing (Update only; Tick stays silent)
@@ -83,6 +84,9 @@ public class Goblin : MonoBehaviour
     private readonly List<Vector2Int> path = new List<Vector2Int>();
     private Vector2Int segmentStart;
     private GameObject model;
+    private CreatureMotion poser;
+    private GoblinAI ai;
+    private bool deathLogged;
     private float logTimer;
     private bool wasWeakened;
 
@@ -102,6 +106,7 @@ public class Goblin : MonoBehaviour
     {
         Tick(Time.deltaTime);
         if (logStats) LogStatsStep(Time.deltaTime);
+        Pose(Time.deltaTime);
     }
 
     /// <summary>One-line snapshot of the goblin's state, used by the debug log.</summary>
@@ -118,6 +123,9 @@ public class Goblin : MonoBehaviour
     {
         if (IsDead)
         {
+            // Once: the body now lingers a moment for its tip-over, so Update runs a few frames past death.
+            if (deathLogged) return;
+            deathLogged = true;
             Debug.Log(StatsLine() + (KilledByDamage
                 ? " — killed: 0 HP"
                 : $" — starved after {StarvationElapsed:F1}s at Hunger 0"), this);
@@ -257,7 +265,9 @@ public class Goblin : MonoBehaviour
         IsDead = true;
         path.Clear();
         NextTile = CurrentTile;
-        gameObject.SetActive(false); // Slice placeholder for death: no corpse system
+        // Deactivate when the tip-over ends (Pose); immediately when there's no model to tip.
+        if (poser != null) poser.BeginDeath();
+        else gameObject.SetActive(false);
     }
 
     private float SegmentLength() =>
@@ -277,5 +287,28 @@ public class Goblin : MonoBehaviour
     {
         if (model != null) return;
         model = CreatureModel.Build(transform, "GoblinModel", CreatureModel.GoblinRecipe(modelHeight, palette), modelSmoothness);
+        poser = new CreatureMotion(transform, model, motion);
     }
+
+    /// <summary>The pose driver (null until CreateModel).</summary>
+    public CreatureMotion Motion => poser;
+
+    /// <summary>
+    /// Steps the pose driver by deltaTime (game time, so pause freezes mid-stride and 2× speeds it up). Called from
+    /// Update after the sim step; public so tests can step it. Once dead, it plays the tip-over and deactivates the
+    /// GameObject when the fall ends. No-op without a model (bare-staged creatures).
+    /// </summary>
+    public void Pose(float deltaTime)
+    {
+        if (poser == null) return;
+        if (ai == null) TryGetComponent(out ai);
+        poser.Step(deltaTime, new CreatureMotion.Flags { Sleeping = ai != null && ai.IsSleeping, Dead = IsDead });
+        if (IsDead && poser.DeathComplete) gameObject.SetActive(false);
+    }
+
+    /// <summary>Presentation only: an attack landed now (the AI's damage call) — lunge at the target.</summary>
+    public void NotifyAttack(Vector3 targetPosition) => poser?.NotifyAttack(targetPosition);
+
+    /// <summary>Presentation only: food was eaten now — dip the head.</summary>
+    public void NotifyEat() => poser?.NotifyEat();
 }

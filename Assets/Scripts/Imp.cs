@@ -15,6 +15,7 @@ public class Imp : MonoBehaviour
     [SerializeField] private float modelHeight = 0.6f;                                   // Tiles: the smallest creature
     [SerializeField] private CreatureModel.ImpPalette palette = CreatureModel.ImpPalette.Default; // Red skin, dark horns, leather, pickaxe (#84)
     [SerializeField] private float modelSmoothness = 0.35f;                              // Toy (vinyl) sheen
+    [SerializeField] private MotionTuning motion = MotionTuning.Imp();                   // Walk, idle, dig swing (#87)
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
@@ -32,6 +33,8 @@ public class Imp : MonoBehaviour
     private readonly List<Vector2Int> path = new List<Vector2Int>();
     private Vector2Int segmentStart;
     private GameObject model;
+    private CreatureMotion poser;
+    private ImpDigger digger;
 
     private void Start()
     {
@@ -45,6 +48,7 @@ public class Imp : MonoBehaviour
     private void Update()
     {
         Advance(Time.deltaTime);
+        Pose(Time.deltaTime);
     }
 
     /// <summary>
@@ -165,5 +169,21 @@ public class Imp : MonoBehaviour
     {
         if (model != null) return;
         model = CreatureModel.Build(transform, "ImpModel", CreatureModel.ImpRecipe(modelHeight, palette), modelSmoothness);
+        poser = new CreatureMotion(transform, model, motion);
+    }
+
+    /// <summary>The pose driver (null until CreateModel).</summary>
+    public CreatureMotion Motion => poser;
+
+    /// <summary>
+    /// Steps the pose driver by deltaTime (game time). Called from Update after Advance; public so tests can step
+    /// it. The pickaxe swings while ImpDigger is digging or rearming. No-op without a model.
+    /// </summary>
+    public void Pose(float deltaTime)
+    {
+        if (poser == null) return;
+        if (digger == null) TryGetComponent(out digger);
+        bool working = digger != null && (digger.IsDigging || digger.IsRearming);
+        poser.Step(deltaTime, new CreatureMotion.Flags { Digging = working });
     }
 }

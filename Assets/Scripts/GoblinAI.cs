@@ -295,6 +295,7 @@ public class GoblinAI : MonoBehaviour
 
         bool ate = goblin.CurrentTile == standPoint && TargetPlot.TryTakeFood();
         if (ate) goblin.Hunger += hungerPerFood; // The setter clamps at 100
+        if (ate) goblin.NotifyEat();             // Presentation only: head dip
         EndGoal(); // Ate (one food per trip), or the last food went to another goblin: re-decide either way
     }
 
@@ -375,6 +376,7 @@ public class GoblinAI : MonoBehaviour
 
         if (attackCooldown > 0f) return;
         CurrentTarget.TakeDamage(attackDamage);
+        goblin.NotifyAttack(CurrentTarget.transform.position); // Presentation only: lunge
         attackCooldown = EffectiveAttackInterval; // Read at the moment of each attack
         if (CurrentTarget.IsDead) Disengage();
     }

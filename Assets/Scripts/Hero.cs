@@ -20,6 +20,7 @@ public class Hero : MonoBehaviour
     [SerializeField] private float modelHeight = 0.85f;                             // Tiles: the tallest creature
     [SerializeField] private CreatureModel.HeroPalette palette = CreatureModel.HeroPalette.Default; // Pale steel, blue heraldry, dark steel (#84)
     [SerializeField] private float modelSmoothness = 0.35f;                         // Toy (vinyl) sheen
+    [SerializeField] private MotionTuning motion = MotionTuning.Hero();             // Walk, idle, lunge, tip-over (#87)
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
@@ -40,6 +41,7 @@ public class Hero : MonoBehaviour
     private readonly List<Vector2Int> path = new List<Vector2Int>();
     private Vector2Int segmentStart;
     private GameObject model;
+    private CreatureMotion poser;
 
     private void Start()
     {
@@ -53,6 +55,7 @@ public class Hero : MonoBehaviour
     private void Update()
     {
         Tick(Time.deltaTime);
+        Pose(Time.deltaTime);
     }
 
     /// <summary>
@@ -158,7 +161,10 @@ public class Hero : MonoBehaviour
         IsDead = true;
         path.Clear();
         NextTile = CurrentTile;
-        gameObject.SetActive(false); // Slice placeholder for death: no corpse system
+        // Deactivate when the tip-over ends (Pose); immediately when there's no model to tip. Escaping is not
+        // dying: HeroAI deactivates an escaped hero directly, with no tip-over.
+        if (poser != null) poser.BeginDeath();
+        else gameObject.SetActive(false);
     }
 
     private float SegmentLength() =>
@@ -178,5 +184,24 @@ public class Hero : MonoBehaviour
     {
         if (model != null) return;
         model = CreatureModel.Build(transform, "HeroModel", CreatureModel.HeroRecipe(modelHeight, palette), modelSmoothness);
+        poser = new CreatureMotion(transform, model, motion);
     }
+
+    /// <summary>The pose driver (null until CreateModel).</summary>
+    public CreatureMotion Motion => poser;
+
+    /// <summary>
+    /// Steps the pose driver by deltaTime (game time, so pause freezes mid-stride and 2× speeds it up). Called from
+    /// Update after the sim step; public so tests can step it. Once dead, it plays the tip-over and deactivates the
+    /// GameObject when the fall ends. No-op without a model (bare-staged creatures).
+    /// </summary>
+    public void Pose(float deltaTime)
+    {
+        if (poser == null) return;
+        poser.Step(deltaTime, new CreatureMotion.Flags { Dead = IsDead });
+        if (IsDead && poser.DeathComplete) gameObject.SetActive(false);
+    }
+
+    /// <summary>Presentation only: an attack landed now (the AI's damage call) — lunge at the target.</summary>
+    public void NotifyAttack(Vector3 targetPosition) => poser?.NotifyAttack(targetPosition);
 }

@@ -161,7 +161,9 @@ public class EntranceTests
         GameObject door = boardRenderer.GetDoorView(Door.x, Door.y);
         Assert.IsNotNull(door, "A door stands on the entrance tile");
         Assert.IsTrue(door.activeSelf);
-        Assert.AreEqual(4, door.transform.childCount, "Two posts, a lintel, a panel");
+        Assert.AreEqual(10, door.transform.childCount, "Posts, lintel, panel, two seams, crossbar, two iron bands, handle");
+        foreach (string part in new[] { "PostLeft", "PostRight", "Lintel", "Panel", "SeamLeft", "SeamRight", "Crossbar", "BandTop", "BandBottom", "Handle" })
+            Assert.IsNotNull(door.transform.Find(part), part);
         Assert.AreEqual(boardRenderer.GetTileCenterWorldPosition(Door.x, Door.y), door.transform.position);
         Assert.IsNull(boardRenderer.GetDoorView(Door.x - 1, Door.y), "No door on the rock beside it");
         Assert.AreEqual(boardRenderer.ShapeFor(TileState.Floor).Scale,

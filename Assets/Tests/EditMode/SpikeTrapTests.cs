@@ -179,12 +179,12 @@ public class SpikeTrapTests
     public void Rearm_AlreadyArmed_IsHarmlessNoOp()
     {
         SpikeTrap trap = PlaceTrap(22, 14);
-        int childrenBefore = trap.transform.childCount; // Body, ground shadow, one spike sprite
+        int childrenBefore = trap.transform.childCount; // The plate model and the spike grid
 
         trap.Rearm();
         Assert.IsTrue(trap.IsArmed);
         Assert.IsTrue(trap.SpikesVisible);
-        Assert.AreEqual(childrenBefore, trap.transform.childCount, "Rearming doesn't add sprites");
+        Assert.AreEqual(childrenBefore, trap.transform.childCount, "Rearming doesn't add spikes");
     }
 
     // --- GetSpikeTraps ---

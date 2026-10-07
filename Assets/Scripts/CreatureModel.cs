@@ -12,7 +12,7 @@ public static class CreatureModel
 {
     public const string LitShaderName = "Universal Render Pipeline/Lit";
 
-    public enum Shape { Sphere, Capsule, Cylinder, Box, Cone }
+    public enum Shape { Sphere, Capsule, Cylinder, Box, Cone, Octahedron }
 
     /// <summary>One primitive part: local position/rotation/scale under the model root, and its color.</summary>
     public struct Part
@@ -36,6 +36,7 @@ public static class CreatureModel
     }
 
     private static readonly Dictionary<(Color, float), Material> materials = new Dictionary<(Color, float), Material>();
+    private static readonly Dictionary<(Color, float, float), Material> emissiveMaterials = new Dictionary<(Color, float, float), Material>();
     private static readonly Dictionary<Shape, Mesh> meshes = new Dictionary<Shape, Mesh>();
 
     /// <summary>Builds the model under root: a "name" object at the ground point holding one object per part.</summary>
@@ -44,20 +45,40 @@ public static class CreatureModel
         var model = new GameObject(name);
         model.transform.SetParent(root, false);
 
-        foreach (Part part in parts)
-        {
-            var go = new GameObject(part.Name);
-            go.transform.SetParent(model.transform, false);
-            go.transform.localPosition = part.Position;
-            go.transform.localRotation = Quaternion.Euler(part.Euler);
-            go.transform.localScale = part.Scale;
-            go.AddComponent<MeshFilter>().sharedMesh = MeshFor(part.Shape);
-            var meshRenderer = go.AddComponent<MeshRenderer>();
-            meshRenderer.sharedMaterial = MaterialFor(part.Color, smoothness);
-            meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
-            meshRenderer.receiveShadows = true;
-        }
+        foreach (Part part in parts) CreatePart(model.transform, part, smoothness);
         return model;
+    }
+
+    /// <summary>One part under parent: its mesh, a shared lit material for its color, casting and receiving shadows.</summary>
+    public static MeshRenderer CreatePart(Transform parent, Part part, float smoothness)
+    {
+        var go = new GameObject(part.Name);
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = part.Position;
+        go.transform.localRotation = Quaternion.Euler(part.Euler);
+        go.transform.localScale = part.Scale;
+        go.AddComponent<MeshFilter>().sharedMesh = MeshFor(part.Shape);
+        var meshRenderer = go.AddComponent<MeshRenderer>();
+        meshRenderer.sharedMaterial = MaterialFor(part.Color, smoothness);
+        meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+        meshRenderer.receiveShadows = true;
+        return meshRenderer;
+    }
+
+    /// <summary>A shared emissive lit material (the color glows at intensity): one per (color, intensity, smoothness).</summary>
+    public static Material EmissiveMaterialFor(Color color, float intensity, float smoothness)
+    {
+        if (emissiveMaterials.TryGetValue((color, intensity, smoothness), out Material cached) && cached != null) return cached;
+
+        Shader shader = Shader.Find(LitShaderName) ?? Shader.Find("Universal Render Pipeline/Simple Lit");
+        var material = new Material(shader) { name = $"Emissive {ColorUtility.ToHtmlStringRGB(color)} x{intensity:0.##}" };
+        material.SetColor("_BaseColor", color);
+        material.SetFloat("_Smoothness", smoothness);
+        material.EnableKeyword("_EMISSION");
+        material.SetColor("_EmissionColor", color * intensity); // HDR: intensity > 1 glows past the lit surface
+        material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+        emissiveMaterials[(color, intensity, smoothness)] = material;
+        return material;
     }
 
     /// <summary>The shared lit material for a color at a smoothness: one per pair, created on first use.</summary>
@@ -78,7 +99,9 @@ public static class CreatureModel
     {
         if (meshes.TryGetValue(shape, out Mesh cached) && cached != null) return cached;
 
-        Mesh mesh = shape == Shape.Cone ? BuildCone() : BuiltinPrimitiveMesh(shape);
+        Mesh mesh = shape == Shape.Cone ? BuildCone()
+            : shape == Shape.Octahedron ? BuildOctahedron()
+            : BuiltinPrimitiveMesh(shape);
         meshes[shape] = mesh;
         return mesh;
     }
@@ -128,6 +151,40 @@ public static class CreatureModel
         }
 
         var mesh = new Mesh { name = "CreatureCone" };
+        mesh.SetVertices(vertices);
+        mesh.SetNormals(normals);
+        mesh.SetTriangles(triangles, 0);
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    // A faceted double pyramid: bottom tip on the local origin, the square equator (corners at ±0.5 on X/Z) at
+    // y = 0.5, top tip at y = 1. Each face has its own vertices and flat normal, so the facets catch light.
+    private static Mesh BuildOctahedron()
+    {
+        var corners = new[] { new Vector3(0.5f, 0.5f, 0f), new Vector3(0f, 0.5f, 0.5f), new Vector3(-0.5f, 0.5f, 0f), new Vector3(0f, 0.5f, -0.5f) };
+        Vector3 top = Vector3.up, bottom = Vector3.zero;
+        var vertices = new List<Vector3>();
+        var normals = new List<Vector3>();
+        var triangles = new List<int>();
+
+        void AddFacet(Vector3 a, Vector3 b, Vector3 c)
+        {
+            Vector3 n = Vector3.Cross(b - a, c - a).normalized;
+            int s = vertices.Count;
+            vertices.Add(a); vertices.Add(b); vertices.Add(c);
+            normals.Add(n); normals.Add(n); normals.Add(n);
+            triangles.Add(s); triangles.Add(s + 1); triangles.Add(s + 2);
+        }
+
+        for (int i = 0; i < 4; i++)
+        {
+            Vector3 c0 = corners[i], c1 = corners[(i + 1) % 4];
+            AddFacet(c0, top, c1);    // Upper facet, clockwise seen from outside
+            AddFacet(c1, bottom, c0); // Lower facet
+        }
+
+        var mesh = new Mesh { name = "Octahedron" };
         mesh.SetVertices(vertices);
         mesh.SetNormals(normals);
         mesh.SetTriangles(triangles, 0);

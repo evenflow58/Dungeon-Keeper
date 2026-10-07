@@ -23,7 +23,7 @@ public class Heart : MonoBehaviour
     [Header("Model (code-built, ticket #77)")]
     // The centerpiece: a faceted crystal on a low stone plinth, the only emissive surface in the game.
     [SerializeField] private Color crystalColor = new Color(0.80f, 0.10f, 0.35f, 1f); // Deep red-magenta (its sprite-era color)
-    [SerializeField] private float emissionIntensity = 1.6f;                          // Glow strength (HDR multiplier)
+    [SerializeField] private float emissionIntensity = 0.6f;                          // Glow strength (HDR multiplier); higher washes out the facets
     [SerializeField] private float crystalHeight = 1.2f;                              // Tiles, plinth included
     [SerializeField] private float crystalWidth = 0.75f;                              // Tiles across its equator
     [SerializeField] private Color plinthColor = new Color(0.36f, 0.34f, 0.33f, 1f);  // Stone

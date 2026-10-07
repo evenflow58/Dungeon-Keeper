@@ -524,6 +524,7 @@ MonoBehaviour:
   designatedColor: {r: 0.85, g: 0.65, b: 0.15, a: 1}
   doorPanelColor: {r: 0.72, g: 0.46, b: 0.22, a: 1}
   doorFrameColor: {r: 0.16, g: 0.09, b: 0.04, a: 1}
+  doorIronColor: {r: 0.2, g: 0.2, b: 0.22, a: 1}
   doorHeight: 0.9
   doorPostWidth: 0.12
   surfaceSmoothness: 0
@@ -634,9 +635,6 @@ MonoBehaviour:
   mushroomPlotColor: {r: 0.35, g: 0.75, b: 0.35, a: 1}
   spikeTrapColor: {r: 0.55, g: 0.55, b: 0.6, a: 1}
   placeableSize: 0.8
-  placeableShadow:
-    Diameter: 0.85
-    Opacity: 0.35
   mushroomGrowthSecondsPerFood: 30
   mushroomCapacity: 5
   spikeDamage: 1
@@ -1052,13 +1050,13 @@ MonoBehaviour:
   boardRenderer: {fileID: 565044519}
   health: {fileID: 1804583411}
   heartTile: {x: 24, y: 14}
-  bodyColor: {r: 0.8, g: 0.1, b: 0.35, a: 1}
-  outlineColor: {r: 0.25, g: 0.02, b: 0.1, a: 1}
-  outlineWidth: 0.12
-  bodySize: 1.2
-  groundShadow:
-    Diameter: 1
-    Opacity: 0.4
+  crystalColor: {r: 0.8, g: 0.1, b: 0.35, a: 1}
+  emissionIntensity: 0.6
+  crystalHeight: 1.2
+  crystalWidth: 0.75
+  plinthColor: {r: 0.36, g: 0.34, b: 0.33, a: 1}
+  plinthHeight: 0.12
+  modelSmoothness: 0.7
 --- !u!114 &1804583411
 MonoBehaviour:
   m_ObjectHideFlags: 0

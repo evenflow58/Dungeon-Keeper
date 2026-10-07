@@ -43,17 +43,18 @@ public static class PropModel
     }
 
     /// <summary>
-    /// Where food pip i of n sits: spread evenly along the mound's front arc (facing the camera), resting on the
-    /// mound's surface at that radius.
+    /// Where food pip i of n sits: a straight row across the mound's front (toward the camera), so all of the
+    /// spacing is left-right on screen (depth is foreshortened), resting on the mound's surface at that spot.
+    /// frontFraction places the row between the center (0) and the front rim (1).
     /// </summary>
-    public static Vector3 PipPosition(int i, int n, float s, float ringFraction, float pipDiameter)
+    public static Vector3 PipPosition(int i, int n, float s, float frontFraction, float pipDiameter, float pipSpacing)
     {
-        float t = n <= 1 ? 0.5f : i / (float)(n - 1);
-        float angle = Mathf.Lerp(-160f, -20f, t) * Mathf.Deg2Rad; // −Z is the front, toward the camera
-        float r = ringFraction * s * 0.5f;
         float halfWidth = s * 0.5f;
-        float surface = MoundHeight * Mathf.Sqrt(Mathf.Max(0f, 1f - (r / halfWidth) * (r / halfWidth)));
-        return new Vector3(Mathf.Cos(angle) * r, surface + pipDiameter * 0.35f, Mathf.Sin(angle) * r);
+        float x = (i - (n - 1) * 0.5f) * pipSpacing;
+        float z = -frontFraction * halfWidth;                 // −Z is the front, toward the camera
+        float rr = (x * x + z * z) / (halfWidth * halfWidth); // Mound is a half-sunk ellipsoid
+        float surface = MoundHeight * Mathf.Sqrt(Mathf.Max(0f, 1f - rr));
+        return new Vector3(x, surface + pipDiameter * 0.35f, z);
     }
 
     // ---- Spike trap: a flat plate (the spikes are SpikeTrap's, so it can raise and retract them) ----

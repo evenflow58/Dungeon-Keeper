@@ -16,9 +16,9 @@ public class SpikeTrap : MonoBehaviour
     [Header("Spikes (code-built, ticket #77)")]
     [SerializeField] private Color spikeColor = new Color(0.85f, 0.87f, 0.90f, 1f); // Light steel
     [SerializeField] private int spikeGrid = 3;                                     // spikeGrid x spikeGrid cones
-    [SerializeField] private float spikeHeight = 0.3f;                              // Tiles, when raised
+    [SerializeField] private float spikeHeight = 0.34f;                             // Tiles, when raised
     [SerializeField] private float spikeWidth = 0.14f;                              // Cone base diameter, tiles
-    [SerializeField] private float retractedScale = 0.12f;                          // Spent: spikes squashed to this fraction
+    [SerializeField] private float retractedScale = 0.12f;                          // Spent: spikes squashed to this fraction, sunk into the plate
     [SerializeField] private float spikeSmoothness = 0.6f;                          // Polished steel
     [SerializeField] private float spikeSpread = 0.8f;                              // Grid span as a fraction of the plate
 
@@ -36,6 +36,7 @@ public class SpikeTrap : MonoBehaviour
 
     private Transform spikes;
     private bool spikesRaised;
+    private float spikeBaseY; // The plate's top, where raised spikes stand
 
     /// <summary>Called once by PlacementManager right after Placeable.Initialize.</summary>
     public void Initialize(int spikeDamage)
@@ -75,6 +76,8 @@ public class SpikeTrap : MonoBehaviour
         if (spikes == null) spikes = CreateSpikes();
         spikesRaised = IsArmed;
         spikes.localScale = new Vector3(1f, IsArmed ? 1f : retractedScale, 1f);
+        // Spent: the squashed spikes also sink below the plate's top, so a spent trap reads as a bare plate.
+        spikes.localPosition = new Vector3(0f, IsArmed ? spikeBaseY : spikeBaseY - spikeHeight * retractedScale - 0.002f, 0f);
     }
 
     // The grid stands on the plate's top surface, sized to the placeable's footprint.
@@ -86,6 +89,7 @@ public class SpikeTrap : MonoBehaviour
 
         var root = new GameObject("Spikes").transform;
         root.SetParent(transform, false);
+        spikeBaseY = plateTop;
         root.localPosition = new Vector3(0f, plateTop, 0f);
         foreach (CreatureModel.Part part in PropModel.SpikeGridRecipe(size * spikeSpread, spikeGrid, spikeHeight, spikeWidth, spikeColor))
             CreatureModel.CreatePart(root, part, spikeSmoothness);

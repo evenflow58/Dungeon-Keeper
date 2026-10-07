@@ -2,8 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Mushroom Plot behavior: grows 1 food per growthSecondsPerFood up to capacity, shown as small sphere
-/// pips along the front of the plot's mound (ticket #77; pip i shows exactly when FoodCount > i). Consumers take food through TryTakeFood(). Time spent at capacity is discarded
+/// Mushroom Plot behavior: grows 1 food per growthSecondsPerFood up to capacity, shown as a row of small
+/// sphere pips across the front of the plot's mound (ticket #77; pip i shows exactly when FoodCount > i). Consumers take food through TryTakeFood(). Time spent at capacity is discarded
 /// (no banking): after a take from a full plot, the next food needs a full fresh interval.
 /// </summary>
 [DisallowMultipleComponent]
@@ -16,8 +16,9 @@ public class MushroomPlot : MonoBehaviour
 
     [Header("Food Pips (code-built spheres, ticket #77)")]
     [SerializeField] private Color pipColor = new Color(0.95f, 0.90f, 0.70f, 1f); // Light warm white
-    [SerializeField] private float pipDiameter = 0.12f;                           // Tiles; countable at base zoom
-    [SerializeField] private float pipRingFraction = 0.72f;                       // Arc radius as a fraction of the mound's radius
+    [SerializeField] private float pipDiameter = 0.13f;                           // Tiles
+    [SerializeField] private float pipSpacing = 0.165f;                           // Center to center, tiles: a clear gap between pips
+    [SerializeField] private float pipRowFront = 0.45f;                           // Row depth: 0 = mound center, 1 = its front rim
     [SerializeField] private float pipSmoothness = 0.35f;                         // A little shine so they pop off the soil
 
     public float GrowthSecondsPerFood { get => growthSecondsPerFood; set => growthSecondsPerFood = value; }
@@ -80,7 +81,7 @@ public class MushroomPlot : MonoBehaviour
     }
 
     /// <summary>
-    /// Ensures exactly Capacity pips exist along the mound's front arc, with pip i visible iff i &lt; FoodCount.
+    /// Ensures exactly Capacity pips exist in a row across the mound's front, with pip i visible iff i &lt; FoodCount.
     /// </summary>
     public void RefreshPips()
     {
@@ -102,7 +103,7 @@ public class MushroomPlot : MonoBehaviour
         for (int i = 0; i < pips.Count; i++)
         {
             if (pips[i] == null) pips[i] = CreatePip(i);
-            pips[i].transform.localPosition = PropModel.PipPosition(i, target, size, pipRingFraction, pipDiameter);
+            pips[i].transform.localPosition = PropModel.PipPosition(i, target, size, pipRowFront, pipDiameter, pipSpacing);
             pips[i].enabled = i < FoodCount;
         }
     }

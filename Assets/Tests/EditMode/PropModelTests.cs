@@ -124,10 +124,13 @@ public class PropModelTests
         foreach (MeshRenderer pip in pips)
         {
             Assert.AreEqual(CreatureModel.MeshFor(CreatureModel.Shape.Sphere), pip.GetComponent<MeshFilter>().sharedMesh, pip.name);
-            Assert.Less(pip.transform.localPosition.z, 0f, pip.name + " on the mound's front arc, toward the camera");
+            Assert.Less(pip.transform.localPosition.z, 0f, pip.name + " on the mound's front, toward the camera");
             Assert.Greater(pip.transform.localPosition.y, 0f, pip.name + " on top of the mound");
         }
         Assert.AreEqual(5, pips.Select(p => p.transform.localPosition).Distinct().Count(), "Spread out, not stacked");
+        float[] xs = pips.Select(p => p.transform.localPosition.x).OrderBy(x => x).ToArray();
+        for (int i = 1; i < xs.Length; i++)
+            Assert.Greater(xs[i] - xs[i - 1], 0.13f, "A visible gap between neighbors (wider than a pip)");
 
         Assert.IsTrue(plot.TryTakeFood());
         Assert.AreEqual(4, plot.VisiblePipCount, "Eating takes a pip away");
@@ -165,7 +168,8 @@ public class PropModelTests
         Material crystal = heart.Model.transform.Find("Crystal").GetComponent<MeshRenderer>().sharedMaterial;
         Assert.IsTrue(crystal.IsKeywordEnabled("_EMISSION"), "Glows");
         Color emission = crystal.GetColor("_EmissionColor");
-        Assert.Greater(emission.r, 0.5f, "Deep red glow");
+        Assert.Greater(emission.r, 0.1f, "It glows");
+        Assert.Greater(emission.r, emission.g * 3f, "Red-dominant glow");
         Assert.AreEqual(CreatureModel.MeshFor(CreatureModel.Shape.Octahedron), heart.Model.transform.Find("Crystal").GetComponent<MeshFilter>().sharedMesh);
         Assert.IsFalse(heart.Model.transform.Find("Plinth").GetComponent<MeshRenderer>().sharedMaterial.IsKeywordEnabled("_EMISSION"), "Only the crystal glows");
 

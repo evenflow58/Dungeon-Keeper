@@ -51,10 +51,7 @@ public class PlacementController : MonoBehaviour
     private static readonly string[] BarLabels = { "Lair Cot", "Mushroom Plot", "Spike Trap" };
 
     // ---- input ----
-    private InputAction leftPressAction;
-    private InputAction rightPressAction;
-    private InputAction escAction;
-    private InputAction mousePosAction;
+    private InputConfig.Actions input; // Bindings come from InputConfig (rebindable); enabled with this component
 
     // ---- drag state ----
     private bool isDragging;
@@ -76,34 +73,22 @@ public class PlacementController : MonoBehaviour
 
     private void Awake()
     {
-        leftPressAction  = new InputAction("PlaceLeft",  InputActionType.Button, "<Mouse>/leftButton");
-        rightPressAction = new InputAction("PlaceRight", InputActionType.Button, "<Mouse>/rightButton");
-        escAction        = new InputAction("PlaceEsc",   InputActionType.Button, "<Keyboard>/escape");
-        mousePosAction   = new InputAction("PlaceMouse", InputActionType.Value,  "<Mouse>/position");
+        input = InputConfig.CreateActions();
     }
 
     private void OnEnable()
     {
-        leftPressAction?.Enable();
-        rightPressAction?.Enable();
-        escAction?.Enable();
-        mousePosAction?.Enable();
+        input?.Enable();
     }
 
     private void OnDisable()
     {
-        leftPressAction?.Disable();
-        rightPressAction?.Disable();
-        escAction?.Disable();
-        mousePosAction?.Disable();
+        input?.Disable();
     }
 
     private void OnDestroy()
     {
-        leftPressAction?.Dispose();
-        rightPressAction?.Dispose();
-        escAction?.Dispose();
-        mousePosAction?.Dispose();
+        input?.Dispose();
         if (previewSprite != null) Destroy(previewSprite.gameObject);
         if (barCanvas != null) Destroy(barCanvas.gameObject);
     }
@@ -176,9 +161,7 @@ public class PlacementController : MonoBehaviour
 
         if (!IsPlacing || dungeonBoard == null || boardRenderer == null || mainCamera == null) return;
 
-        Vector2 mouseScreen = mousePosAction?.ReadValue<Vector2>() ?? Vector2.zero;
-        if (mouseScreen == Vector2.zero && Mouse.current != null)
-            mouseScreen = Mouse.current.position.ReadValue();
+        Vector2 mouseScreen = input?.PointerPosition.ReadValue<Vector2>() ?? Vector2.zero;
 
         Ray ray = mainCamera.ScreenPointToRay(mouseScreen);
         bool hitGround = TileHover.RaycastGroundPlane(ray, out Vector3 worldPos);
@@ -191,12 +174,9 @@ public class PlacementController : MonoBehaviour
 
     private void HandleIdleInput(bool hitGround, Vector3 worldPos)
     {
-        bool esc = (escAction?.WasPressedThisFrame() ?? false)
-                || (Keyboard.current?.escapeKey.wasPressedThisFrame ?? false);
-        bool leftPressed  = (leftPressAction?.WasPressedThisFrame()  ?? false)
-                         || (Mouse.current?.leftButton.wasPressedThisFrame  ?? false);
-        bool rightPressed = (rightPressAction?.WasPressedThisFrame() ?? false)
-                         || (Mouse.current?.rightButton.wasPressedThisFrame ?? false);
+        bool esc = input?.Abort.WasPressedThisFrame() ?? false;
+        bool leftPressed  = input?.Designate.WasPressedThisFrame() ?? false;
+        bool rightPressed = input?.ClearOrAbort.WasPressedThisFrame() ?? false;
 
         if (esc || rightPressed)
         {
@@ -223,10 +203,8 @@ public class PlacementController : MonoBehaviour
 
     private void HandleDragInput(bool hitGround, Vector3 worldPos)
     {
-        bool esc = (escAction?.WasPressedThisFrame() ?? false)
-                || (Keyboard.current?.escapeKey.wasPressedThisFrame ?? false);
-        bool rightPressed = (rightPressAction?.WasPressedThisFrame() ?? false)
-                         || (Mouse.current?.rightButton.wasPressedThisFrame ?? false);
+        bool esc = input?.Abort.WasPressedThisFrame() ?? false;
+        bool rightPressed = input?.ClearOrAbort.WasPressedThisFrame() ?? false;
 
         // During a drag, Esc / right-click abort the drag only (placement mode stays active).
         if (esc || rightPressed)
@@ -246,8 +224,7 @@ public class PlacementController : MonoBehaviour
 
         UpdatePreview();
 
-        bool leftReleased = (leftPressAction?.WasReleasedThisFrame() ?? false)
-                         || (Mouse.current?.leftButton.wasReleasedThisFrame ?? false);
+        bool leftReleased = input?.Designate.WasReleasedThisFrame() ?? false;
         if (leftReleased) EndDrag();
     }
 

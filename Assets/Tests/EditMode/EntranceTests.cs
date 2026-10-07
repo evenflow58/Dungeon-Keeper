@@ -1,7 +1,6 @@
 using System;
 using NUnit.Framework;
 using UnityEngine;
-using UnityEngine.Tilemaps;
 using Object = UnityEngine.Object;
 
 public class EntranceTests
@@ -155,13 +154,18 @@ public class EntranceTests
     }
 
     [Test]
-    public void Renderer_HasADistinctDoorTile()
+    public void Renderer_BuildsADoorOnTheEntranceTileOnly()
     {
-        TileBase door = boardRenderer.GetTileAsset(TileState.Entrance);
-        Assert.IsNotNull(door);
-        Assert.AreNotSame(boardRenderer.GetTileAsset(TileState.Rock), door);
-        Assert.AreNotSame(boardRenderer.GetTileAsset(TileState.Floor), door);
-        Assert.AreNotSame(boardRenderer.GetTileAsset(TileState.Designated), door);
+        boardRenderer.RenderFullBoard();
+
+        GameObject door = boardRenderer.GetDoorView(Door.x, Door.y);
+        Assert.IsNotNull(door, "A door stands on the entrance tile");
+        Assert.IsTrue(door.activeSelf);
+        Assert.AreEqual(4, door.transform.childCount, "Two posts, a lintel, a panel");
+        Assert.AreEqual(boardRenderer.GetTileCenterWorldPosition(Door.x, Door.y), door.transform.position);
+        Assert.IsNull(boardRenderer.GetDoorView(Door.x - 1, Door.y), "No door on the rock beside it");
+        Assert.AreEqual(boardRenderer.ShapeFor(TileState.Floor).Scale,
+            boardRenderer.GetTileView(Door.x, Door.y).transform.localScale, "The door stands on a floor slab");
     }
 
     // --- Door rules: everyone but the hero treats it like the board edge ---

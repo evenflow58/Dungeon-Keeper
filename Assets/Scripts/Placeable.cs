@@ -20,6 +20,9 @@ public class Placeable : MonoBehaviour
     /// <summary>Lair Cot rest-spot claim (used by goblins in Epic #4). Always false for other types.</summary>
     public bool IsClaimed { get; private set; }
 
+    /// <summary>Height of the body's center above the ground point: decorations (pips, spikes) stand on it too.</summary>
+    public float StandHeight { get; private set; }
+
     private SpriteRenderer bodySprite;
 
     /// <summary>
@@ -53,7 +56,8 @@ public class Placeable : MonoBehaviour
         var go = new GameObject(Type + "Body");
         go.transform.SetParent(transform, false);
         go.transform.localScale = new Vector3(size, size, 1f);
-        go.transform.localPosition = new Vector3(0f, 0f, -0.1f);
+        StandHeight = size * 0.5f;
+        go.transform.localPosition = new Vector3(0f, StandHeight, 0f); // Standing on the ground point
         bodySprite = go.AddComponent<SpriteRenderer>();
 
         const int res = 16;

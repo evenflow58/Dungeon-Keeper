@@ -67,6 +67,7 @@ public class DigDesignator : MonoBehaviour
     private void CreatePreview()
     {
         var go = new GameObject("DigPreview");
+        go.transform.rotation = Quaternion.Euler(90f, 0f, 0f); // Lies flat (XZ), facing up
         previewSprite = go.AddComponent<SpriteRenderer>();
 
         const int res = 16;
@@ -95,7 +96,7 @@ public class DigDesignator : MonoBehaviour
         Vector2 mouseScreen = input?.PointerPosition.ReadValue<Vector2>() ?? Vector2.zero;
 
         Ray ray = mainCamera.ScreenPointToRay(mouseScreen);
-        bool hitGround = TileHover.RaycastGroundPlane(ray, out Vector3 worldPos);
+        bool hitGround = boardRenderer.RaycastBoard(ray, out Vector3 worldPos);
 
         if (!isDragging)
             HandleIdleInput(hitGround, worldPos);
@@ -168,7 +169,9 @@ public class DigDesignator : MonoBehaviour
         Vector3 maxCenter = boardRenderer.GetTileCenterWorldPosition(rect.xMax - 1, rect.yMax - 1);
         Vector3 center    = (minCenter + maxCenter) * 0.5f;
 
-        previewSprite.transform.position   = new Vector3(center.x, center.y, -0.1f);
+        // Flat over the rock tops it designates (at ground level it would be hidden inside the blocks).
+        float previewY = boardRenderer.RockHeight + boardRenderer.OverlayLift;
+        previewSprite.transform.position   = new Vector3(center.x, previewY, center.z);
         previewSprite.transform.localScale = new Vector3(rect.width, rect.height, 1f);
         previewSprite.enabled = true;
     }

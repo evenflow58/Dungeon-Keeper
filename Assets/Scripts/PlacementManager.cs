@@ -197,6 +197,6 @@ public class PlacementManager : MonoBehaviour
     private Vector3 TileCenter(Vector2Int tile)
     {
         if (boardRenderer != null) return boardRenderer.GetTileCenterWorldPosition(tile.x, tile.y);
-        return new Vector3(tile.x + 0.5f, tile.y + 0.5f, 0f);
+        return BoardRenderer.UnanchoredTileCenter(tile);
     }
 }

@@ -266,13 +266,11 @@ public class Goblin : MonoBehaviour
     private float SegmentLength() =>
         Vector3.Distance(TileCenter(segmentStart), TileCenter(NextTile));
 
-    private Vector3 TileCenter(Vector2Int tile)
-    {
-        Vector3 center = boardRenderer != null
+    // The tile's ground point; the root stands there and the body sprite stands up from it.
+    private Vector3 TileCenter(Vector2Int tile) =>
+        boardRenderer != null
             ? boardRenderer.GetTileCenterWorldPosition(tile.x, tile.y)
-            : new Vector3(tile.x + 0.5f, tile.y + 0.5f, 0f);
-        return new Vector3(center.x, center.y, transform.position.z);
-    }
+            : BoardRenderer.UnanchoredTileCenter(tile);
 
     private void CreateBody()
     {
@@ -281,7 +279,7 @@ public class Goblin : MonoBehaviour
         var go = new GameObject("GoblinBody");
         go.transform.SetParent(transform, false);
         go.transform.localScale = new Vector3(bodySize, bodySize, 1f);
-        go.transform.localPosition = new Vector3(0f, 0f, -0.2f);
+        go.transform.localPosition = new Vector3(0f, bodySize * 0.5f, 0f); // Standing on the ground point
         bodySprite = go.AddComponent<SpriteRenderer>();
 
         // A filled disc with a dark rim, colors baked in (the renderer tint stays white).

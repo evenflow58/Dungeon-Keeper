@@ -61,10 +61,9 @@ public class Heart : MonoBehaviour
     public void PlaceOnTile(Vector2Int tile)
     {
         heartTile = tile;
-        Vector3 center = boardRenderer != null
+        transform.position = boardRenderer != null
             ? boardRenderer.GetTileCenterWorldPosition(tile.x, tile.y)
-            : new Vector3(tile.x + 0.5f, tile.y + 0.5f, 0f);
-        transform.position = new Vector3(center.x, center.y, transform.position.z);
+            : BoardRenderer.UnanchoredTileCenter(tile);
     }
 
     private void CreateBody()
@@ -74,7 +73,7 @@ public class Heart : MonoBehaviour
         var go = new GameObject("HeartBody");
         go.transform.SetParent(transform, false);
         go.transform.localScale = new Vector3(bodySize, bodySize, 1f);
-        go.transform.localPosition = new Vector3(0f, 0f, -0.1f);
+        go.transform.localPosition = new Vector3(0f, bodySize * 0.5f, 0f); // Standing on the ground point
         bodySprite = go.AddComponent<SpriteRenderer>();
 
         // A filled diamond with a dark rim, colors baked in (the renderer tint stays white).

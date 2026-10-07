@@ -37,6 +37,51 @@ public static class CreatureModel
         }
     }
 
+    // ---- pivots (#84 amendment): joints a later motion driver can pose; the model renders identically ----
+
+    public const string BodyPivot = "BodyPivot";
+    public const string HeadPivot = "HeadPivot";
+    public const string BootLeftPivot = "BootLeftPivot";
+    public const string BootRightPivot = "BootRightPivot";
+    public const string ArmLeftPivot = "ArmLeftPivot";
+    public const string ArmRightPivot = "ArmRightPivot";
+
+    /// <summary>A named joint at a model-space position, and the parts it carries.</summary>
+    public struct Pivot
+    {
+        public string Name;
+        public Vector3 Position;
+        public string[] Parts;
+
+        public Pivot(string name, Vector3 position, params string[] parts)
+        {
+            Name = name;
+            Position = position;
+            Parts = parts;
+        }
+    }
+
+    /// <summary>A creature recipe: its parts (placed in model space) and the pivots that carry them.</summary>
+    public sealed class Recipe
+    {
+        public readonly Part[] Parts;
+        public readonly Pivot[] Pivots;
+
+        public Recipe(Part[] parts, params Pivot[] pivots)
+        {
+            Parts = parts;
+            Pivots = pivots;
+        }
+
+        /// <summary>The pivot carrying a part, or null for a part left on the model root.</summary>
+        public string PivotOf(string partName)
+        {
+            foreach (Pivot pivot in Pivots)
+                if (System.Array.IndexOf(pivot.Parts, partName) >= 0) return pivot.Name;
+            return null;
+        }
+    }
+
     private static readonly Dictionary<(Color, float), Material> materials = new Dictionary<(Color, float), Material>();
     private static readonly Dictionary<(Color, float, float), Material> emissiveMaterials = new Dictionary<(Color, float, float), Material>();
     private static readonly Dictionary<Shape, Mesh> meshes = new Dictionary<Shape, Mesh>();
@@ -49,6 +94,53 @@ public static class CreatureModel
 
         foreach (Part part in parts) CreatePart(model.transform, part, smoothness);
         return model;
+    }
+
+    /// <summary>
+    /// Builds a pivoted model: each pivot is an empty transform at its joint (model space, no rotation), and its parts
+    /// sit beneath it offset by the pivot's position, so every part renders exactly where the recipe places it.
+    /// </summary>
+    public static GameObject Build(Transform root, string name, Recipe recipe, float smoothness)
+    {
+        var model = new GameObject(name);
+        model.transform.SetParent(root, false);
+
+        var pivots = new Dictionary<string, Transform>();
+        foreach (Pivot pivot in recipe.Pivots)
+        {
+            var go = new GameObject(pivot.Name);
+            go.transform.SetParent(model.transform, false);
+            go.transform.localPosition = pivot.Position;
+            pivots[pivot.Name] = go.transform;
+        }
+
+        foreach (Part part in recipe.Parts)
+        {
+            string pivotName = recipe.PivotOf(part.Name);
+            if (pivotName == null)
+            {
+                CreatePart(model.transform, part, smoothness);
+                continue;
+            }
+            Transform pivot = pivots[pivotName];
+            Part local = part;
+            local.Position = part.Position - pivot.localPosition;
+            CreatePart(pivot, local, smoothness);
+        }
+        return model;
+    }
+
+    /// <summary>A model's pivot by name (e.g. HeadPivot), or null.</summary>
+    public static Transform FindPivot(GameObject model, string pivotName) =>
+        model != null ? model.transform.Find(pivotName) : null;
+
+    /// <summary>A part anywhere under a model (on the root or under its pivot), or null.</summary>
+    public static Transform FindPart(GameObject model, string partName)
+    {
+        if (model == null) return null;
+        foreach (MeshRenderer r in model.GetComponentsInChildren<MeshRenderer>(true))
+            if (r.gameObject.name == partName) return r.transform;
+        return null;
     }
 
     /// <summary>One part under parent: its mesh, a shared lit material for its color, casting and receiving shadows.</summary>
@@ -257,7 +349,7 @@ public static class CreatureModel
     /// belt and gold buckle, arms with oversized hands, a face (muzzle, nose, brow, glossy eyes with highlights,
     /// blush, a grin with one fang) and tall ears with lighter inner ears. Ear tips define the top.
     /// </summary>
-    public static Part[] GoblinRecipe(float h, GoblinPalette p) => new[]
+    public static Recipe GoblinRecipe(float h, GoblinPalette p) => new Recipe(new[]
     {
         new Part("BootLeft",  Shape.Box, V(-0.10f, 0.04f, -0.01f, h), V(0.13f, 0.08f, 0.16f, h), p.BootsAndBelt),
         new Part("ToeLeft",   Shape.Box, V(-0.10f, 0.03f, -0.09f, h), V(0.11f, 0.06f, 0.07f, h), p.BootsAndBelt),
@@ -292,13 +384,22 @@ public static class CreatureModel
         new Part("EarRight",      Shape.Cone, V(0.19f, 0.74f, 0f, h),  V(0.16f, 0.42f, 0.05f, h), p.Skin, new Vector3(0f, 0f, -55f)),
         new Part("InnerEarLeft",  Shape.Cone, V(-0.20f, 0.745f, -0.02f, h), V(0.09f, 0.30f, 0.03f, h), p.InnerEar, new Vector3(0f, 0f, 55f)),
         new Part("InnerEarRight", Shape.Cone, V(0.20f, 0.745f, -0.02f, h),  V(0.09f, 0.30f, 0.03f, h), p.InnerEar, new Vector3(0f, 0f, -55f)),
-    };
+    },
+        // Pivots at the joints: ankles (boot tops), shoulders (arm tops), the neck, the hips.
+        new Pivot(BootLeftPivot,  V(-0.10f, 0.08f, -0.01f, h), "BootLeft", "ToeLeft", "WrapLeft"),
+        new Pivot(BootRightPivot, V(0.10f, 0.08f, -0.01f, h),  "BootRight", "ToeRight", "WrapRight"),
+        new Pivot(BodyPivot,      V(0f, 0.13f, 0f, h), "Shorts", "Vest", "Belt", "Buckle"),
+        new Pivot(ArmLeftPivot,   V(-0.175f, 0.40f, 0f, h), "ArmLeft", "HandLeft"),
+        new Pivot(ArmRightPivot,  V(0.175f, 0.40f, 0f, h),  "ArmRight", "HandRight"),
+        new Pivot(HeadPivot,      V(0f, 0.47f, 0f, h), "Head", "Muzzle", "Nose", "Brow", "EyeLeft", "EyeRight",
+            "EyeShineLeft", "EyeShineRight", "BlushLeft", "BlushRight", "MouthLeft", "MouthMid", "MouthRight", "Fang",
+            "EarLeft", "EarRight", "InnerEarLeft", "InnerEarRight"));
 
     /// <summary>
     /// The imp, in the goblin's language: boots with cuffs, a belt and loincloth, hands, a face (muzzle, brow, glossy
     /// eyes with highlights, one fang), its horns and its pickaxe. Horn tips define the top.
     /// </summary>
-    public static Part[] ImpRecipe(float h, ImpPalette p) => new[]
+    public static Recipe ImpRecipe(float h, ImpPalette p) => new Recipe(new[]
     {
         new Part("BootLeft",  Shape.Box, V(-0.09f, 0.04f, -0.01f, h), V(0.11f, 0.08f, 0.15f, h), p.Boots),
         new Part("CuffLeft",  Shape.Cylinder, V(-0.09f, 0.10f, 0f, h), V(0.09f, 0.02f, 0.09f, h), p.Boots),
@@ -321,14 +422,21 @@ public static class CreatureModel
         new Part("HornRight", Shape.Cone, V(0.12f, 0.76f, 0f, h),  V(0.08f, 0.24f, 0.08f, h), p.Horns, new Vector3(0f, 0f, -22f)),
         new Part("PickHandle", Shape.Cylinder, V(0.30f, 0.40f, -0.08f, h), V(0.05f, 0.30f, 0.05f, h), p.PickHandle, new Vector3(0f, 0f, -18f)),
         new Part("PickHead",   Shape.Box, V(0.393f, 0.685f, -0.08f, h), V(0.36f, 0.07f, 0.07f, h), p.PickHead, new Vector3(0f, 0f, -18f)),
-    };
+    },
+        new Pivot(BootLeftPivot,  V(-0.09f, 0.08f, -0.01f, h), "BootLeft", "CuffLeft"),
+        new Pivot(BootRightPivot, V(0.09f, 0.08f, -0.01f, h),  "BootRight", "CuffRight"),
+        new Pivot(BodyPivot,      V(0f, 0.10f, 0f, h), "Body", "Belt", "Loincloth"),
+        new Pivot(ArmLeftPivot,   V(-0.17f, 0.40f, 0f, h), "HandLeft"),
+        new Pivot(ArmRightPivot,  V(0.17f, 0.40f, 0f, h),  "HandRight", "PickHandle", "PickHead"), // The pickaxe rides the right arm
+        new Pivot(HeadPivot,      V(0f, 0.45f, 0f, h), "Head", "Muzzle", "Brow", "EyeLeft", "EyeRight",
+            "EyeShineLeft", "EyeShineRight", "Fang", "HornLeft", "HornRight"));
 
     /// <summary>
     /// The hero, in the same language: boots, an armored body with a blue tabard and a belt, shoulder pauldrons,
     /// armored arms and gauntlets, a helmet with a dark visor slit (a knight's face) and a crest, and a round shield
     /// with a center boss. The crest tip defines the top.
     /// </summary>
-    public static Part[] HeroRecipe(float h, HeroPalette p) => new[]
+    public static Recipe HeroRecipe(float h, HeroPalette p) => new Recipe(new[]
     {
         new Part("BootLeft",  Shape.Box, V(-0.09f, 0.045f, -0.01f, h), V(0.12f, 0.09f, 0.17f, h), p.DarkSteel),
         new Part("BootRight", Shape.Box, V(0.09f, 0.045f, -0.01f, h),  V(0.12f, 0.09f, 0.17f, h), p.DarkSteel),
@@ -347,5 +455,11 @@ public static class CreatureModel
         // The shield, held at his front-left with its face to the camera; a boss at its center.
         new Part("Shield",     Shape.Cylinder, V(-0.20f, 0.34f, -0.18f, h), V(0.32f, 0.025f, 0.32f, h), p.Accent, new Vector3(90f, 0f, 0f)),
         new Part("ShieldBoss", Shape.Sphere, V(-0.20f, 0.34f, -0.205f, h), V(0.08f, 0.08f, 0.04f, h), p.Armor, default, MetalGloss),
-    };
+    },
+        new Pivot(BootLeftPivot,  V(-0.09f, 0.09f, -0.01f, h), "BootLeft"),
+        new Pivot(BootRightPivot, V(0.09f, 0.09f, -0.01f, h),  "BootRight"),
+        new Pivot(BodyPivot,      V(0f, 0.11f, 0f, h), "Body", "Tabard", "Belt", "PauldronLeft", "PauldronRight"),
+        new Pivot(ArmLeftPivot,   V(-0.19f, 0.47f, 0f, h), "ArmLeft", "GauntletLeft", "Shield", "ShieldBoss"), // The shield rides the left arm
+        new Pivot(ArmRightPivot,  V(0.19f, 0.47f, 0f, h),  "ArmRight", "GauntletRight"),
+        new Pivot(HeadPivot,      V(0f, 0.55f, 0f, h), "Helmet", "Visor", "Crest"));
 }

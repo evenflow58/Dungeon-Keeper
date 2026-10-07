@@ -36,7 +36,7 @@ public class CreatureModelTests
     public void Goblin_IsTheFullReferenceDesign()
     {
         root = new GameObject("Goblin");
-        CollectionAssert.AreEqual(new[]
+        CollectionAssert.AreEquivalent(new[]
         {
             "BootLeft", "ToeLeft", "WrapLeft", "BootRight", "ToeRight", "WrapRight",
             "Shorts", "Vest", "Belt", "Buckle", "ArmLeft", "ArmRight", "HandLeft", "HandRight",
@@ -50,7 +50,7 @@ public class CreatureModelTests
     public void Imp_KeepsHornsAndPickaxe_WithAFaceBootsAndLoincloth()
     {
         root = new GameObject("Imp");
-        CollectionAssert.AreEqual(new[]
+        CollectionAssert.AreEquivalent(new[]
         {
             "BootLeft", "CuffLeft", "BootRight", "CuffRight", "Body", "Belt", "Loincloth", "HandLeft", "HandRight",
             "Head", "Muzzle", "Brow", "EyeLeft", "EyeRight", "EyeShineLeft", "EyeShineRight", "Fang",
@@ -62,7 +62,7 @@ public class CreatureModelTests
     public void Hero_KeepsHelmetCrestAndShield_WithVisorPauldronsGauntletsAndTabard()
     {
         root = new GameObject("Hero");
-        CollectionAssert.AreEqual(new[]
+        CollectionAssert.AreEquivalent(new[]
         {
             "BootLeft", "BootRight", "Body", "Tabard", "Belt", "PauldronLeft", "PauldronRight", "ArmLeft", "ArmRight",
             "GauntletLeft", "GauntletRight", "Helmet", "Visor", "Crest", "Shield", "ShieldBoss",
@@ -77,17 +77,17 @@ public class CreatureModelTests
 
         foreach (GameObject model in new[] { goblin, imp })
         {
-            Transform head = model.transform.Find("Head");
+            Transform head = CreatureModel.FindPart(model, "Head");
             foreach (string eye in new[] { "EyeLeft", "EyeRight", "EyeShineLeft", "EyeShineRight" })
             {
-                Transform part = model.transform.Find(eye);
+                Transform part = CreatureModel.FindPart(model, eye);
                 Assert.IsNotNull(part, model.name + " " + eye);
-                Assert.Less(part.localPosition.z, head.localPosition.z, model.name + " " + eye + " in front of the head (toward the camera)");
+                Assert.Less(part.position.z, head.position.z, model.name + " " + eye + " in front of the head (toward the camera)");
             }
         }
-        Transform visor = hero.transform.Find("Visor");
+        Transform visor = CreatureModel.FindPart(hero, "Visor");
         Assert.IsNotNull(visor, "The hero's face is a visor slit");
-        Assert.Less(visor.localPosition.z, hero.transform.Find("Helmet").localPosition.z);
+        Assert.Less(visor.position.z, CreatureModel.FindPart(hero, "Helmet").position.z);
     }
 
     [Test]
@@ -97,9 +97,9 @@ public class CreatureModelTests
         CreatureModel.GoblinPalette palette = CreatureModel.GoblinPalette.Default;
         GameObject model = BuildGoblin(root.transform);
 
-        MeshRenderer head = model.transform.Find("Head").GetComponent<MeshRenderer>();
-        MeshRenderer ear = model.transform.Find("EarLeft").GetComponent<MeshRenderer>();
-        MeshRenderer vest = model.transform.Find("Vest").GetComponent<MeshRenderer>();
+        MeshRenderer head = CreatureModel.FindPart(model, "Head").GetComponent<MeshRenderer>();
+        MeshRenderer ear = CreatureModel.FindPart(model, "EarLeft").GetComponent<MeshRenderer>();
+        MeshRenderer vest = CreatureModel.FindPart(model, "Vest").GetComponent<MeshRenderer>();
         Assert.AreSame(head.sharedMaterial, ear.sharedMaterial, "Same color, same material");
         Assert.AreNotSame(head.sharedMaterial, vest.sharedMaterial, "The vest is its own color");
         Assert.AreSame(CreatureModel.MaterialFor(palette.Skin, 0.35f), head.sharedMaterial, "Keyed by color (and smoothness)");
@@ -107,9 +107,9 @@ public class CreatureModelTests
         Assert.AreEqual(CreatureModel.LitShaderName, head.sharedMaterial.shader.name);
 
         // Per-part smoothness: eyes are the glossiest thing on the model; the model's sheen elsewhere.
-        Material eye = model.transform.Find("EyeLeft").GetComponent<MeshRenderer>().sharedMaterial;
+        Material eye = CreatureModel.FindPart(model, "EyeLeft").GetComponent<MeshRenderer>().sharedMaterial;
         Assert.Greater(eye.GetFloat("_Smoothness"), head.sharedMaterial.GetFloat("_Smoothness"));
-        Assert.AreSame(eye, model.transform.Find("EyeRight").GetComponent<MeshRenderer>().sharedMaterial);
+        Assert.AreSame(eye, CreatureModel.FindPart(model, "EyeRight").GetComponent<MeshRenderer>().sharedMaterial);
 
         foreach (MeshRenderer r in model.GetComponentsInChildren<MeshRenderer>())
         {
@@ -148,6 +148,85 @@ public class CreatureModelTests
         Assert.Less(imp.max.y, goblin.max.y, "Imp smallest");
         Assert.Less(goblin.max.y, hero.max.y, "Hero tallest");
         Assert.Greater(goblin.size.x, hero.size.x, "Goblin widest: its ears");
+    }
+
+    // --- Pivots (#84 amendment): joints for the later motion driver; the model renders identically ---
+
+    private static readonly string[] AllPivots =
+    {
+        CreatureModel.BootLeftPivot, CreatureModel.BootRightPivot, CreatureModel.BodyPivot,
+        CreatureModel.ArmLeftPivot, CreatureModel.ArmRightPivot, CreatureModel.HeadPivot,
+    };
+
+    private static string[] PartsUnder(GameObject model, string pivot) =>
+        CreatureModel.FindPivot(model, pivot).GetComponentsInChildren<MeshRenderer>(true).Select(r => r.gameObject.name).ToArray();
+
+    [Test]
+    public void EveryCreature_HasTheSixPivots_AndEveryPartRidesOne()
+    {
+        root = new GameObject("Owners");
+        foreach (GameObject model in new[] { BuildGoblin(root.transform), BuildImp(root.transform), BuildHero(root.transform) })
+        {
+            foreach (string pivot in AllPivots)
+            {
+                Transform t = CreatureModel.FindPivot(model, pivot);
+                Assert.IsNotNull(t, model.name + " " + pivot);
+                Assert.AreSame(model.transform, t.parent, model.name + " " + pivot + " directly under the model root");
+                Assert.AreEqual(Quaternion.identity, t.localRotation, "Rest pose: no rotation");
+                Assert.IsNull(t.GetComponent<MeshRenderer>(), "A pivot is an empty joint");
+            }
+            foreach (MeshRenderer part in model.GetComponentsInChildren<MeshRenderer>(true))
+                Assert.AreNotSame(model.transform, part.transform.parent, model.name + " " + part.name + " rides a pivot");
+        }
+    }
+
+    [Test]
+    public void Goblin_PivotsCarryTheirParts_AtTheJoints()
+    {
+        root = new GameObject("Goblin");
+        GameObject model = BuildGoblin(root.transform);
+
+        CollectionAssert.AreEquivalent(new[] { "BootLeft", "ToeLeft", "WrapLeft" }, PartsUnder(model, CreatureModel.BootLeftPivot));
+        CollectionAssert.AreEquivalent(new[] { "BootRight", "ToeRight", "WrapRight" }, PartsUnder(model, CreatureModel.BootRightPivot));
+        CollectionAssert.AreEquivalent(new[] { "Shorts", "Vest", "Belt", "Buckle" }, PartsUnder(model, CreatureModel.BodyPivot));
+        CollectionAssert.AreEquivalent(new[] { "ArmLeft", "HandLeft" }, PartsUnder(model, CreatureModel.ArmLeftPivot));
+        CollectionAssert.AreEquivalent(new[] { "ArmRight", "HandRight" }, PartsUnder(model, CreatureModel.ArmRightPivot));
+        CollectionAssert.AreEquivalent(new[] { "Head", "Muzzle", "Nose", "Brow", "EyeLeft", "EyeRight", "EyeShineLeft", "EyeShineRight",
+            "BlushLeft", "BlushRight", "MouthLeft", "MouthMid", "MouthRight", "Fang", "EarLeft", "EarRight", "InnerEarLeft", "InnerEarRight" },
+            PartsUnder(model, CreatureModel.HeadPivot));
+
+        // Joints sit where the anatomy says (fractions of H = 0.8): ankles at boot tops, shoulders, the neck.
+        Assert.AreEqual(0.08f * 0.8f, CreatureModel.FindPivot(model, CreatureModel.BootLeftPivot).localPosition.y, 1e-5f, "Ankle");
+        Assert.AreEqual(0.40f * 0.8f, CreatureModel.FindPivot(model, CreatureModel.ArmLeftPivot).localPosition.y, 1e-5f, "Shoulder");
+        Assert.AreEqual(0.47f * 0.8f, CreatureModel.FindPivot(model, CreatureModel.HeadPivot).localPosition.y, 1e-5f, "Neck");
+    }
+
+    [Test]
+    public void HeldItems_RideTheirArm_ImpPickaxeRight_HeroShieldLeft()
+    {
+        root = new GameObject("Owners");
+        GameObject imp = BuildImp(root.transform), hero = BuildHero(root.transform);
+
+        CollectionAssert.IsSupersetOf(PartsUnder(imp, CreatureModel.ArmRightPivot), new[] { "HandRight", "PickHandle", "PickHead" });
+        CollectionAssert.IsSupersetOf(PartsUnder(imp, CreatureModel.HeadPivot), new[] { "Head", "HornLeft", "HornRight", "EyeLeft", "Fang" });
+        CollectionAssert.IsSupersetOf(PartsUnder(hero, CreatureModel.ArmLeftPivot), new[] { "GauntletLeft", "Shield", "ShieldBoss" });
+        CollectionAssert.AreEquivalent(new[] { "Helmet", "Visor", "Crest" }, PartsUnder(hero, CreatureModel.HeadPivot));
+    }
+
+    [Test]
+    public void Pivoting_DoesNotMoveAnyPart()
+    {
+        // The recipe's model-space placement is preserved exactly: world position = model root + recipe position.
+        root = new GameObject("Owner");
+        root.transform.position = new Vector3(1.5f, 0f, 2.5f);
+        CreatureModel.Recipe recipe = CreatureModel.GoblinRecipe(0.8f, CreatureModel.GoblinPalette.Default);
+        GameObject model = CreatureModel.Build(root.transform, "GoblinModel", recipe, 0.35f);
+
+        foreach (CreatureModel.Part part in recipe.Parts)
+        {
+            Transform t = CreatureModel.FindPart(model, part.Name);
+            Assert.Less(Vector3.Distance(root.transform.position + part.Position, t.position), 1e-5f, part.Name);
+        }
     }
 
     [Test]

@@ -19,7 +19,6 @@ public class MushroomPlot : MonoBehaviour
     [SerializeField] private float pipSize = 0.18f;                               // Fraction of a tile; legible at default zoom
     [SerializeField] private float pipSpacing = 0.20f;                            // 5 pips span ~0.98 of a tile
     [SerializeField] private float pipRowY = -0.28f;                              // Local offset from tile center
-    [SerializeField] private int pipSortingOrder = 2;                             // Above the plot body (1)
 
     public float GrowthSecondsPerFood { get => growthSecondsPerFood; set => growthSecondsPerFood = value; }
     public int Capacity { get => capacity; set => capacity = value; }
@@ -145,7 +144,6 @@ public class MushroomPlot : MonoBehaviour
         var sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = pipSprite;
         sr.color = pipColor;
-        sr.sortingOrder = pipSortingOrder;
         sr.enabled = false;
         return sr;
     }

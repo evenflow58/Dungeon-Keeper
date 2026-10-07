@@ -14,7 +14,7 @@ public class Imp : MonoBehaviour
     [Header("Appearance (Placeholder Art)")]
     [SerializeField] private Color bodyColor = new Color(0.85f, 0.2f, 0.2f, 1f); // Imp red
     [SerializeField] private float bodySize = 0.6f;                               // Fraction of a tile
-    [SerializeField] private int sortingOrder = 2;                                // Above tiles (0) and hover highlight (1)
+    [SerializeField] private GroundShadowStyle groundShadow = new GroundShadowStyle(0.55f, 0.4f); // Disc under the body (sprites cast no shadows)
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
@@ -181,6 +181,6 @@ public class Imp : MonoBehaviour
         sprite.name = "Imp_Sprite";
         bodySprite.sprite = sprite;
         bodySprite.color = bodyColor;
-        bodySprite.sortingOrder = sortingOrder;
+        GroundShadow.Create(transform, groundShadow, BoardRenderer.OverlayLiftOf(boardRenderer));
     }
 }

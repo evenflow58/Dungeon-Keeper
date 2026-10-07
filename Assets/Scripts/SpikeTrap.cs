@@ -17,7 +17,6 @@ public class SpikeTrap : MonoBehaviour
     [SerializeField] private float spikeSize = 0.45f;                               // Fraction of a tile
     [SerializeField] private float spikeRotation = 45f;                             // Square turned into a diamond
     [SerializeField] private Vector3 spikeOffset = new Vector3(0f, 0.02f, -0.15f);   // Local offset from tile center
-    [SerializeField] private int spikeSortingOrder = 2;                             // Above the trap body (1)
 
     public int Damage { get => damage; set => damage = value; }
 
@@ -94,7 +93,6 @@ public class SpikeTrap : MonoBehaviour
         var sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = sprite;
         sr.color = spikeColor;
-        sr.sortingOrder = spikeSortingOrder;
         return sr;
     }
 }

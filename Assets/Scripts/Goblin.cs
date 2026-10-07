@@ -31,7 +31,7 @@ public class Goblin : MonoBehaviour
     [Header("Appearance (Placeholder Art)")]
     [SerializeField] private Color bodyColor = new Color(0.45f, 0.80f, 0.35f, 1f); // Goblin green
     [SerializeField] private float bodySize = 0.75f;                               // Fraction of a tile
-    [SerializeField] private int sortingOrder = 2;                                 // Above tiles (0) and placeables (1)
+    [SerializeField] private GroundShadowStyle groundShadow = new GroundShadowStyle(0.7f, 0.4f); // Disc under the body (sprites cast no shadows)
     // Round with a dark rim so goblins read as creatures, not as the square green Mushroom Plots.
     [SerializeField] private Color outlineColor = new Color(0.10f, 0.18f, 0.08f, 1f); // Near-black green
     [SerializeField] private float outlineWidth = 0.14f;                               // Fraction of the body radius
@@ -306,6 +306,6 @@ public class Goblin : MonoBehaviour
         sprite.name = "Goblin_Sprite";
         bodySprite.sprite = sprite;
         bodySprite.color = Color.white;
-        bodySprite.sortingOrder = sortingOrder;
+        GroundShadow.Create(transform, groundShadow, BoardRenderer.OverlayLiftOf(boardRenderer));
     }
 }

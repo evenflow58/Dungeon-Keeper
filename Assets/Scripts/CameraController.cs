@@ -51,8 +51,7 @@ public class CameraController : MonoBehaviour
         if (cam != null)
         {
             cam.orthographic = true;
-            cam.transparencySortMode = TransparencySortMode.CustomAxis;
-            cam.transparencySortAxis = new Vector3(0f, 1f, 0f);
+            cam.transparencySortMode = TransparencySortMode.Default; // Sort by view depth: real depth replaced the 2D axis
             cam.farClipPlane = Mathf.Max(cam.farClipPlane, 100f);
         }
 
@@ -85,8 +84,7 @@ public class CameraController : MonoBehaviour
         cam ??= GetComponent<Camera>();
 
         cam.orthographic = true;
-        cam.transparencySortMode = TransparencySortMode.CustomAxis;
-        cam.transparencySortAxis = new Vector3(0f, 1f, 0f);
+        cam.transparencySortMode = TransparencySortMode.Default;
 
         ComputeBaseOrthographicSize();
         cam.orthographicSize = baseOrthographicSize;

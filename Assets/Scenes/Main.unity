@@ -153,10 +153,16 @@ MonoBehaviour:
   boardRenderer: {fileID: 565044519}
   moveSpeedTilesPerSecond: 4
   modelHeight: 0.6
-  skinColor: {r: 0.85, g: 0.2, b: 0.2, a: 1}
-  hornColor: {r: 0.35, g: 0.08, b: 0.06, a: 1}
-  pickHandleColor: {r: 0.5, g: 0.33, b: 0.18, a: 1}
-  pickHeadColor: {r: 0.62, g: 0.64, b: 0.68, a: 1}
+  palette:
+    Skin: {r: 0.85, g: 0.2, b: 0.2, a: 1}
+    Horns: {r: 0.35, g: 0.08, b: 0.06, a: 1}
+    Brow: {r: 0.55, g: 0.1, b: 0.08, a: 1}
+    Boots: {r: 0.24, g: 0.11, b: 0.06, a: 1}
+    Loincloth: {r: 0.4, g: 0.2, b: 0.09, a: 1}
+    Eyes: {r: 0.043137256, g: 0.043137256, b: 0.043137256, a: 1}
+    Fang: {r: 1, g: 1, b: 1, a: 1}
+    PickHandle: {r: 0.5, g: 0.33, b: 0.18, a: 1}
+    PickHead: {r: 0.62, g: 0.64, b: 0.68, a: 1}
   modelSmoothness: 0.35
 --- !u!4 &71735946
 Transform:
@@ -808,8 +814,19 @@ MonoBehaviour:
   startingHunger: 100
   startingEnergy: 100
   modelHeight: 0.8
-  skinColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
-  bellyColor: {r: 0.33, g: 0.62, b: 0.25, a: 1}
+  palette:
+    Skin: {r: 0.3764706, g: 0.627451, b: 0.1254902, a: 1}
+    InnerEar: {r: 0.6431373, g: 0.8392157, b: 0.36862746, a: 1}
+    BrowAndWraps: {r: 0.18039216, g: 0.41960785, b: 0.101960786, a: 1}
+    Nose: {r: 0.29803923, g: 0.5803922, b: 0.15686275, a: 1}
+    Vest: {r: 0.5019608, g: 0.2509804, b: 0, a: 1}
+    Shorts: {r: 0.3764706, g: 0.1254902, b: 0, a: 1}
+    BootsAndBelt: {r: 0.2509804, g: 0.1254902, b: 0, a: 1}
+    Buckle: {r: 0.9490196, g: 0.69411767, b: 0.20392157, a: 1}
+    Blush: {r: 0.95686275, g: 0.6039216, b: 0.75686276, a: 1}
+    Eyes: {r: 0.043137256, g: 0.043137256, b: 0.043137256, a: 1}
+    Mouth: {r: 0.11372549, g: 0.16862746, b: 0.07058824, a: 1}
+    Fang: {r: 1, g: 1, b: 1, a: 1}
   modelSmoothness: 0.35
   logStats: 1
   logIntervalSeconds: 5
@@ -958,8 +975,19 @@ MonoBehaviour:
   startingHunger: 100
   startingEnergy: 100
   modelHeight: 0.8
-  skinColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
-  bellyColor: {r: 0.33, g: 0.62, b: 0.25, a: 1}
+  palette:
+    Skin: {r: 0.3764706, g: 0.627451, b: 0.1254902, a: 1}
+    InnerEar: {r: 0.6431373, g: 0.8392157, b: 0.36862746, a: 1}
+    BrowAndWraps: {r: 0.18039216, g: 0.41960785, b: 0.101960786, a: 1}
+    Nose: {r: 0.29803923, g: 0.5803922, b: 0.15686275, a: 1}
+    Vest: {r: 0.5019608, g: 0.2509804, b: 0, a: 1}
+    Shorts: {r: 0.3764706, g: 0.1254902, b: 0, a: 1}
+    BootsAndBelt: {r: 0.2509804, g: 0.1254902, b: 0, a: 1}
+    Buckle: {r: 0.9490196, g: 0.69411767, b: 0.20392157, a: 1}
+    Blush: {r: 0.95686275, g: 0.6039216, b: 0.75686276, a: 1}
+    Eyes: {r: 0.043137256, g: 0.043137256, b: 0.043137256, a: 1}
+    Mouth: {r: 0.11372549, g: 0.16862746, b: 0.07058824, a: 1}
+    Fang: {r: 1, g: 1, b: 1, a: 1}
   modelSmoothness: 0.35
   logStats: 1
   logIntervalSeconds: 5
@@ -1129,8 +1157,19 @@ MonoBehaviour:
   startingHunger: 100
   startingEnergy: 100
   modelHeight: 0.8
-  skinColor: {r: 0.45, g: 0.8, b: 0.35, a: 1}
-  bellyColor: {r: 0.33, g: 0.62, b: 0.25, a: 1}
+  palette:
+    Skin: {r: 0.3764706, g: 0.627451, b: 0.1254902, a: 1}
+    InnerEar: {r: 0.6431373, g: 0.8392157, b: 0.36862746, a: 1}
+    BrowAndWraps: {r: 0.18039216, g: 0.41960785, b: 0.101960786, a: 1}
+    Nose: {r: 0.29803923, g: 0.5803922, b: 0.15686275, a: 1}
+    Vest: {r: 0.5019608, g: 0.2509804, b: 0, a: 1}
+    Shorts: {r: 0.3764706, g: 0.1254902, b: 0, a: 1}
+    BootsAndBelt: {r: 0.2509804, g: 0.1254902, b: 0, a: 1}
+    Buckle: {r: 0.9490196, g: 0.69411767, b: 0.20392157, a: 1}
+    Blush: {r: 0.95686275, g: 0.6039216, b: 0.75686276, a: 1}
+    Eyes: {r: 0.043137256, g: 0.043137256, b: 0.043137256, a: 1}
+    Mouth: {r: 0.11372549, g: 0.16862746, b: 0.07058824, a: 1}
+    Fang: {r: 1, g: 1, b: 1, a: 1}
   modelSmoothness: 0.35
   logStats: 1
   logIntervalSeconds: 5

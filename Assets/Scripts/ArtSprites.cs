@@ -18,6 +18,14 @@ public static class ArtSprites
     // Only hits are cached: a sprite added later (or restored after a rename) loads on the next request.
     private static readonly Dictionary<string, Sprite> cache = new Dictionary<string, Sprite>();
 
+    // The project enters Play without a domain reload, so statics survive between sessions: start each
+    // session with an empty cache, or a sprite renamed/moved since the last session would keep loading.
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetOnPlay() => ClearCache();
+
+    /// <summary>Forgets every cached sprite; the next Load goes back to Resources.</summary>
+    public static void ClearCache() => cache.Clear();
+
     /// <summary>The sprite at a Resources path, or null when there's no sprite there.</summary>
     public static Sprite Load(string path)
     {

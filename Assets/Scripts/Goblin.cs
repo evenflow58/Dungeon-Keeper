@@ -30,8 +30,7 @@ public class Goblin : MonoBehaviour
 
     [Header("Model (code-built, ticket #76)")]
     [SerializeField] private float modelHeight = 0.8f;                              // Tiles: the stockiest creature
-    [SerializeField] private Color skinColor = new Color(0.45f, 0.80f, 0.35f, 1f);  // Goblin green (its sprite-era color)
-    [SerializeField] private Color bellyColor = new Color(0.33f, 0.62f, 0.25f, 1f); // Darker green belly
+    [SerializeField] private CreatureModel.GoblinPalette palette = CreatureModel.GoblinPalette.Default; // The approved design's colors (#84)
     [SerializeField] private float modelSmoothness = 0.35f;                         // Toy (vinyl) sheen
 
     [Header("Debug")]
@@ -277,6 +276,6 @@ public class Goblin : MonoBehaviour
     public void CreateModel()
     {
         if (model != null) return;
-        model = CreatureModel.Build(transform, "GoblinModel", CreatureModel.GoblinRecipe(modelHeight, skinColor, bellyColor), modelSmoothness);
+        model = CreatureModel.Build(transform, "GoblinModel", CreatureModel.GoblinRecipe(modelHeight, palette), modelSmoothness);
     }
 }

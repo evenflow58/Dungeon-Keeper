@@ -18,8 +18,7 @@ public class Hero : MonoBehaviour
 
     [Header("Model (code-built, ticket #76)")]
     [SerializeField] private float modelHeight = 0.85f;                             // Tiles: the tallest creature
-    [SerializeField] private Color armorColor = new Color(0.78f, 0.83f, 0.92f, 1f); // Pale steel (the triangle's color)
-    [SerializeField] private Color accentColor = new Color(0.20f, 0.36f, 0.72f, 1f); // Blue crest and shield
+    [SerializeField] private CreatureModel.HeroPalette palette = CreatureModel.HeroPalette.Default; // Pale steel, blue heraldry, dark steel (#84)
     [SerializeField] private float modelSmoothness = 0.35f;                         // Toy (vinyl) sheen
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
@@ -178,6 +177,6 @@ public class Hero : MonoBehaviour
     public void CreateModel()
     {
         if (model != null) return;
-        model = CreatureModel.Build(transform, "HeroModel", CreatureModel.HeroRecipe(modelHeight, armorColor, accentColor), modelSmoothness);
+        model = CreatureModel.Build(transform, "HeroModel", CreatureModel.HeroRecipe(modelHeight, palette), modelSmoothness);
     }
 }

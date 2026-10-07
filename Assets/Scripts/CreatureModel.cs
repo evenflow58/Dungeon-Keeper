@@ -23,8 +23,9 @@ public static class CreatureModel
         public Vector3 Euler;
         public Vector3 Scale;
         public Color Color;
+        public float? Smoothness; // Per-part override (eyes, metal); null = the model's smoothness
 
-        public Part(string name, Shape shape, Vector3 position, Vector3 scale, Color color, Vector3 euler = default)
+        public Part(string name, Shape shape, Vector3 position, Vector3 scale, Color color, Vector3 euler = default, float? smoothness = null)
         {
             Name = name;
             Shape = shape;
@@ -32,6 +33,7 @@ public static class CreatureModel
             Scale = scale;
             Color = color;
             Euler = euler;
+            Smoothness = smoothness;
         }
     }
 
@@ -59,7 +61,7 @@ public static class CreatureModel
         go.transform.localScale = part.Scale;
         go.AddComponent<MeshFilter>().sharedMesh = MeshFor(part.Shape);
         var meshRenderer = go.AddComponent<MeshRenderer>();
-        meshRenderer.sharedMaterial = MaterialFor(part.Color, smoothness);
+        meshRenderer.sharedMaterial = MaterialFor(part.Color, part.Smoothness ?? smoothness);
         meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
         meshRenderer.receiveShadows = true;
         return meshRenderer;
@@ -192,36 +194,158 @@ public static class CreatureModel
         return mesh;
     }
 
-    // ---- recipes: proportions as fractions of the creature's height h; feet at y = 0 ----
+    // ---- palettes: one serializable group of colors per creature (shown as one foldout in the inspector) ----
 
-    /// <summary>The goblin: stockiest. Squat body, darker belly, oversized head, long ears out to the sides.</summary>
-    public static Part[] GoblinRecipe(float h, Color skin, Color belly) => new[]
+    // "#rrggbb" → Color in plain C#: palettes are field initializers on MonoBehaviours, where Unity's native APIs
+    // (ColorUtility included) may not be called.
+    private static Color Hex(string hex)
     {
-        new Part("Body",  Shape.Capsule, new Vector3(0f, 0.275f * h, 0f),  new Vector3(0.52f, 0.275f, 0.48f) * h, skin),
-        new Part("Belly", Shape.Sphere,  new Vector3(0f, 0.25f * h, -0.17f * h), new Vector3(0.36f, 0.32f, 0.16f) * h, belly),
-        new Part("Head",  Shape.Sphere,  new Vector3(0f, 0.72f * h, 0f),   new Vector3(0.54f, 0.52f, 0.52f) * h, skin),
-        new Part("EarLeft",  Shape.Cone, new Vector3(-0.22f * h, 0.76f * h, 0f), new Vector3(0.14f, 0.42f, 0.06f) * h, skin, new Vector3(0f, 0f, 68f)),
-        new Part("EarRight", Shape.Cone, new Vector3(0.22f * h, 0.76f * h, 0f),  new Vector3(0.14f, 0.42f, 0.06f) * h, skin, new Vector3(0f, 0f, -68f)),
+        int rgb = System.Convert.ToInt32(hex.TrimStart('#'), 16);
+        return new Color(((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f, 1f);
+    }
+
+    /// <summary>The goblin's design palette (#84, the approved toyetic reference).</summary>
+    [System.Serializable]
+    public struct GoblinPalette
+    {
+        public Color Skin, InnerEar, BrowAndWraps, Nose, Vest, Shorts, BootsAndBelt, Buckle, Blush, Eyes, Mouth, Fang;
+
+        public static GoblinPalette Default => new GoblinPalette
+        {
+            Skin = Hex("#60a020"), InnerEar = Hex("#a4d65e"), BrowAndWraps = Hex("#2e6b1a"), Nose = Hex("#4c9428"),
+            Vest = Hex("#804000"), Shorts = Hex("#602000"), BootsAndBelt = Hex("#402000"), Buckle = Hex("#f2b134"),
+            Blush = Hex("#f49ac1"), Eyes = Hex("#0b0b0b"), Mouth = Hex("#1d2b12"), Fang = Color.white,
+        };
+    }
+
+    /// <summary>The imp's palette: its sprite-era red skin and dark horns, with leather, cloth and a pickaxe.</summary>
+    [System.Serializable]
+    public struct ImpPalette
+    {
+        public Color Skin, Horns, Brow, Boots, Loincloth, Eyes, Fang, PickHandle, PickHead;
+
+        public static ImpPalette Default => new ImpPalette
+        {
+            Skin = new Color(0.85f, 0.2f, 0.2f), Horns = new Color(0.35f, 0.08f, 0.06f), Brow = new Color(0.55f, 0.10f, 0.08f),
+            Boots = new Color(0.24f, 0.11f, 0.06f), Loincloth = new Color(0.40f, 0.20f, 0.09f), Eyes = Hex("#0b0b0b"),
+            Fang = Color.white, PickHandle = new Color(0.50f, 0.33f, 0.18f), PickHead = new Color(0.62f, 0.64f, 0.68f),
+        };
+    }
+
+    /// <summary>The hero's palette: pale steel armor and blue heraldry (the triangle's colors), dark steel and leather.</summary>
+    [System.Serializable]
+    public struct HeroPalette
+    {
+        public Color Armor, Accent, DarkSteel, Visor, Belt;
+
+        public static HeroPalette Default => new HeroPalette
+        {
+            Armor = new Color(0.78f, 0.83f, 0.92f), Accent = new Color(0.20f, 0.36f, 0.72f),
+            DarkSteel = new Color(0.32f, 0.34f, 0.40f), Visor = new Color(0.05f, 0.05f, 0.07f), Belt = new Color(0.32f, 0.20f, 0.10f),
+        };
+    }
+
+    // ---- recipes: positions/scales are fractions of the creature's height h (feet at y = 0, top ≈ h); −Z faces the camera ----
+
+    private const float EyeGloss = 0.9f;   // Eyes and their highlights: the glossiest thing on a model
+    private const float MetalGloss = 0.6f; // Buckles, fangs, the shield boss
+
+    private static Vector3 V(float x, float y, float z, float h) => new Vector3(x, y, z) * h;
+
+    /// <summary>
+    /// The goblin, to the approved toyetic reference: boots with toes and leg wraps, shorts, a brown vest with a
+    /// belt and gold buckle, arms with oversized hands, a face (muzzle, nose, brow, glossy eyes with highlights,
+    /// blush, a grin with one fang) and tall ears with lighter inner ears. Ear tips define the top.
+    /// </summary>
+    public static Part[] GoblinRecipe(float h, GoblinPalette p) => new[]
+    {
+        new Part("BootLeft",  Shape.Box, V(-0.10f, 0.04f, -0.01f, h), V(0.13f, 0.08f, 0.16f, h), p.BootsAndBelt),
+        new Part("ToeLeft",   Shape.Box, V(-0.10f, 0.03f, -0.09f, h), V(0.11f, 0.06f, 0.07f, h), p.BootsAndBelt),
+        new Part("WrapLeft",  Shape.Cylinder, V(-0.10f, 0.12f, 0f, h), V(0.10f, 0.03f, 0.10f, h), p.BrowAndWraps),
+        new Part("BootRight", Shape.Box, V(0.10f, 0.04f, -0.01f, h),  V(0.13f, 0.08f, 0.16f, h), p.BootsAndBelt),
+        new Part("ToeRight",  Shape.Box, V(0.10f, 0.03f, -0.09f, h),  V(0.11f, 0.06f, 0.07f, h), p.BootsAndBelt),
+        new Part("WrapRight", Shape.Cylinder, V(0.10f, 0.12f, 0f, h),  V(0.10f, 0.03f, 0.10f, h), p.BrowAndWraps),
+        new Part("Shorts",    Shape.Box, V(0f, 0.205f, 0f, h), V(0.30f, 0.15f, 0.22f, h), p.Shorts),
+        new Part("Vest",      Shape.Sphere, V(0f, 0.34f, 0f, h), V(0.44f, 0.30f, 0.34f, h), p.Vest),
+        new Part("Belt",      Shape.Cylinder, V(0f, 0.26f, 0f, h), V(0.40f, 0.025f, 0.31f, h), p.BootsAndBelt),
+        new Part("Buckle",    Shape.Box, V(0f, 0.26f, -0.165f, h), V(0.07f, 0.06f, 0.02f, h), p.Buckle, default, MetalGloss),
+        new Part("ArmLeft",   Shape.Capsule, V(-0.22f, 0.32f, 0f, h), V(0.08f, 0.09f, 0.08f, h), p.Skin, new Vector3(0f, 0f, -30f)),
+        new Part("ArmRight",  Shape.Capsule, V(0.22f, 0.32f, 0f, h),  V(0.08f, 0.09f, 0.08f, h), p.Skin, new Vector3(0f, 0f, 30f)),
+        new Part("HandLeft",  Shape.Sphere, V(-0.27f, 0.25f, -0.02f, h), V(0.14f, 0.12f, 0.14f, h), p.Skin),
+        new Part("HandRight", Shape.Sphere, V(0.27f, 0.25f, -0.02f, h),  V(0.14f, 0.12f, 0.14f, h), p.Skin),
+        new Part("Head",      Shape.Sphere, V(0f, 0.63f, 0f, h), V(0.45f, 0.38f, 0.40f, h), p.Skin),
+        new Part("Muzzle",    Shape.Sphere, V(0f, 0.55f, -0.15f, h), V(0.28f, 0.16f, 0.16f, h), p.Skin),
+        new Part("Nose",      Shape.Sphere, V(0f, 0.585f, -0.225f, h), V(0.07f, 0.06f, 0.06f, h), p.Nose),
+        new Part("Brow",      Shape.Box, V(0f, 0.71f, -0.17f, h), V(0.30f, 0.04f, 0.06f, h), p.BrowAndWraps, new Vector3(-10f, 0f, 0f)),
+        new Part("EyeLeft",   Shape.Sphere, V(-0.09f, 0.66f, -0.17f, h), V(0.08f, 0.08f, 0.08f, h), p.Eyes, default, EyeGloss),
+        new Part("EyeRight",  Shape.Sphere, V(0.09f, 0.66f, -0.17f, h),  V(0.08f, 0.08f, 0.08f, h), p.Eyes, default, EyeGloss),
+        new Part("EyeShineLeft",  Shape.Sphere, V(-0.075f, 0.675f, -0.205f, h), V(0.025f, 0.025f, 0.025f, h), Color.white, default, EyeGloss),
+        new Part("EyeShineRight", Shape.Sphere, V(0.105f, 0.675f, -0.205f, h),  V(0.025f, 0.025f, 0.025f, h), Color.white, default, EyeGloss),
+        new Part("BlushLeft",  Shape.Sphere, V(-0.16f, 0.58f, -0.155f, h), V(0.08f, 0.04f, 0.03f, h), p.Blush),
+        new Part("BlushRight", Shape.Sphere, V(0.16f, 0.58f, -0.155f, h),  V(0.08f, 0.04f, 0.03f, h), p.Blush),
+        // The grin: three thin angled bars (corners up) rather than a new torus mesh.
+        new Part("MouthLeft",  Shape.Box, V(-0.06f, 0.515f, -0.218f, h), V(0.05f, 0.012f, 0.012f, h), p.Mouth, new Vector3(0f, 0f, -20f)),
+        new Part("MouthMid",   Shape.Box, V(0f, 0.505f, -0.224f, h),     V(0.08f, 0.012f, 0.012f, h), p.Mouth),
+        new Part("MouthRight", Shape.Box, V(0.06f, 0.515f, -0.218f, h),  V(0.05f, 0.012f, 0.012f, h), p.Mouth, new Vector3(0f, 0f, 20f)),
+        new Part("Fang",       Shape.Cone, V(0.03f, 0.502f, -0.226f, h), V(0.025f, 0.04f, 0.025f, h), p.Fang, new Vector3(180f, 0f, 0f), MetalGloss),
+        new Part("EarLeft",       Shape.Cone, V(-0.19f, 0.74f, 0f, h), V(0.16f, 0.42f, 0.05f, h), p.Skin, new Vector3(0f, 0f, 55f)),
+        new Part("EarRight",      Shape.Cone, V(0.19f, 0.74f, 0f, h),  V(0.16f, 0.42f, 0.05f, h), p.Skin, new Vector3(0f, 0f, -55f)),
+        new Part("InnerEarLeft",  Shape.Cone, V(-0.20f, 0.745f, -0.02f, h), V(0.09f, 0.30f, 0.03f, h), p.InnerEar, new Vector3(0f, 0f, 55f)),
+        new Part("InnerEarRight", Shape.Cone, V(0.20f, 0.745f, -0.02f, h),  V(0.09f, 0.30f, 0.03f, h), p.InnerEar, new Vector3(0f, 0f, -55f)),
     };
 
-    /// <summary>The imp: smallest. Slim body, big head, two small horns, a pickaxe held at its right side.</summary>
-    public static Part[] ImpRecipe(float h, Color skin, Color horns, Color handle, Color pickHead) => new[]
+    /// <summary>
+    /// The imp, in the goblin's language: boots with cuffs, a belt and loincloth, hands, a face (muzzle, brow, glossy
+    /// eyes with highlights, one fang), its horns and its pickaxe. Horn tips define the top.
+    /// </summary>
+    public static Part[] ImpRecipe(float h, ImpPalette p) => new[]
     {
-        new Part("Body", Shape.Capsule, new Vector3(0f, 0.27f * h, 0f), new Vector3(0.40f, 0.27f, 0.38f) * h, skin),
-        new Part("Head", Shape.Sphere,  new Vector3(0f, 0.72f * h, 0f), new Vector3(0.50f, 0.48f, 0.48f) * h, skin),
-        new Part("HornLeft",  Shape.Cone, new Vector3(-0.13f * h, 0.90f * h, 0f), new Vector3(0.10f, 0.20f, 0.10f) * h, horns, new Vector3(0f, 0f, 22f)),
-        new Part("HornRight", Shape.Cone, new Vector3(0.13f * h, 0.90f * h, 0f),  new Vector3(0.10f, 0.20f, 0.10f) * h, horns, new Vector3(0f, 0f, -22f)),
-        new Part("PickHandle", Shape.Cylinder, new Vector3(0.32f * h, 0.42f * h, -0.08f * h), new Vector3(0.06f, 0.34f, 0.06f) * h, handle, new Vector3(0f, 0f, -18f)),
-        new Part("PickHead",   Shape.Box,      new Vector3(0.43f * h, 0.74f * h, -0.08f * h), new Vector3(0.40f, 0.08f, 0.08f) * h, pickHead, new Vector3(0f, 0f, -18f)),
+        new Part("BootLeft",  Shape.Box, V(-0.09f, 0.04f, -0.01f, h), V(0.11f, 0.08f, 0.15f, h), p.Boots),
+        new Part("CuffLeft",  Shape.Cylinder, V(-0.09f, 0.10f, 0f, h), V(0.09f, 0.02f, 0.09f, h), p.Boots),
+        new Part("BootRight", Shape.Box, V(0.09f, 0.04f, -0.01f, h),  V(0.11f, 0.08f, 0.15f, h), p.Boots),
+        new Part("CuffRight", Shape.Cylinder, V(0.09f, 0.10f, 0f, h),  V(0.09f, 0.02f, 0.09f, h), p.Boots),
+        new Part("Body",      Shape.Capsule, V(0f, 0.30f, 0f, h), V(0.32f, 0.20f, 0.28f, h), p.Skin),
+        new Part("Belt",      Shape.Cylinder, V(0f, 0.20f, 0f, h), V(0.34f, 0.02f, 0.30f, h), p.Boots),
+        new Part("Loincloth", Shape.Box, V(0f, 0.14f, -0.14f, h), V(0.12f, 0.10f, 0.02f, h), p.Loincloth),
+        new Part("HandLeft",  Shape.Sphere, V(-0.22f, 0.30f, -0.02f, h), V(0.12f, 0.10f, 0.12f, h), p.Skin),
+        new Part("HandRight", Shape.Sphere, V(0.22f, 0.30f, -0.02f, h),  V(0.12f, 0.10f, 0.12f, h), p.Skin),
+        new Part("Head",      Shape.Sphere, V(0f, 0.62f, 0f, h), V(0.42f, 0.36f, 0.38f, h), p.Skin),
+        new Part("Muzzle",    Shape.Sphere, V(0f, 0.555f, -0.15f, h), V(0.24f, 0.13f, 0.14f, h), p.Skin),
+        new Part("Brow",      Shape.Box, V(0f, 0.69f, -0.16f, h), V(0.28f, 0.035f, 0.05f, h), p.Brow, new Vector3(-10f, 0f, 0f)),
+        new Part("EyeLeft",   Shape.Sphere, V(-0.085f, 0.65f, -0.165f, h), V(0.075f, 0.075f, 0.075f, h), p.Eyes, default, EyeGloss),
+        new Part("EyeRight",  Shape.Sphere, V(0.085f, 0.65f, -0.165f, h),  V(0.075f, 0.075f, 0.075f, h), p.Eyes, default, EyeGloss),
+        new Part("EyeShineLeft",  Shape.Sphere, V(-0.07f, 0.665f, -0.2f, h), V(0.022f, 0.022f, 0.022f, h), Color.white, default, EyeGloss),
+        new Part("EyeShineRight", Shape.Sphere, V(0.10f, 0.665f, -0.2f, h),  V(0.022f, 0.022f, 0.022f, h), Color.white, default, EyeGloss),
+        new Part("Fang",      Shape.Cone, V(0.03f, 0.51f, -0.21f, h), V(0.025f, 0.04f, 0.025f, h), p.Fang, new Vector3(180f, 0f, 0f), MetalGloss),
+        new Part("HornLeft",  Shape.Cone, V(-0.12f, 0.76f, 0f, h), V(0.08f, 0.24f, 0.08f, h), p.Horns, new Vector3(0f, 0f, 22f)),
+        new Part("HornRight", Shape.Cone, V(0.12f, 0.76f, 0f, h),  V(0.08f, 0.24f, 0.08f, h), p.Horns, new Vector3(0f, 0f, -22f)),
+        new Part("PickHandle", Shape.Cylinder, V(0.30f, 0.40f, -0.08f, h), V(0.05f, 0.30f, 0.05f, h), p.PickHandle, new Vector3(0f, 0f, -18f)),
+        new Part("PickHead",   Shape.Box, V(0.393f, 0.685f, -0.08f, h), V(0.36f, 0.07f, 0.07f, h), p.PickHead, new Vector3(0f, 0f, -18f)),
     };
 
-    /// <summary>The hero: tallest. Upright armored body, helmet with a crest, a round shield on his left.</summary>
-    public static Part[] HeroRecipe(float h, Color armor, Color accent) => new[]
+    /// <summary>
+    /// The hero, in the same language: boots, an armored body with a blue tabard and a belt, shoulder pauldrons,
+    /// armored arms and gauntlets, a helmet with a dark visor slit (a knight's face) and a crest, and a round shield
+    /// with a center boss. The crest tip defines the top.
+    /// </summary>
+    public static Part[] HeroRecipe(float h, HeroPalette p) => new[]
     {
-        new Part("Body",   Shape.Capsule,  new Vector3(0f, 0.32f * h, 0f),  new Vector3(0.40f, 0.32f, 0.36f) * h, armor),
-        new Part("Helmet", Shape.Sphere,   new Vector3(0f, 0.76f * h, 0f),  new Vector3(0.40f, 0.38f, 0.38f) * h, armor),
-        new Part("Crest",  Shape.Box,      new Vector3(0f, 0.95f * h, 0f),  new Vector3(0.07f, 0.10f, 0.30f) * h, accent),
-        // A round shield held at his front-left, its face toward the camera (a disc edge-on would read as a sliver).
-        new Part("Shield", Shape.Cylinder, new Vector3(-0.20f * h, 0.34f * h, -0.18f * h), new Vector3(0.34f, 0.025f, 0.34f) * h, accent, new Vector3(90f, 0f, 0f)),
+        new Part("BootLeft",  Shape.Box, V(-0.09f, 0.045f, -0.01f, h), V(0.12f, 0.09f, 0.17f, h), p.DarkSteel),
+        new Part("BootRight", Shape.Box, V(0.09f, 0.045f, -0.01f, h),  V(0.12f, 0.09f, 0.17f, h), p.DarkSteel),
+        new Part("Body",      Shape.Capsule, V(0f, 0.33f, 0f, h), V(0.36f, 0.22f, 0.30f, h), p.Armor),
+        new Part("Tabard",    Shape.Box, V(0f, 0.30f, -0.15f, h), V(0.16f, 0.30f, 0.02f, h), p.Accent),
+        new Part("Belt",      Shape.Cylinder, V(0f, 0.30f, 0f, h), V(0.38f, 0.02f, 0.32f, h), p.Belt),
+        new Part("PauldronLeft",  Shape.Sphere, V(-0.19f, 0.52f, 0f, h), V(0.16f, 0.12f, 0.16f, h), p.Armor),
+        new Part("PauldronRight", Shape.Sphere, V(0.19f, 0.52f, 0f, h),  V(0.16f, 0.12f, 0.16f, h), p.Armor),
+        new Part("ArmLeft",   Shape.Capsule, V(-0.21f, 0.40f, 0f, h), V(0.08f, 0.08f, 0.08f, h), p.Armor, new Vector3(0f, 0f, -15f)),
+        new Part("ArmRight",  Shape.Capsule, V(0.21f, 0.40f, 0f, h),  V(0.08f, 0.08f, 0.08f, h), p.Armor, new Vector3(0f, 0f, 15f)),
+        new Part("GauntletLeft",  Shape.Sphere, V(-0.23f, 0.30f, -0.02f, h), V(0.10f, 0.09f, 0.10f, h), p.DarkSteel),
+        new Part("GauntletRight", Shape.Sphere, V(0.23f, 0.30f, -0.02f, h),  V(0.10f, 0.09f, 0.10f, h), p.DarkSteel),
+        new Part("Helmet",    Shape.Sphere, V(0f, 0.70f, 0f, h), V(0.36f, 0.34f, 0.34f, h), p.Armor),
+        new Part("Visor",     Shape.Box, V(0f, 0.69f, -0.165f, h), V(0.22f, 0.035f, 0.03f, h), p.Visor, default, EyeGloss),
+        new Part("Crest",     Shape.Box, V(0f, 0.93f, 0f, h), V(0.06f, 0.14f, 0.28f, h), p.Accent),
+        // The shield, held at his front-left with its face to the camera; a boss at its center.
+        new Part("Shield",     Shape.Cylinder, V(-0.20f, 0.34f, -0.18f, h), V(0.32f, 0.025f, 0.32f, h), p.Accent, new Vector3(90f, 0f, 0f)),
+        new Part("ShieldBoss", Shape.Sphere, V(-0.20f, 0.34f, -0.205f, h), V(0.08f, 0.08f, 0.04f, h), p.Armor, default, MetalGloss),
     };
 }

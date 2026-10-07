@@ -48,6 +48,7 @@ public class TileHover : MonoBehaviour
     private void CreateHighlight()
     {
         var go = new GameObject("TileHighlight");
+        go.transform.rotation = Quaternion.Euler(90f, 0f, 0f); // Lies on the ground (XZ), facing up
         highlightSprite = go.AddComponent<SpriteRenderer>();
 
         const int res = 16;
@@ -111,7 +112,7 @@ public class TileHover : MonoBehaviour
         Vector2 mouseScreen = input?.PointerPosition.ReadValue<Vector2>() ?? Vector2.zero;
 
         Ray ray = mainCamera.ScreenPointToRay(mouseScreen);
-        if (!RaycastGroundPlane(ray, out Vector3 worldPos))
+        if (!boardRenderer.RaycastBoard(ray, out Vector3 worldPos))
         {
             SetHoverActive(false);
             return;
@@ -127,7 +128,9 @@ public class TileHover : MonoBehaviour
         TileState state = dungeonBoard.GetTile(coords.x, coords.y);
         Vector3 center = boardRenderer.GetTileCenterWorldPosition(coords.x, coords.y);
 
-        highlightSprite.transform.position = new Vector3(center.x, center.y, -0.1f);
+        // Flat on the tile's top surface (a block's top or the floor), just above it.
+        float surfaceY = boardRenderer.GetTileSurfaceHeight(coords.x, coords.y) + boardRenderer.OverlayLift;
+        highlightSprite.transform.position = new Vector3(center.x, surfaceY, center.z);
         highlightSprite.enabled = true;
 
         if (tooltipText != null) tooltipText.text = FormatTileLabel(state, coords.x, coords.y);
@@ -171,13 +174,14 @@ public class TileHover : MonoBehaviour
         return true;
     }
 
+    /// <summary>Intersects the ray with the ground plane (y = 0). False for a ray parallel to the ground.</summary>
     public static bool RaycastGroundPlane(Ray ray, out Vector3 hitPoint)
     {
         hitPoint = Vector3.zero;
-        if (Mathf.Abs(ray.direction.z) < 1e-5f) return false;
-        float t = -ray.origin.z / ray.direction.z;
+        if (Mathf.Abs(ray.direction.y) < 1e-5f) return false;
+        float t = -ray.origin.y / ray.direction.y;
         hitPoint = ray.origin + ray.direction * t;
-        hitPoint.z = 0f;
+        hitPoint.y = 0f;
         return true;
     }
 

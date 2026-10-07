@@ -13,7 +13,7 @@ public class TileHoverTests
     public void SetUp()
     {
         // DungeonBoard and BoardRenderer on the same object, matching the real scene layout.
-        // No Tilemap is wired, so WorldToBoardCoords uses the fallback math path.
+        // The ground is the XZ plane (y = 0): world (x, z) maps to board (x, y).
         managerGo = new GameObject("TestDungeonManager");
         board = managerGo.AddComponent<DungeonBoard>();
         board.InitializeBoard();
@@ -34,21 +34,21 @@ public class TileHoverTests
         if (managerGo != null) Object.DestroyImmediate(managerGo);
     }
 
-    // --- WorldToBoardCoords fallback math ---
+    // --- WorldToBoardCoords (ground plane XZ) ---
 
     [Test]
-    public void WorldToBoardCoords_Fallback_BoardCorner_ReturnsZeroZero()
+    public void WorldToBoardCoords_BoardCorner_ReturnsZeroZero()
     {
-        // BoardOrigin = (-24, -16, 0). Tile (0,0) center is at (-23.5, -15.5).
-        Vector2Int result = boardRenderer.WorldToBoardCoords(new Vector3(-23.5f, -15.5f, 0f));
+        // BoardOrigin = (-24, 0, -16). Tile (0,0) center is at (-23.5, 0, -15.5).
+        Vector2Int result = boardRenderer.WorldToBoardCoords(new Vector3(-23.5f, 0f, -15.5f));
         Assert.AreEqual(new Vector2Int(0, 0), result);
     }
 
     [Test]
-    public void WorldToBoardCoords_Fallback_BoardCenter_Returns24_16()
+    public void WorldToBoardCoords_BoardCenter_Returns24_16()
     {
-        // Tile (24,16) center is at BoardOrigin + (24.5, 16.5) = (0.5, 0.5).
-        Vector2Int result = boardRenderer.WorldToBoardCoords(new Vector3(0.5f, 0.5f, 0f));
+        // Tile (24,16) center is at BoardOrigin + (24.5, 0, 16.5) = (0.5, 0, 0.5).
+        Vector2Int result = boardRenderer.WorldToBoardCoords(new Vector3(0.5f, 0f, 0.5f));
         Assert.AreEqual(new Vector2Int(24, 16), result);
     }
 
@@ -67,8 +67,8 @@ public class TileHoverTests
     [Test]
     public void TryGetHoverState_CavernTile_ReturnsFloor()
     {
-        // Tile (24,16) is inside the 6x6 cavern at (21,13)-(26,18). Center at (0.5, 0.5).
-        bool hit = tileHover.TryGetHoverState(new Vector3(0.5f, 0.5f, 0f), out TileState state, out Vector2Int coords);
+        // Tile (24,16) is inside the 6x6 cavern at (21,13)-(26,18). Center at (0.5, 0, 0.5).
+        bool hit = tileHover.TryGetHoverState(new Vector3(0.5f, 0f, 0.5f), out TileState state, out Vector2Int coords);
         Assert.IsTrue(hit);
         Assert.AreEqual(TileState.Floor, state);
         Assert.AreEqual(new Vector2Int(24, 16), coords);
@@ -77,8 +77,8 @@ public class TileHoverTests
     [Test]
     public void TryGetHoverState_OutsideCavern_ReturnsRock()
     {
-        // Tile (0,0) is outside the cavern. Center at (-23.5, -15.5).
-        bool hit = tileHover.TryGetHoverState(new Vector3(-23.5f, -15.5f, 0f), out TileState state, out Vector2Int coords);
+        // Tile (0,0) is outside the cavern. Center at (-23.5, 0, -15.5).
+        bool hit = tileHover.TryGetHoverState(new Vector3(-23.5f, 0f, -15.5f), out TileState state, out Vector2Int coords);
         Assert.IsTrue(hit);
         Assert.AreEqual(TileState.Rock, state);
         Assert.AreEqual(new Vector2Int(0, 0), coords);
@@ -87,8 +87,27 @@ public class TileHoverTests
     [Test]
     public void TryGetHoverState_OutOfBounds_ReturnsFalse()
     {
-        // World (-25, -17) -> board coords (-1, -1) -> out of bounds.
-        bool hit = tileHover.TryGetHoverState(new Vector3(-25f, -17f, 0f), out _, out _);
+        // World (-25, 0, -17) -> board coords (-1, -1) -> out of bounds.
+        bool hit = tileHover.TryGetHoverState(new Vector3(-25f, 0f, -17f), out _, out _);
         Assert.IsFalse(hit);
+    }
+
+    // --- Ground raycast (y = 0) ---
+
+    [Test]
+    public void RaycastGroundPlane_HitsYZero()
+    {
+        var ray = new Ray(new Vector3(2f, 10f, -3f), new Vector3(0f, -1f, 1f).normalized);
+        Assert.IsTrue(TileHover.RaycastGroundPlane(ray, out Vector3 hit));
+        Assert.AreEqual(0f, hit.y, 1e-5f);
+        Assert.AreEqual(2f, hit.x, 1e-4f);
+        Assert.AreEqual(7f, hit.z, 1e-4f, "10 down at 45 degrees travels 10 forward");
+    }
+
+    [Test]
+    public void RaycastGroundPlane_ParallelToGround_Misses()
+    {
+        var ray = new Ray(new Vector3(0f, 1f, 0f), Vector3.forward);
+        Assert.IsFalse(TileHover.RaycastGroundPlane(ray, out _));
     }
 }

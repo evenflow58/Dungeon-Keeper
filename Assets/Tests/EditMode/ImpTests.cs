@@ -13,7 +13,7 @@ public class ImpTests
     public void SetUp()
     {
         // DungeonBoard and BoardRenderer on the same object, matching the real scene layout.
-        // No Tilemap is wired, so tile centers use the fallback math: BoardOrigin (-24,-16) + (x+0.5, y+0.5).
+        // Tile centers are ground points: BoardOrigin (-24, 0, -16) + (x+0.5, 0, y+0.5).
         managerGo = new GameObject("TestDungeonManager");
         board = managerGo.AddComponent<DungeonBoard>();
         board.InitializeBoard();

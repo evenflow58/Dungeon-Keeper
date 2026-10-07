@@ -98,11 +98,14 @@ public class MushroomPlot : MonoBehaviour
         }
         while (pips.Count < target) pips.Add(CreatePip(pips.Count));
 
+        // The row sits on the standing plot body: offsets are from the body's center, not the ground point.
+        float standHeight = TryGetComponent(out Placeable placeable) ? placeable.StandHeight : 0f;
+
         for (int i = 0; i < pips.Count; i++)
         {
             if (pips[i] == null) pips[i] = CreatePip(i);
             float x = (i - (target - 1) * 0.5f) * pipSpacing;
-            pips[i].transform.localPosition = new Vector3(x, pipRowY, -0.15f);
+            pips[i].transform.localPosition = new Vector3(x, standHeight + pipRowY, -0.15f);
             pips[i].enabled = i < FoodCount;
         }
     }

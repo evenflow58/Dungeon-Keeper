@@ -1,36 +1,72 @@
+using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Tilemaps;
 
+/// <summary>
+/// The board's 3D view and the single source of tile ↔ world mapping (ticket #74). The ground is the XZ
+/// plane at y = 0 (Y up): tile (x, y) has its center — its ground point — at BoardOrigin + (x + 0.5, 0, y + 0.5),
+/// with the origin at (−Width/2, 0, −Height/2). Each tile is one code-built box view, created once under a
+/// code-made root and restyled from OnTileChanged (never destroyed/recreated): Floor a thin slab whose top is
+/// the ground, Rock/Designated a raised block, Entrance a slab with a simple box-built door.
+/// </summary>
 public class BoardRenderer : MonoBehaviour
 {
+    public const string ShaderResourcePath = "Shaders/BoardVertexColor";
+    private const int PickSamples = 32; // Ray steps between the block-top plane and the ground in RaycastBoard
+
     [Header("References")]
     [SerializeField] private DungeonBoard dungeonBoard;
-    [SerializeField] private Tilemap tilemap;
+
+    [Header("Tile Shapes")]
+    [SerializeField] private float rockHeight = 0.6f;     // Rock and designated blocks, in tiles
+    [SerializeField] private float floorThickness = 0.1f; // Floor slab; its top face is the ground (y = 0)
+    [SerializeField] private float overlayLift = 0.01f;   // Hover highlight and drag previews sit this far above a surface
 
     [Header("Tile Colors (Placeholder Art)")]
     [SerializeField] private Color rockColor = new Color(0.22f, 0.22f, 0.22f, 1f);       // Dark gray
     [SerializeField] private Color floorColor = new Color(0.48f, 0.32f, 0.18f, 1f);      // Brown
     [SerializeField] private Color designatedColor = new Color(0.85f, 0.65f, 0.15f, 1f); // Amber/Gold
     [SerializeField] private Color doorPanelColor = new Color(0.72f, 0.46f, 0.22f, 1f);  // Warm wood, lighter than Floor
-    [SerializeField] private Color doorFrameColor = new Color(0.16f, 0.09f, 0.04f, 1f);  // Near-black frame and crossbar
+    [SerializeField] private Color doorFrameColor = new Color(0.16f, 0.09f, 0.04f, 1f);  // Near-black frame and lintel
+
+    [Header("Door (Placeholder Art)")]
+    [SerializeField] private float doorHeight = 0.9f;  // Taller than the rock so the entrance reads from afar
+    [SerializeField] private float doorPostWidth = 0.12f;
+
+    [Header("Face Shading (until lighting, story 2)")]
+    [SerializeField] private float frontBackShade = 0.70f; // ±Z faces, relative to the top
+    [SerializeField] private float sideShade = 0.84f;      // ±X faces
+    [SerializeField] private float bottomShade = 0.50f;
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
-    public Tilemap Tilemap => tilemap;
+    public float RockHeight { get => rockHeight; set => rockHeight = value; }
+    public float FloorThickness => floorThickness;
+    public float OverlayLift => overlayLift;
     public Vector3 BoardOrigin => dungeonBoard != null
-        ? new Vector3(-dungeonBoard.Width * 0.5f, -dungeonBoard.Height * 0.5f, 0f)
+        ? new Vector3(-dungeonBoard.Width * 0.5f, 0f, -dungeonBoard.Height * 0.5f)
         : Vector3.zero;
 
-    private Tile rockTile;
-    private Tile floorTile;
-    private Tile designatedTile;
-    private Tile entranceTile;
-    private bool tilesInitialized;
+    /// <summary>Parent of the tile views; null until RenderFullBoard has run (Start).</summary>
+    public Transform ViewRoot => viewRoot;
+
+    /// <summary>How a tile state is shaped: a unit box's scale and the height of its center.</summary>
+    public struct TileShape
+    {
+        public Vector3 Scale;
+        public float CenterY;
+        public TileShape(Vector3 scale, float centerY) { Scale = scale; CenterY = centerY; }
+        public float TopY => CenterY + Scale.y * 0.5f;
+        public float BottomY => CenterY - Scale.y * 0.5f;
+    }
+
+    private Transform viewRoot;
+    private GameObject[,] tileViews;
+    private readonly Dictionary<Vector2Int, GameObject> doors = new Dictionary<Vector2Int, GameObject>();
+    private readonly Dictionary<Color, Mesh> boxMeshes = new Dictionary<Color, Mesh>();
+    private Material boardMaterial;
 
     private void Awake()
     {
         InitializeReferences();
-        AlignGridPosition();
-        EnsureTilesInitialized();
     }
 
     private void OnEnable()
@@ -52,138 +88,56 @@ public class BoardRenderer : MonoBehaviour
     private void Start()
     {
         InitializeReferences();
-        AlignGridPosition();
-        EnsureTilesInitialized();
         RenderFullBoard();
+    }
+
+    private void OnDestroy()
+    {
+        foreach (Mesh mesh in boxMeshes.Values) DestroyRuntimeObject(mesh);
+        boxMeshes.Clear();
+        DestroyRuntimeObject(boardMaterial); // The views are children of this object and go with it
     }
 
     public void InitializeReferences()
     {
         dungeonBoard ??= GetComponent<DungeonBoard>() ?? FindAnyObjectByType<DungeonBoard>();
-        tilemap ??= GetComponentInChildren<Tilemap>() ?? FindAnyObjectByType<Tilemap>();
     }
 
-    public void AlignGridPosition()
+    // ---- shapes and colors (pure: what each state looks like) ----
+
+    public static bool IsRaised(TileState state) => state == TileState.Rock || state == TileState.Designated;
+
+    /// <summary>Floor and Entrance: a slab with its top at the ground. Rock and Designated: a block standing on it.</summary>
+    public TileShape ShapeFor(TileState state) =>
+        IsRaised(state)
+            ? new TileShape(new Vector3(1f, rockHeight, 1f), rockHeight * 0.5f)
+            : new TileShape(new Vector3(1f, floorThickness, 1f), -floorThickness * 0.5f);
+
+    public Color ColorFor(TileState state)
     {
-        if (tilemap == null) return;
-
-        // Position the parent Grid (or Tilemap itself) so tile (0,0) is at BoardOrigin
-        Transform gridTransform = tilemap.layoutGrid != null ? tilemap.layoutGrid.transform : tilemap.transform;
-        gridTransform.position = BoardOrigin;
-    }
-
-    public void EnsureTilesInitialized()
-    {
-        if (tilesInitialized) return;
-
-        rockTile = CreateSolidColorTile(rockColor, "RockTile");
-        floorTile = CreateSolidColorTile(floorColor, "FloorTile");
-        designatedTile = CreateSolidColorTile(designatedColor, "DesignatedTile");
-        entranceTile = CreateDoorTile("EntranceTile");
-
-        tilesInitialized = true;
-    }
-
-    private Tile CreateSolidColorTile(Color color, string tileName, int resolution = 16)
-    {
-        Texture2D texture = new Texture2D(resolution, resolution, TextureFormat.RGBA32, false);
-        texture.name = tileName + "_Texture";
-        Color[] pixels = new Color[resolution * resolution];
-        for (int i = 0; i < pixels.Length; i++)
-        {
-            pixels[i] = color;
-        }
-        texture.SetPixels(pixels);
-        texture.filterMode = FilterMode.Point;
-        texture.wrapMode = TextureWrapMode.Clamp;
-        texture.Apply();
-
-        Sprite sprite = Sprite.Create(
-            texture,
-            new Rect(0, 0, resolution, resolution),
-            new Vector2(0.5f, 0.5f),
-            resolution
-        );
-        sprite.name = tileName + "_Sprite";
-
-        Tile tile = ScriptableObject.CreateInstance<Tile>();
-        tile.name = tileName;
-        tile.sprite = sprite;
-        tile.color = Color.white;
-        return tile;
-    }
-
-    // A framed wooden door: dark frame around a plank panel, with a dark crossbar and plank seams.
-    private Tile CreateDoorTile(string tileName, int resolution = 16)
-    {
-        Texture2D texture = new Texture2D(resolution, resolution, TextureFormat.RGBA32, false);
-        texture.name = tileName + "_Texture";
-        Color[] pixels = new Color[resolution * resolution];
-        int mid = resolution / 2;
-        for (int y = 0; y < resolution; y++)
-        {
-            for (int x = 0; x < resolution; x++)
-            {
-                bool frame = x < 2 || x >= resolution - 2 || y >= resolution - 2 || y < 1; // Sides and lintel, a sill
-                bool crossbar = y == mid || y == mid - 1;
-                bool seam = (x == 5 || x == 10) && !frame;                                   // Plank lines
-                pixels[y * resolution + x] = frame || crossbar ? doorFrameColor
-                    : seam ? Color.Lerp(doorPanelColor, doorFrameColor, 0.45f)
-                    : doorPanelColor;
-            }
-        }
-        texture.SetPixels(pixels);
-        texture.filterMode = FilterMode.Point;
-        texture.wrapMode = TextureWrapMode.Clamp;
-        texture.Apply();
-
-        Sprite sprite = Sprite.Create(
-            texture,
-            new Rect(0, 0, resolution, resolution),
-            new Vector2(0.5f, 0.5f),
-            resolution
-        );
-        sprite.name = tileName + "_Sprite";
-
-        Tile tile = ScriptableObject.CreateInstance<Tile>();
-        tile.name = tileName;
-        tile.sprite = sprite;
-        tile.color = Color.white;
-        return tile;
-    }
-
-    public TileBase GetTileAsset(TileState state)
-    {
-        EnsureTilesInitialized();
-
         switch (state)
         {
-            case TileState.Rock:
-                return rockTile;
-            case TileState.Floor:
-                return floorTile;
-            case TileState.Designated:
-                return designatedTile;
-            case TileState.Entrance:
-                return entranceTile;
-            default:
-                return rockTile;
+            case TileState.Floor:      return floorColor;
+            case TileState.Designated: return designatedColor;
+            case TileState.Entrance:   return floorColor; // The slab; the door on it is separate geometry
+            default:                   return rockColor;
         }
     }
+
+    /// <summary>Height of a tile's top surface: the block top for raised tiles, the ground (0) otherwise.</summary>
+    public float GetTileSurfaceHeight(int x, int y) =>
+        dungeonBoard != null && dungeonBoard.IsInBounds(x, y) && IsRaised(dungeonBoard.GetTile(x, y)) ? rockHeight : 0f;
+
+    // ---- views ----
 
     public void RenderFullBoard()
     {
-        if (dungeonBoard == null || tilemap == null) return;
+        if (dungeonBoard == null) return;
 
-        EnsureTilesInitialized();
-        tilemap.ClearAllTiles();
-
-        int width = dungeonBoard.Width;
-        int height = dungeonBoard.Height;
-
-        for (int x = 0; x < width; x++)
+        EnsureViews();
+        for (int x = 0; x < dungeonBoard.Width; x++)
         {
-            for (int y = 0; y < height; y++)
+            for (int y = 0; y < dungeonBoard.Height; y++)
             {
                 RefreshTile(x, y);
             }
@@ -192,51 +146,199 @@ public class BoardRenderer : MonoBehaviour
 
     public void RefreshTile(int x, int y)
     {
-        if (dungeonBoard == null || tilemap == null) return;
+        if (dungeonBoard == null || tileViews == null) return;
         if (!dungeonBoard.IsInBounds(x, y)) return;
 
-        EnsureTilesInitialized();
-
         TileState state = dungeonBoard.GetTile(x, y);
-        TileBase tileAsset = GetTileAsset(state);
-        Vector3Int cellPos = new Vector3Int(x, y, 0);
-        tilemap.SetTile(cellPos, tileAsset);
+        TileShape shape = ShapeFor(state);
+        Vector3 center = GetTileCenterWorldPosition(x, y);
+
+        GameObject view = tileViews[x, y];
+        view.transform.position = new Vector3(center.x, shape.CenterY, center.z);
+        view.transform.localScale = shape.Scale;
+        view.GetComponent<MeshFilter>().sharedMesh = BoxMesh(ColorFor(state));
+
+        Vector2Int tile = new Vector2Int(x, y);
+        bool isEntrance = state == TileState.Entrance;
+        if (isEntrance && !doors.ContainsKey(tile)) doors[tile] = CreateDoor(center);
+        if (doors.TryGetValue(tile, out GameObject door)) door.SetActive(isEntrance);
     }
+
+    /// <summary>The tile's view object (its box), or null before RenderFullBoard / out of bounds.</summary>
+    public GameObject GetTileView(int x, int y) =>
+        tileViews != null && dungeonBoard != null && dungeonBoard.IsInBounds(x, y) ? tileViews[x, y] : null;
+
+    /// <summary>The door built on an Entrance tile (active while the tile is the Entrance), else null.</summary>
+    public GameObject GetDoorView(int x, int y) =>
+        doors.TryGetValue(new Vector2Int(x, y), out GameObject door) ? door : null;
 
     private void HandleTileChanged(int x, int y, TileState newState)
     {
         RefreshTile(x, y);
     }
 
-    public Vector3 GetTileWorldPosition(int x, int y)
+    private void EnsureViews()
     {
-        if (tilemap != null)
+        int width = dungeonBoard.Width;
+        int height = dungeonBoard.Height;
+        if (tileViews != null && tileViews.GetLength(0) == width && tileViews.GetLength(1) == height) return;
+
+        if (viewRoot == null)
         {
-            return tilemap.CellToWorld(new Vector3Int(x, y, 0));
+            viewRoot = new GameObject("BoardView").transform;
+            viewRoot.SetParent(transform, false);
         }
-        return BoardOrigin + new Vector3(x, y, 0);
+
+        tileViews = new GameObject[width, height];
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                tileViews[x, y] = CreateBox($"Tile ({x}, {y})", viewRoot, rockColor);
+            }
+        }
     }
 
-    public Vector3 GetTileCenterWorldPosition(int x, int y)
+    // A minimal door from boxes: two posts and a lintel in the frame color, a plank panel between them.
+    private GameObject CreateDoor(Vector3 groundPoint)
     {
-        if (tilemap != null)
-        {
-            return tilemap.GetCellCenterWorld(new Vector3Int(x, y, 0));
-        }
-        return BoardOrigin + new Vector3(x + 0.5f, y + 0.5f, 0);
+        var door = new GameObject("Door");
+        door.transform.SetParent(viewRoot, false);
+        door.transform.position = groundPoint;
+
+        float halfSpan = 0.5f - doorPostWidth * 0.5f;
+        float panelWidth = 1f - doorPostWidth * 2f;
+        AddDoorPart(door, "PostLeft", doorFrameColor, new Vector3(-halfSpan, doorHeight * 0.5f, 0f), new Vector3(doorPostWidth, doorHeight, doorPostWidth));
+        AddDoorPart(door, "PostRight", doorFrameColor, new Vector3(halfSpan, doorHeight * 0.5f, 0f), new Vector3(doorPostWidth, doorHeight, doorPostWidth));
+        AddDoorPart(door, "Lintel", doorFrameColor, new Vector3(0f, doorHeight - doorPostWidth * 0.5f, 0f), new Vector3(1f, doorPostWidth, doorPostWidth));
+        float panelHeight = doorHeight - doorPostWidth;
+        AddDoorPart(door, "Panel", doorPanelColor, new Vector3(0f, panelHeight * 0.5f, 0f), new Vector3(panelWidth, panelHeight, doorPostWidth * 0.5f));
+        return door;
     }
 
+    private void AddDoorPart(GameObject door, string partName, Color color, Vector3 localPosition, Vector3 scale)
+    {
+        GameObject part = CreateBox(partName, door.transform, color);
+        part.transform.localPosition = localPosition;
+        part.transform.localScale = scale;
+    }
+
+    private GameObject CreateBox(string boxName, Transform parent, Color color)
+    {
+        var go = new GameObject(boxName);
+        go.transform.SetParent(parent, false);
+        go.AddComponent<MeshFilter>().sharedMesh = BoxMesh(color);
+        var meshRenderer = go.AddComponent<MeshRenderer>();
+        meshRenderer.sharedMaterial = BoardMaterial();
+        meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        meshRenderer.receiveShadows = false;
+        return go;
+    }
+
+    private Material BoardMaterial()
+    {
+        if (boardMaterial != null) return boardMaterial;
+
+        Shader shader = Resources.Load<Shader>(ShaderResourcePath)
+            ?? Shader.Find("DungeonKeeper/BoardVertexColor")
+            ?? Shader.Find("Universal Render Pipeline/Unlit");
+        boardMaterial = new Material(shader) { name = "BoardVertexColor (runtime)" };
+        return boardMaterial;
+    }
+
+    // A unit box centered on the origin, the color baked into vertex colors with a fixed per-face shade.
+    private Mesh BoxMesh(Color color)
+    {
+        if (boxMeshes.TryGetValue(color, out Mesh cached) && cached != null) return cached;
+
+        var vertices = new List<Vector3>(24);
+        var colors = new List<Color>(24);
+        var triangles = new List<int>(36);
+        AddFace(vertices, colors, triangles, Vector3.up, Vector3.right, Vector3.forward, color, 1f);
+        AddFace(vertices, colors, triangles, Vector3.down, Vector3.right, Vector3.back, color, bottomShade);
+        AddFace(vertices, colors, triangles, Vector3.back, Vector3.right, Vector3.up, color, frontBackShade);
+        AddFace(vertices, colors, triangles, Vector3.forward, Vector3.left, Vector3.up, color, frontBackShade);
+        AddFace(vertices, colors, triangles, Vector3.right, Vector3.forward, Vector3.up, color, sideShade);
+        AddFace(vertices, colors, triangles, Vector3.left, Vector3.back, Vector3.up, color, sideShade);
+
+        var mesh = new Mesh { name = "TileBox " + ColorUtility.ToHtmlStringRGB(color) };
+        mesh.SetVertices(vertices);
+        mesh.SetColors(colors);
+        mesh.SetTriangles(triangles, 0);
+        mesh.RecalculateBounds();
+        boxMeshes[color] = mesh;
+        return mesh;
+    }
+
+    private static void AddFace(List<Vector3> vertices, List<Color> colors, List<int> triangles,
+        Vector3 normal, Vector3 u, Vector3 v, Color color, float shade)
+    {
+        int start = vertices.Count;
+        Vector3 c = normal * 0.5f;
+        vertices.Add(c - u * 0.5f - v * 0.5f);
+        vertices.Add(c - u * 0.5f + v * 0.5f);
+        vertices.Add(c + u * 0.5f + v * 0.5f);
+        vertices.Add(c + u * 0.5f - v * 0.5f);
+
+        // Vertex colors bypass the color-space conversion sprites get, so bake in linear when the project is linear.
+        Color shaded = new Color(color.r * shade, color.g * shade, color.b * shade, 1f);
+        if (QualitySettings.activeColorSpace == ColorSpace.Linear) shaded = shaded.linear;
+        for (int i = 0; i < 4; i++) colors.Add(shaded);
+
+        triangles.Add(start); triangles.Add(start + 1); triangles.Add(start + 2);
+        triangles.Add(start); triangles.Add(start + 2); triangles.Add(start + 3);
+    }
+
+    private static void DestroyRuntimeObject(Object obj)
+    {
+        if (obj == null) return;
+        if (Application.isPlaying) Destroy(obj);
+        else DestroyImmediate(obj);
+    }
+
+    // ---- mapping (the single source of tile ↔ world) ----
+
+    /// <summary>A tile's center on the ground for code without a renderer: the board origin taken as (0, 0, 0).</summary>
+    public static Vector3 UnanchoredTileCenter(Vector2Int tile) => new Vector3(tile.x + 0.5f, 0f, tile.y + 0.5f);
+
+    public Vector3 GetTileWorldPosition(int x, int y) => BoardOrigin + new Vector3(x, 0f, y);
+
+    /// <summary>The ground point (y = 0) at the center of tile (x, y).</summary>
+    public Vector3 GetTileCenterWorldPosition(int x, int y) => BoardOrigin + new Vector3(x + 0.5f, 0f, y + 0.5f);
+
+    /// <summary>Exact inverse of the mapping: the tile whose ground cell contains the point (its y is ignored).</summary>
     public Vector2Int WorldToBoardCoords(Vector3 worldPosition)
     {
-        if (tilemap != null)
-        {
-            Vector3Int cell = tilemap.WorldToCell(worldPosition);
-            return new Vector2Int(cell.x, cell.y);
-        }
         Vector3 origin = BoardOrigin;
         return new Vector2Int(
             Mathf.FloorToInt(worldPosition.x - origin.x),
-            Mathf.FloorToInt(worldPosition.y - origin.y)
+            Mathf.FloorToInt(worldPosition.z - origin.z)
         );
+    }
+
+    /// <summary>
+    /// Picks the tile a screen ray actually lands on. A plain ground raycast lands behind a raised block (it
+    /// passes over the block's top to y = 0), so this walks the ray from the block-top plane down to the ground
+    /// and returns the first point inside a raised tile's column — its top or near face — else the ground hit.
+    /// The result is a ground-plane point inside the picked tile, ready for WorldToBoardCoords.
+    /// </summary>
+    public bool RaycastBoard(Ray ray, out Vector3 groundPoint)
+    {
+        if (!TileHover.RaycastGroundPlane(ray, out groundPoint)) return false;
+        if (dungeonBoard == null || rockHeight <= 0f || ray.direction.y >= 0f) return true;
+
+        float tTop = Mathf.Max(0f, (rockHeight - ray.origin.y) / ray.direction.y);
+        float tGround = -ray.origin.y / ray.direction.y;
+        for (int i = 0; i <= PickSamples; i++)
+        {
+            Vector3 p = ray.GetPoint(Mathf.Lerp(tTop, tGround, i / (float)PickSamples));
+            Vector2Int tile = WorldToBoardCoords(p);
+            if (dungeonBoard.IsInBounds(tile.x, tile.y) && IsRaised(dungeonBoard.GetTile(tile.x, tile.y)))
+            {
+                groundPoint = new Vector3(p.x, 0f, p.z);
+                return true;
+            }
+        }
+        return true;
     }
 }

@@ -86,7 +86,9 @@ public class SpikeTrap : MonoBehaviour
 
         var go = new GameObject("Spikes");
         go.transform.SetParent(transform, false);
-        go.transform.localPosition = spikeOffset;
+        // On the standing trap body: the offset is from the body's center, not the ground point.
+        float standHeight = TryGetComponent(out Placeable placeable) ? placeable.StandHeight : 0f;
+        go.transform.localPosition = spikeOffset + new Vector3(0f, standHeight, 0f);
         go.transform.localRotation = Quaternion.Euler(0f, 0f, spikeRotation);
         go.transform.localScale = new Vector3(spikeSize, spikeSize, 1f);
         var sr = go.AddComponent<SpriteRenderer>();

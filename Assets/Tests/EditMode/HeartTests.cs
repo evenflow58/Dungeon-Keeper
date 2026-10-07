@@ -13,7 +13,7 @@ public class HeartTests
     [SetUp]
     public void SetUp()
     {
-        // DungeonBoard and BoardRenderer on one object, as in GoblinTests (fallback tile math, no Tilemap).
+        // DungeonBoard and BoardRenderer on one object, as in GoblinTests (BoardRenderer's ground-plane tile math).
         managerGo = new GameObject("TestDungeonManager");
         board = managerGo.AddComponent<DungeonBoard>();
         board.InitializeBoard();

@@ -104,19 +104,19 @@ public class CameraController : MonoBehaviour
     {
         if (dungeonBoard == null) return;
 
-        // When looking at ground (z=0) with pitchAngle around X axis:
-        // Visible ground height = (2 * orthoSize) / cos(pitchAngle)
-        // Visible ground width = (2 * orthoSize) * aspect
+        // Looking down at the ground (y = 0, the XZ plane) pitchAngle degrees below the horizon:
+        // Visible ground depth (Z) = (2 * orthoSize) / sin(pitchAngle)
+        // Visible ground width (X) = (2 * orthoSize) * aspect
         // To frame the board at 16:9:
-        // orthoSize for board height: (Height/2) * cos(pitchAngle)
+        // orthoSize for board depth: (Height/2) * sin(pitchAngle)
         // orthoSize for board width: (Width/2) / targetAspect
-        // Taking max frames the full board at 16:9 aspect.
+        // Taking max frames the full board at 16:9 aspect. (At 45° this matches the old XY presentation exactly.)
         const float targetAspect = 16f / 9f;
         float rad = pitchAngle * Mathf.Deg2Rad;
-        float cos = Mathf.Cos(rad);
+        float sin = Mathf.Sin(rad);
 
         float sizeForWidth = dungeonBoard.Width * 0.5f / targetAspect;
-        float sizeForHeight = dungeonBoard.Height * 0.5f * cos;
+        float sizeForHeight = dungeonBoard.Height * 0.5f * sin;
 
         baseOrthographicSize = Mathf.Max(sizeForWidth, sizeForHeight);
         minOrthographicSize = baseOrthographicSize * 0.5f;
@@ -181,9 +181,9 @@ public class CameraController : MonoBehaviour
             {
                 // Frame-to-frame delta: ground movement 1:1 with mouse cursor movement
                 float unitsPerPixelX = (cam.orthographicSize * 2f) / cam.pixelHeight;
-                float unitsPerPixelY = unitsPerPixelX / Mathf.Cos(pitchAngle * Mathf.Deg2Rad);
+                float unitsPerPixelZ = unitsPerPixelX / Mathf.Sin(pitchAngle * Mathf.Deg2Rad); // Screen up = ground +Z, foreshortened
 
-                Vector3 groundDelta = new Vector3(-mouseDelta.x * unitsPerPixelX, -mouseDelta.y * unitsPerPixelY, 0f);
+                Vector3 groundDelta = new Vector3(-mouseDelta.x * unitsPerPixelX, 0f, -mouseDelta.y * unitsPerPixelZ);
                 targetGroundPos += groundDelta;
                 currentGroundPos += groundDelta;
             }
@@ -199,8 +199,8 @@ public class CameraController : MonoBehaviour
 
         if (moveInput.sqrMagnitude > 0.001f)
         {
-            // Move in ground plane: camera-relative X and ground-projected forward (Y in ground plane)
-            Vector3 moveDir = new Vector3(moveInput.x, moveInput.y, 0f);
+            // Move in the ground plane: camera-relative X and ground-projected forward (+Z)
+            Vector3 moveDir = new Vector3(moveInput.x, 0f, moveInput.y);
             targetGroundPos += moveDir * (panSpeed * Time.unscaledDeltaTime); // Pans while paused, same feel at 2×
         }
 
@@ -212,16 +212,16 @@ public class CameraController : MonoBehaviour
         cam ??= GetComponent<Camera>();
         if (cam == null) return;
 
-        // Orthographic, pitched pitchAngle degrees around X axis
+        // Orthographic, pitched pitchAngle degrees down from the horizon, looking toward +Z
         transform.rotation = Quaternion.Euler(pitchAngle, 0f, 0f);
 
-        // Keep camera height/distance fixed
+        // Keep camera height/distance fixed: cameraDistance back from the ground point, raised so it looks at it
         float rad = pitchAngle * Mathf.Deg2Rad;
         float tan = Mathf.Tan(rad);
 
-        float camZ = -cameraDistance;
-        float camY = currentGroundPos.y - camZ * tan;
         float camX = currentGroundPos.x;
+        float camY = cameraDistance * tan;
+        float camZ = currentGroundPos.z - cameraDistance;
 
         transform.position = new Vector3(camX, camY, camZ);
     }
@@ -235,10 +235,10 @@ public class CameraController : MonoBehaviour
         float boardHeight = dungeonBoard.Height;
         float minX = -boardWidth * 0.5f;
         float maxX = minX + boardWidth;
-        float minY = -boardHeight * 0.5f;
-        float maxY = minY + boardHeight;
+        float minZ = -boardHeight * 0.5f; // Board rows run along Z on the ground plane
+        float maxZ = minZ + boardHeight;
 
-        // Raycast the 4 screen corners onto the z=0 plane to get the visible ground rect
+        // Raycast the 4 screen corners onto the ground plane (y = 0) to get the visible ground rect
         Ray rayBL = cam.ViewportPointToRay(new Vector3(0f, 0f, 0f));
         Ray rayBR = cam.ViewportPointToRay(new Vector3(1f, 0f, 0f));
         Ray rayTL = cam.ViewportPointToRay(new Vector3(0f, 1f, 0f));
@@ -254,11 +254,11 @@ public class CameraController : MonoBehaviour
 
         float visMinX = Mathf.Min(Mathf.Min(pBL.x, pBR.x), Mathf.Min(pTL.x, pTR.x));
         float visMaxX = Mathf.Max(Mathf.Max(pBL.x, pBR.x), Mathf.Max(pTL.x, pTR.x));
-        float visMinY = Mathf.Min(Mathf.Min(pBL.y, pBR.y), Mathf.Min(pTL.y, pTR.y));
-        float visMaxY = Mathf.Max(Mathf.Max(pBL.y, pBR.y), Mathf.Max(pTL.y, pTR.y));
+        float visMinZ = Mathf.Min(Mathf.Min(pBL.z, pBR.z), Mathf.Min(pTL.z, pTR.z));
+        float visMaxZ = Mathf.Max(Mathf.Max(pBL.z, pBR.z), Mathf.Max(pTL.z, pTR.z));
 
         float visibleWidth = visMaxX - visMinX;
-        float visibleHeight = visMaxY - visMinY;
+        float visibleHeight = visMaxZ - visMinZ;
 
         // X axis clamping: if view is larger than board on an axis, center that axis on the board (0)
         if (visibleWidth >= boardWidth)
@@ -273,31 +273,22 @@ public class CameraController : MonoBehaviour
             currentGroundPos.x = Mathf.Clamp(currentGroundPos.x, minX + halfW, maxX - halfW);
         }
 
-        // Y axis clamping: if view is larger than board on an axis, center that axis on the board (0)
+        // Z axis clamping: if view is larger than board on an axis, center that axis on the board (0)
         if (visibleHeight >= boardHeight)
         {
-            targetGroundPos.y = 0f;
-            currentGroundPos.y = 0f;
+            targetGroundPos.z = 0f;
+            currentGroundPos.z = 0f;
         }
         else
         {
             float halfH = visibleHeight * 0.5f;
-            targetGroundPos.y = Mathf.Clamp(targetGroundPos.y, minY + halfH, maxY - halfH);
-            currentGroundPos.y = Mathf.Clamp(currentGroundPos.y, minY + halfH, maxY - halfH);
+            targetGroundPos.z = Mathf.Clamp(targetGroundPos.z, minZ + halfH, maxZ - halfH);
+            currentGroundPos.z = Mathf.Clamp(currentGroundPos.z, minZ + halfH, maxZ - halfH);
         }
     }
 
-    public bool RaycastGround(Ray ray, out Vector3 hitPoint)
-    {
-        hitPoint = Vector3.zero;
-        if (Mathf.Abs(ray.direction.z) < 1e-5f)
-            return false;
-
-        float t = -ray.origin.z / ray.direction.z;
-        hitPoint = ray.origin + ray.direction * t;
-        hitPoint.z = 0f;
-        return true;
-    }
+    /// <summary>The ground-plane (y = 0) hit of a ray; the same math as TileHover.RaycastGroundPlane.</summary>
+    public bool RaycastGround(Ray ray, out Vector3 hitPoint) => TileHover.RaycastGroundPlane(ray, out hitPoint);
 
     public void SetTargetGroundPos(Vector3 pos)
     {

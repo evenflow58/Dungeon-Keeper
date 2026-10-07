@@ -2,8 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Mushroom Plot behavior: grows 1 food per growthSecondsPerFood up to capacity, shown as a row of
-/// pips on the plot. Consumers take food through TryTakeFood(). Time spent at capacity is discarded
+/// Mushroom Plot behavior: grows 1 food per growthSecondsPerFood up to capacity, shown as small sphere
+/// pips along the front of the plot's mound (ticket #77; pip i shows exactly when FoodCount > i). Consumers take food through TryTakeFood(). Time spent at capacity is discarded
 /// (no banking): after a take from a full plot, the next food needs a full fresh interval.
 /// </summary>
 [DisallowMultipleComponent]
@@ -14,11 +14,11 @@ public class MushroomPlot : MonoBehaviour
     [SerializeField] private float growthSecondsPerFood = 30f;
     [SerializeField] private int capacity = 5;
 
-    [Header("Food Pips (Placeholder Art)")]
+    [Header("Food Pips (code-built spheres, ticket #77)")]
     [SerializeField] private Color pipColor = new Color(0.95f, 0.90f, 0.70f, 1f); // Light warm white
-    [SerializeField] private float pipSize = 0.18f;                               // Fraction of a tile; legible at default zoom
-    [SerializeField] private float pipSpacing = 0.20f;                            // 5 pips span ~0.98 of a tile
-    [SerializeField] private float pipRowY = -0.28f;                              // Local offset from tile center
+    [SerializeField] private float pipDiameter = 0.12f;                           // Tiles; countable at base zoom
+    [SerializeField] private float pipRingFraction = 0.72f;                       // Arc radius as a fraction of the mound's radius
+    [SerializeField] private float pipSmoothness = 0.35f;                         // A little shine so they pop off the soil
 
     public float GrowthSecondsPerFood { get => growthSecondsPerFood; set => growthSecondsPerFood = value; }
     public int Capacity { get => capacity; set => capacity = value; }
@@ -30,8 +30,7 @@ public class MushroomPlot : MonoBehaviour
     /// <summary>Progress in seconds toward the next food. Held at 0 while at capacity.</summary>
     public float GrowthElapsed { get; private set; }
 
-    private readonly List<SpriteRenderer> pips = new List<SpriteRenderer>();
-    private Sprite pipSprite;
+    private readonly List<MeshRenderer> pips = new List<MeshRenderer>();
 
     /// <summary>Called once by PlacementManager right after Placeable.Initialize.</summary>
     public void Initialize(float growthSeconds, int cap)
@@ -81,7 +80,7 @@ public class MushroomPlot : MonoBehaviour
     }
 
     /// <summary>
-    /// Ensures exactly Capacity pips exist in a centered row, with pip i visible iff i &lt; FoodCount.
+    /// Ensures exactly Capacity pips exist along the mound's front arc, with pip i visible iff i &lt; FoodCount.
     /// </summary>
     public void RefreshPips()
     {
@@ -89,7 +88,7 @@ public class MushroomPlot : MonoBehaviour
 
         while (pips.Count > target)
         {
-            SpriteRenderer extra = pips[pips.Count - 1];
+            MeshRenderer extra = pips[pips.Count - 1];
             pips.RemoveAt(pips.Count - 1);
             if (extra == null) continue;
             if (Application.isPlaying) Destroy(extra.gameObject);
@@ -97,14 +96,13 @@ public class MushroomPlot : MonoBehaviour
         }
         while (pips.Count < target) pips.Add(CreatePip(pips.Count));
 
-        // The row sits on the standing plot body: offsets are from the body's center, not the ground point.
-        float standHeight = TryGetComponent(out Placeable placeable) ? placeable.StandHeight : 0f;
+        // Spread along the mound built at the placeable's size (a full tile when there's no Placeable, e.g. tests).
+        float size = TryGetComponent(out Placeable placeable) && placeable.Size > 0f ? placeable.Size : 1f;
 
         for (int i = 0; i < pips.Count; i++)
         {
             if (pips[i] == null) pips[i] = CreatePip(i);
-            float x = (i - (target - 1) * 0.5f) * pipSpacing;
-            pips[i].transform.localPosition = new Vector3(x, standHeight + pipRowY, -0.15f);
+            pips[i].transform.localPosition = PropModel.PipPosition(i, target, size, pipRingFraction, pipDiameter);
             pips[i].enabled = i < FoodCount;
         }
     }
@@ -115,36 +113,17 @@ public class MushroomPlot : MonoBehaviour
         get
         {
             int n = 0;
-            foreach (SpriteRenderer p in pips) if (p != null && p.enabled) n++;
+            foreach (MeshRenderer p in pips) if (p != null && p.enabled) n++;
             return n;
         }
     }
 
-    private SpriteRenderer CreatePip(int index)
+    private MeshRenderer CreatePip(int index)
     {
-        if (pipSprite == null)
-        {
-            const int res = 16;
-            var tex = new Texture2D(res, res, TextureFormat.RGBA32, false);
-            tex.name = "FoodPip_Texture";
-            var pixels = new Color[res * res];
-            for (int i = 0; i < pixels.Length; i++) pixels[i] = Color.white;
-            tex.SetPixels(pixels);
-            tex.filterMode = FilterMode.Point;
-            tex.wrapMode = TextureWrapMode.Clamp;
-            tex.Apply();
-
-            pipSprite = Sprite.Create(tex, new Rect(0, 0, res, res), new Vector2(0.5f, 0.5f), res);
-            pipSprite.name = "FoodPip_Sprite";
-        }
-
-        var go = new GameObject("FoodPip" + index);
-        go.transform.SetParent(transform, false);
-        go.transform.localScale = new Vector3(pipSize, pipSize, 1f);
-        var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = pipSprite;
-        sr.color = pipColor;
-        sr.enabled = false;
-        return sr;
+        var part = new CreatureModel.Part("FoodPip" + index, CreatureModel.Shape.Sphere, Vector3.zero,
+            Vector3.one * pipDiameter, pipColor);
+        MeshRenderer pip = CreatureModel.CreatePart(transform, part, pipSmoothness);
+        pip.enabled = false;
+        return pip;
     }
 }

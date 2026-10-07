@@ -3,7 +3,8 @@ using UnityEngine;
 /// <summary>
 /// Spike Trap behavior: Armed or Spent. An armed trap fires once when a hero steps on its tile
 /// (TryTrigger), dealing Damage and becoming Spent. A spent trap never re-fires until the imp rearms it.
-/// Placeholder visual: a steel diamond ("spikes up") shown iff Armed; Spent shows the flat plate only.
+/// Visual (ticket #77): a grid of steel cone spikes on the trap's plate, raised while Armed and retracted
+/// nearly flat while Spent, switched instantly by every state change.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Placeable))]
@@ -12,11 +13,14 @@ public class SpikeTrap : MonoBehaviour
     [Header("Trap")]
     [SerializeField] private int damage = 1; // Provisional: hero HP lands with Epic #5
 
-    [Header("Spikes (Placeholder Art)")]
+    [Header("Spikes (code-built, ticket #77)")]
     [SerializeField] private Color spikeColor = new Color(0.85f, 0.87f, 0.90f, 1f); // Light steel
-    [SerializeField] private float spikeSize = 0.45f;                               // Fraction of a tile
-    [SerializeField] private float spikeRotation = 45f;                             // Square turned into a diamond
-    [SerializeField] private Vector3 spikeOffset = new Vector3(0f, 0.02f, -0.15f);   // Local offset from tile center
+    [SerializeField] private int spikeGrid = 3;                                     // spikeGrid x spikeGrid cones
+    [SerializeField] private float spikeHeight = 0.3f;                              // Tiles, when raised
+    [SerializeField] private float spikeWidth = 0.14f;                              // Cone base diameter, tiles
+    [SerializeField] private float retractedScale = 0.12f;                          // Spent: spikes squashed to this fraction
+    [SerializeField] private float spikeSmoothness = 0.6f;                          // Polished steel
+    [SerializeField] private float spikeSpread = 0.8f;                              // Grid span as a fraction of the plate
 
     public int Damage { get => damage; set => damage = value; }
 
@@ -24,10 +28,14 @@ public class SpikeTrap : MonoBehaviour
 
     public bool IsArmed { get; private set; }
 
-    /// <summary>True while the spike sprite is shown (Armed).</summary>
-    public bool SpikesVisible => spikes != null && spikes.enabled;
+    /// <summary>True while the spikes are raised (Armed); false while retracted into the plate (Spent).</summary>
+    public bool SpikesVisible => spikes != null && spikesRaised;
 
-    private SpriteRenderer spikes;
+    /// <summary>The spike grid's root: its Y scale is 1 when raised, retractedScale when spent.</summary>
+    public Transform Spikes => spikes;
+
+    private Transform spikes;
+    private bool spikesRaised;
 
     /// <summary>Called once by PlacementManager right after Placeable.Initialize.</summary>
     public void Initialize(int spikeDamage)
@@ -65,34 +73,22 @@ public class SpikeTrap : MonoBehaviour
     private void RefreshVisual()
     {
         if (spikes == null) spikes = CreateSpikes();
-        spikes.enabled = IsArmed;
+        spikesRaised = IsArmed;
+        spikes.localScale = new Vector3(1f, IsArmed ? 1f : retractedScale, 1f);
     }
 
-    private SpriteRenderer CreateSpikes()
+    // The grid stands on the plate's top surface, sized to the placeable's footprint.
+    private Transform CreateSpikes()
     {
-        const int res = 16;
-        var tex = new Texture2D(res, res, TextureFormat.RGBA32, false);
-        tex.name = "Spikes_Texture";
-        var pixels = new Color[res * res];
-        for (int i = 0; i < pixels.Length; i++) pixels[i] = Color.white;
-        tex.SetPixels(pixels);
-        tex.filterMode = FilterMode.Point;
-        tex.wrapMode = TextureWrapMode.Clamp;
-        tex.Apply();
+        Placeable placeable = GetComponent<Placeable>();
+        float size = placeable != null && placeable.Size > 0f ? placeable.Size : 1f; // A full tile when uninitialized
+        float plateTop = placeable != null ? placeable.SurfaceHeight : PropModel.TrapPlateHeight;
 
-        var sprite = Sprite.Create(tex, new Rect(0, 0, res, res), new Vector2(0.5f, 0.5f), res);
-        sprite.name = "Spikes_Sprite";
-
-        var go = new GameObject("Spikes");
-        go.transform.SetParent(transform, false);
-        // On the standing trap body: the offset is from the body's center, not the ground point.
-        float standHeight = TryGetComponent(out Placeable placeable) ? placeable.StandHeight : 0f;
-        go.transform.localPosition = spikeOffset + new Vector3(0f, standHeight, 0f);
-        go.transform.localRotation = Quaternion.Euler(0f, 0f, spikeRotation);
-        go.transform.localScale = new Vector3(spikeSize, spikeSize, 1f);
-        var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = sprite;
-        sr.color = spikeColor;
-        return sr;
+        var root = new GameObject("Spikes").transform;
+        root.SetParent(transform, false);
+        root.localPosition = new Vector3(0f, plateTop, 0f);
+        foreach (CreatureModel.Part part in PropModel.SpikeGridRecipe(size * spikeSpread, spikeGrid, spikeHeight, spikeWidth, spikeColor))
+            CreatureModel.CreatePart(root, part, spikeSmoothness);
+        return root;
     }
 }

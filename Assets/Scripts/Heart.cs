@@ -20,13 +20,15 @@ public class Heart : MonoBehaviour
     [Header("Placement")]
     [SerializeField] private Vector2Int heartTile = new Vector2Int(24, 14); // Starter cavern, not a spawn tile
 
-    [Header("Appearance (Placeholder Art)")]
-    // A crystal (diamond) silhouette: distinct from square placeables and round goblin tokens.
-    [SerializeField] private Color bodyColor = new Color(0.80f, 0.10f, 0.35f, 1f);    // Deep red-magenta
-    [SerializeField] private Color outlineColor = new Color(0.25f, 0.02f, 0.10f, 1f); // Near-black crimson
-    [SerializeField] private float outlineWidth = 0.12f;                               // Fraction of the half-size
-    [SerializeField] private float bodySize = 1.2f;                                    // Tiles
-    [SerializeField] private GroundShadowStyle groundShadow = new GroundShadowStyle(1.0f, 0.4f); // Disc under the body (sprites cast no shadows)
+    [Header("Model (code-built, ticket #77)")]
+    // The centerpiece: a faceted crystal on a low stone plinth, the only emissive surface in the game.
+    [SerializeField] private Color crystalColor = new Color(0.80f, 0.10f, 0.35f, 1f); // Deep red-magenta (its sprite-era color)
+    [SerializeField] private float emissionIntensity = 1.6f;                          // Glow strength (HDR multiplier)
+    [SerializeField] private float crystalHeight = 1.2f;                              // Tiles, plinth included
+    [SerializeField] private float crystalWidth = 0.75f;                              // Tiles across its equator
+    [SerializeField] private Color plinthColor = new Color(0.36f, 0.34f, 0.33f, 1f);  // Stone
+    [SerializeField] private float plinthHeight = 0.12f;                              // Tiles
+    [SerializeField] private float modelSmoothness = 0.7f;                            // Polished crystal
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
@@ -35,7 +37,7 @@ public class Heart : MonoBehaviour
 
     public bool IsDestroyed => health != null && health.IsDead;
 
-    private SpriteRenderer bodySprite;
+    private GameObject model;
 
     // Editor-only: runs when the component is first added (RequireComponent has added Health already).
     // Configures that Health to the design's fixed 100 HP, Monster team, and wires it.
@@ -53,7 +55,7 @@ public class Heart : MonoBehaviour
         boardRenderer ??= FindAnyObjectByType<BoardRenderer>();
         health ??= GetComponent<Health>();
 
-        CreateBody();
+        CreateModel();
         PlaceOnTile(heartTile);
     }
 
@@ -66,40 +68,16 @@ public class Heart : MonoBehaviour
             : BoardRenderer.UnanchoredTileCenter(tile);
     }
 
-    private void CreateBody()
+    /// <summary>The code-built model (null until CreateModel, which Start calls).</summary>
+    public GameObject Model => model;
+
+    /// <summary>Builds the crystal-on-plinth model once, standing on the ground point; the crystal glows.</summary>
+    public void CreateModel()
     {
-        if (bodySprite != null) return;
-
-        var go = new GameObject("HeartBody");
-        go.transform.SetParent(transform, false);
-        go.transform.localScale = new Vector3(bodySize, bodySize, 1f);
-        go.transform.localPosition = new Vector3(0f, bodySize * 0.5f, 0f); // Standing on the ground point
-        bodySprite = go.AddComponent<SpriteRenderer>();
-
-        // A filled diamond with a dark rim, colors baked in (the renderer tint stays white).
-        const int res = 32;
-        var tex = new Texture2D(res, res, TextureFormat.RGBA32, false);
-        tex.name = "Heart_Texture";
-        var pixels = new Color[res * res];
-        float half = res * 0.5f;
-        float rimStart = half * (1f - outlineWidth);
-        for (int y = 0; y < res; y++)
-        {
-            for (int x = 0; x < res; x++)
-            {
-                float d = Mathf.Abs(x + 0.5f - half) + Mathf.Abs(y + 0.5f - half); // Manhattan: a diamond
-                pixels[y * res + x] = d > half ? Color.clear : d > rimStart ? outlineColor : bodyColor;
-            }
-        }
-        tex.SetPixels(pixels);
-        tex.filterMode = FilterMode.Bilinear;
-        tex.wrapMode = TextureWrapMode.Clamp;
-        tex.Apply();
-
-        var sprite = Sprite.Create(tex, new Rect(0, 0, res, res), new Vector2(0.5f, 0.5f), res);
-        sprite.name = "Heart_Sprite";
-        bodySprite.sprite = sprite;
-        bodySprite.color = Color.white;
-        GroundShadow.Create(transform, groundShadow, BoardRenderer.OverlayLiftOf(boardRenderer));
+        if (model != null) return;
+        model = CreatureModel.Build(transform, "HeartModel",
+            PropModel.HeartRecipe(crystalHeight, crystalWidth, crystalColor, plinthColor, plinthHeight), modelSmoothness);
+        model.transform.Find("Crystal").GetComponent<MeshRenderer>().sharedMaterial =
+            CreatureModel.EmissiveMaterialFor(crystalColor, emissionIntensity, modelSmoothness);
     }
 }

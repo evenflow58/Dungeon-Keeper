@@ -13,10 +13,7 @@ using UnityEngine;
 public class BoardRenderer : MonoBehaviour
 {
     public const string LitShaderName = "Universal Render Pipeline/Lit";
-    public const float DefaultOverlayLift = 0.01f; // overlayLift's default; also the lift for code without a renderer
-
-    /// <summary>The overlay lift of a renderer, or the default when there's none (tests, unwired objects).</summary>
-    public static float OverlayLiftOf(BoardRenderer renderer) => renderer != null ? renderer.OverlayLift : DefaultOverlayLift;
+    public const float DefaultOverlayLift = 0.01f; // overlayLift's default
     private const int PickSamples = 32; // Ray steps between the block-top plane and the ground in RaycastBoard
 
     [Header("References")]
@@ -25,7 +22,7 @@ public class BoardRenderer : MonoBehaviour
     [Header("Tile Shapes")]
     [SerializeField] private float rockHeight = 0.6f;     // Rock and designated blocks, in tiles
     [SerializeField] private float floorThickness = 0.1f; // Floor slab; its top face is the ground (y = 0)
-    [SerializeField] private float overlayLift = DefaultOverlayLift; // Highlight, previews, ground shadows sit this far above a surface
+    [SerializeField] private float overlayLift = DefaultOverlayLift; // Hover highlight and drag previews sit this far above a surface
 
     [Header("Tile Colors (Placeholder Art)")]
     [SerializeField] private Color rockColor = new Color(0.22f, 0.22f, 0.22f, 1f);       // Dark gray
@@ -33,6 +30,7 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private Color designatedColor = new Color(0.85f, 0.65f, 0.15f, 1f); // Amber/Gold
     [SerializeField] private Color doorPanelColor = new Color(0.72f, 0.46f, 0.22f, 1f);  // Warm wood, lighter than Floor
     [SerializeField] private Color doorFrameColor = new Color(0.16f, 0.09f, 0.04f, 1f);  // Near-black frame and lintel
+    [SerializeField] private Color doorIronColor = new Color(0.20f, 0.20f, 0.22f, 1f);   // Bands and handle
 
     [Header("Door (Placeholder Art)")]
     [SerializeField] private float doorHeight = 0.9f;  // Taller than the rock so the entrance reads from afar
@@ -235,14 +233,26 @@ public class BoardRenderer : MonoBehaviour
         AddDoorPart(door, "Lintel", doorFrameColor, new Vector3(0f, doorHeight - doorPostWidth * 0.5f, 0f), new Vector3(1f, doorPostWidth, doorPostWidth));
         float panelHeight = doorHeight - doorPostWidth;
         AddDoorPart(door, "Panel", doorPanelColor, new Vector3(0f, panelHeight * 0.5f, 0f), new Vector3(panelWidth, panelHeight, doorPostWidth * 0.5f));
+
+        // Dressing on the panel's camera-facing side (#77): plank seams, a crossbar, two iron bands, a handle.
+        float front = -doorPostWidth * 0.25f;                  // The panel's front face
+        Color seam = Color.Lerp(doorPanelColor, doorFrameColor, 0.45f);
+        AddDoorPart(door, "SeamLeft", seam, new Vector3(-panelWidth / 6f, panelHeight * 0.5f, front - 0.004f), new Vector3(0.015f, panelHeight * 0.94f, 0.01f));
+        AddDoorPart(door, "SeamRight", seam, new Vector3(panelWidth / 6f, panelHeight * 0.5f, front - 0.004f), new Vector3(0.015f, panelHeight * 0.94f, 0.01f));
+        AddDoorPart(door, "Crossbar", doorFrameColor, new Vector3(0f, panelHeight * 0.5f, front - 0.012f), new Vector3(panelWidth * 0.96f, 0.06f, 0.025f));
+        AddDoorPart(door, "BandTop", doorIronColor, new Vector3(0f, panelHeight * 0.82f, front - 0.009f), new Vector3(panelWidth * 0.98f, 0.035f, 0.018f));
+        AddDoorPart(door, "BandBottom", doorIronColor, new Vector3(0f, panelHeight * 0.18f, front - 0.009f), new Vector3(panelWidth * 0.98f, 0.035f, 0.018f));
+        GameObject handle = AddDoorPart(door, "Handle", doorIronColor, new Vector3(panelWidth * 0.32f, panelHeight * 0.42f, front - 0.03f), Vector3.one * 0.06f);
+        handle.GetComponent<MeshFilter>().sharedMesh = CreatureModel.MeshFor(CreatureModel.Shape.Sphere); // A round knob
         return door;
     }
 
-    private void AddDoorPart(GameObject door, string partName, Color color, Vector3 localPosition, Vector3 scale)
+    private GameObject AddDoorPart(GameObject door, string partName, Color color, Vector3 localPosition, Vector3 scale)
     {
         GameObject part = CreateBox(partName, door.transform, color);
         part.transform.localPosition = localPosition;
         part.transform.localScale = scale;
+        return part;
     }
 
     private GameObject CreateBox(string boxName, Transform parent, Color color)

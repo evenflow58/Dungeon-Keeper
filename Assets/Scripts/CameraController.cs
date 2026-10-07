@@ -200,7 +200,7 @@ public class CameraController : MonoBehaviour
             targetOrthographicSize = Mathf.Clamp(targetOrthographicSize * zoomFactor, minOrthographicSize, maxOrthographicSize);
         }
 
-        cam.orthographicSize = Mathf.Lerp(cam.orthographicSize, targetOrthographicSize, Time.deltaTime * zoomDamping);
+        cam.orthographicSize = Mathf.Lerp(cam.orthographicSize, targetOrthographicSize, Time.unscaledDeltaTime * zoomDamping); // View chrome: unaffected by game speed
     }
 
     private void HandleMiddleMouseDrag()
@@ -285,10 +285,10 @@ public class CameraController : MonoBehaviour
         {
             // Move in ground plane: camera-relative X and ground-projected forward (Y in ground plane)
             Vector3 moveDir = new Vector3(moveInput.x, moveInput.y, 0f);
-            targetGroundPos += moveDir * (panSpeed * Time.deltaTime);
+            targetGroundPos += moveDir * (panSpeed * Time.unscaledDeltaTime); // Pans while paused, same feel at 2×
         }
 
-        currentGroundPos = Vector3.Lerp(currentGroundPos, targetGroundPos, Time.deltaTime * panDamping);
+        currentGroundPos = Vector3.Lerp(currentGroundPos, targetGroundPos, Time.unscaledDeltaTime * panDamping);
     }
 
     public void UpdateCameraTransform()

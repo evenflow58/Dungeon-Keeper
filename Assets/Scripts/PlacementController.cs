@@ -170,7 +170,7 @@ public class PlacementController : MonoBehaviour
 
         if (feedbackTimer > 0f)
         {
-            feedbackTimer -= Time.deltaTime;
+            feedbackTimer -= Time.unscaledDeltaTime; // UI feedback: the rejection flash clears even while paused
             if (feedbackTimer <= 0f && !isDragging && previewSprite != null) previewSprite.enabled = false;
         }
 
@@ -345,7 +345,7 @@ public class PlacementController : MonoBehaviour
         return sprite;
     }
 
-    private static void EnsureEventSystem()
+    internal static void EnsureEventSystem() // Shared with GameSpeed's buttons; guarded, so call order doesn't matter
     {
         if (FindAnyObjectByType<EventSystem>() != null) return;
 

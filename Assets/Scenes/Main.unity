@@ -536,6 +536,7 @@ GameObject:
   - component: {fileID: 565044526}
   - component: {fileID: 565044527}
   - component: {fileID: 565044528}
+  - component: {fileID: 565044529}
   m_Layer: 0
   m_Name: DungeonManager
   m_TagString: Untagged
@@ -740,6 +741,23 @@ MonoBehaviour:
   sidePadding: 16
   panelColor: {r: 0, g: 0, b: 0, a: 0.6}
   pollIntervalSeconds: 0.25
+--- !u!114 &565044529
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 86a568c0c0b66c64b8038591015477fe, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::GameSpeed
+  buttonSize: {x: 140, y: 36}
+  barPadding: 8
+  rowAboveBuildBar: 68
+  buttonNormalColor: {r: 0.25, g: 0.25, b: 0.3, a: 1}
+  buttonSelectedColor: {r: 0.85, g: 0.65, b: 0.15, a: 1}
 --- !u!1 &708604853
 GameObject:
   m_ObjectHideFlags: 0

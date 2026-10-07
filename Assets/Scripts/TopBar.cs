@@ -57,7 +57,7 @@ public class TopBar : MonoBehaviour
 
     private void Update()
     {
-        pollTimer += Time.deltaTime;
+        pollTimer += Time.unscaledDeltaTime; // Keeps refreshing while paused (e.g. a building placed mid-pause)
         if (pollTimer < pollIntervalSeconds) return;
         pollTimer = 0f;
         Refresh();

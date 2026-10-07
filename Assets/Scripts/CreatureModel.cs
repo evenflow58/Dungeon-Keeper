@@ -163,7 +163,8 @@ public static class CreatureModel
     {
         new Part("Body",   Shape.Capsule,  new Vector3(0f, 0.32f * h, 0f),  new Vector3(0.40f, 0.32f, 0.36f) * h, armor),
         new Part("Helmet", Shape.Sphere,   new Vector3(0f, 0.76f * h, 0f),  new Vector3(0.40f, 0.38f, 0.38f) * h, armor),
-        new Part("Crest",  Shape.Box,      new Vector3(0f, 0.95f * h, 0f),  new Vector3(0.05f, 0.10f, 0.30f) * h, accent),
-        new Part("Shield", Shape.Cylinder, new Vector3(-0.27f * h, 0.36f * h, -0.04f * h), new Vector3(0.34f, 0.025f, 0.34f) * h, accent, new Vector3(0f, 0f, 90f)),
+        new Part("Crest",  Shape.Box,      new Vector3(0f, 0.95f * h, 0f),  new Vector3(0.07f, 0.10f, 0.30f) * h, accent),
+        // A round shield held at his front-left, its face toward the camera (a disc edge-on would read as a sliver).
+        new Part("Shield", Shape.Cylinder, new Vector3(-0.20f * h, 0.34f * h, -0.18f * h), new Vector3(0.34f, 0.025f, 0.34f) * h, accent, new Vector3(90f, 0f, 0f)),
     };
 }

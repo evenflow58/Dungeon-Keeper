@@ -538,6 +538,7 @@ GameObject:
   - component: {fileID: 565044528}
   - component: {fileID: 565044529}
   - component: {fileID: 565044530}
+  - component: {fileID: 565044531}
   m_Layer: 0
   m_Name: DungeonManager
   m_TagString: Untagged
@@ -782,6 +783,25 @@ MonoBehaviour:
   spacing: 6
   edgePadding: 8
   panelColor: {r: 0, g: 0, b: 0, a: 0.6}
+--- !u!114 &565044531
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbe9ace651a00774fae33c9f6c24d941, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::EndScreen
+  gameManager: {fileID: 565044526}
+  pollIntervalSeconds: 0.25
+  backdropColor: {r: 0, g: 0, b: 0, a: 0.75}
+  headlineFontSize: 36
+  buttonSize: {x: 140, y: 36}
+  buttonNormalColor: {r: 0.25, g: 0.25, b: 0.3, a: 1}
+  sortingOrder: 100
 --- !u!1 &708604853
 GameObject:
   m_ObjectHideFlags: 0

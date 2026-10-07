@@ -39,7 +39,7 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private float doorPostWidth = 0.12f;
 
     [Header("Surface")]
-    [SerializeField] private float surfaceSmoothness = 0.15f; // Lit materials: low gloss, so rock and earth read matte
+    [SerializeField] private float surfaceSmoothness = 0f; // Lit materials: matte rock and earth (no highlights, no reflections)
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public float RockHeight { get => rockHeight; set => rockHeight = value; }
@@ -181,6 +181,11 @@ public class BoardRenderer : MonoBehaviour
         var material = new Material(shader) { name = "Tile " + ColorUtility.ToHtmlStringRGB(color) };
         material.SetColor("_BaseColor", color); // Material colors are sRGB-authored; Unity converts for linear
         material.SetFloat("_Smoothness", surfaceSmoothness);
+        // Matte surfaces: no specular highlights or environment (skybox) reflections on a dungeon floor.
+        material.SetFloat("_SpecularHighlights", 0f);
+        material.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+        material.SetFloat("_EnvironmentReflections", 0f);
+        material.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
         materials[color] = material;
         return material;
     }

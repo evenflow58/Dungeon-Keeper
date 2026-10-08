@@ -89,7 +89,7 @@ public class BuildAnimationTests
 
         // The aim rotation turns the tool's rest direction onto the shoulder→aim line.
         Vector3 shoulder = new Vector3(0.1f, 0.24f, 0f), rest = new Vector3(0.6f, 0.77f, -0.2f).normalized;
-        Quaternion q = CreatureMotion.BuildArmAim(shoulder, rest, t.buildStrikePoint);
+        Quaternion q = CreatureMotion.ArmAim(shoulder, rest, t.buildStrikePoint);
         Assert.Less(Vector3.Angle(q * rest, t.buildStrikePoint - shoulder), 0.01f);
     }
 
@@ -167,9 +167,9 @@ public class BuildAnimationTests
             Object.DestroyImmediate(site.gameObject);
         }
 
-        // Contrast: the dig swings the same pick out to the side (a roll about the forward axis), never forward.
-        Vector3 digPeak = Quaternion.Euler(0f, 0f, t.digRaiseDegrees) * Vector3.up;
-        Assert.Greater(Mathf.Abs(digPeak.x), 0.9f, "The dig's silhouette is sideways; the build's points at the work");
+        // Contrast: the dig winds the same pick up overhead and back; the build's pat stays low and in front.
+        Assert.Greater(t.digRaisePoint.y, t.buildRaisePoint.y, "The dig's wind-up is higher");
+        Assert.Greater(t.digRaisePoint.z, t.buildRaisePoint.z, "...and goes back over the shoulder; the build's stays in front");
     }
 
     [Test]

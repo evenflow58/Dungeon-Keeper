@@ -360,15 +360,75 @@ public class CreatureMotionTests
     // --- Work and rest poses ---
 
     [Test]
-    public void DigArm_RaisesStrikesAndRecovers()
+    public void DigAim_ReadyRaiseStrikeRecover_OnTheOldTiming()
     {
-        var t = new MotionTuning();
-        Assert.AreEqual(0f, CreatureMotion.DigArmAngle(0f, t), 1e-4f, "Starts at rest");
-        Assert.AreEqual(t.digRaiseDegrees, CreatureMotion.DigArmAngle(t.digRaiseSeconds, t), 1e-3f, "Up at the end of the raise");
-        Assert.AreEqual(t.digStrikeDegrees, CreatureMotion.DigArmAngle(t.digRaiseSeconds + t.digStrikeSeconds - 1e-4f, t), 0.5f, "Strike follows through");
+        // #100: the chop aims the pick through points (was a fixed-axis roll); the phase timing is unchanged.
+        MotionTuning t = MotionTuning.Imp();
+        Assert.AreEqual(0.25f, t.digRaiseSeconds);
+        Assert.AreEqual(0.1f, t.digStrikeSeconds);
+        Assert.AreEqual(0.25f, t.digRecoverSeconds);
+
+        Assert.AreEqual(t.digReadyPoint, CreatureMotion.DigAimPoint(0f, t), "Starts ready");
+        AssertNear(t.digRaisePoint, CreatureMotion.DigAimPoint(t.digRaiseSeconds - 1e-4f, t), "Wound up at the end of the raise");
+        AssertNear(t.digStrikePoint, CreatureMotion.DigAimPoint(t.digRaiseSeconds + t.digStrikeSeconds - 1e-4f, t), "Struck onto the tile");
         float period = t.digRaiseSeconds + t.digStrikeSeconds + t.digRecoverSeconds;
-        Assert.AreEqual(0f, CreatureMotion.DigArmAngle(period - 1e-4f, t), 0.5f, "Back to rest");
-        Assert.AreEqual(CreatureMotion.DigArmAngle(0.1f, t), CreatureMotion.DigArmAngle(0.1f + period, t), 1e-3f, "Loops");
+        AssertNear(t.digReadyPoint, CreatureMotion.DigAimPoint(period - 1e-4f, t), "Back to ready");
+        AssertNear(CreatureMotion.DigAimPoint(0.1f, t), CreatureMotion.DigAimPoint(0.1f + period, t), "Loops");
+
+        // Always in the plane toward the work, and the strike sits on the tile ahead at ground level.
+        for (float c = 0f; c < period; c += 0.01f) Assert.AreEqual(0f, CreatureMotion.DigAimPoint(c, t).x, 1e-6f);
+        Assert.Less(t.digStrikePoint.z, -0.5f, "On the tile a step ahead");
+        Assert.Less(t.digStrikePoint.y, 0.1f, "At ground level");
+        Assert.Greater(t.digRaisePoint.y, 0.9f, "Wound up overhead");
+    }
+
+    private static void AssertNear(Vector3 expected, Vector3 actual, string because) =>
+        Assert.Less(Vector3.Distance(expected, actual), 2e-3f, $"{because}: expected {expected}, was {actual}");
+
+    [Test]
+    public void DigPose_ThePickStrikesTheTarget_AtAnyHeading()
+    {
+        // Mirrors #93's build-aim test: an imp facing a tile in each direction (its dig/rearm target via the
+        // FaceTarget feed) — at the bottom of the strike the shoulder→pick-head line lands on that tile; at the
+        // wind-up it's raised toward it, never out to the side.
+        MotionTuning t = MotionTuning.Imp();
+        foreach (Vector2Int offset in new[] { new Vector2Int(1, 0), new Vector2Int(-1, 0), new Vector2Int(0, 1), new Vector2Int(0, -1) })
+        {
+            creatureGo = new GameObject("TestImp");
+            var imp = creatureGo.AddComponent<Imp>();
+            imp.Board = board;
+            imp.Renderer = boardRenderer;
+            imp.PlaceOnTile(new Vector2Int(24, 16));
+            imp.CreateModel();
+            Vector3 target = boardRenderer.GetTileCenterWorldPosition(24 + offset.x, 16 + offset.y);
+            Vector3 toTarget = target - imp.transform.position;
+            toTarget.y = 0f;
+
+            float period = t.digRaiseSeconds + t.digStrikeSeconds + t.digRecoverSeconds;
+            Ray strike = DigPickRay(imp, target, 2f * period + t.digRaiseSeconds + t.digStrikeSeconds); // Bottom of a strike
+            Assert.Less(strike.direction.y, 0f, $"{offset}: striking down");
+            float s = (0.05f - strike.origin.y) / strike.direction.y;
+            Vector3 hit = strike.origin + strike.direction * s;
+            Assert.Less(new Vector2(hit.x - target.x, hit.z - target.z).magnitude, 0.15f, $"{offset}: lands on the target tile's centre, hit {hit}");
+
+            // On to the end of the next wind-up: through the recover, then (almost) the whole raise.
+            Ray raise = DigPickRay(imp, target, t.digRecoverSeconds + t.digRaiseSeconds - Dt);
+            Vector3 flat = raise.direction;
+            flat.y = 0f;
+            Assert.Greater(raise.direction.y, 0.5f, $"{offset}: wound up high");
+            Assert.Greater(Vector3.Dot(flat.normalized, -toTarget.normalized), 0.5f, $"{offset}: wound up back over the shoulder, in line with the target");
+
+            Object.DestroyImmediate(creatureGo);
+        }
+    }
+
+    // Steps a digging imp facing target for the given seconds; returns the pick's world ray (shoulder → pick head).
+    private static Ray DigPickRay(Imp imp, Vector3 target, float seconds)
+    {
+        for (float c = 0f; c < seconds - 1e-4f; c += Dt)
+            imp.Motion.Step(Dt, new CreatureMotion.Flags { Digging = true, FaceTarget = target });
+        Transform arm = CreatureModel.FindPivot(imp.Model, CreatureModel.ArmRightPivot);
+        return new Ray(arm.position, arm.Find("PickHead").position - arm.position);
     }
 
     [Test]

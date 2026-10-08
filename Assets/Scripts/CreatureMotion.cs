@@ -46,9 +46,13 @@ public class MotionTuning
     public float digRaiseSeconds = 0.25f;
     public float digStrikeSeconds = 0.1f;
     public float digRecoverSeconds = 0.25f;
-    public float digRaiseDegrees = 110f;   // Pickaxe arm up and out
-    public float digStrikeDegrees = -15f;  // Follow-through below rest
     public float digBodyDegrees = 6f;      // Body pitch on the strike
+    // The chop AIMS the pick (shoulder → pick head) like the build pose, through points in model space (tiles; front is
+    // −Z, the work is 1 tile ahead): held ready up-and-forward, wound up overhead and back, struck down onto the target
+    // tile at ground level (#100). Timing per the phase seconds above; always in the plane toward the work.
+    public Vector3 digReadyPoint = new Vector3(0f, 0.45f, -0.6f);
+    public Vector3 digRaisePoint = new Vector3(0f, 1.0f, 0.15f);
+    public Vector3 digStrikePoint = new Vector3(0f, 0.05f, -1f);
 
     [Header("Build (#93)")]
     public float buildCycleSeconds = 0.8f;   // One crouch-and-rise with its pat at the bottom
@@ -69,6 +73,7 @@ public class MotionTuning
     public static MotionTuning Imp() => new MotionTuning
     {
         strideLength = 0.55f, bobHeight = 0.04f, footLift = 0.04f, stepReach = 0.04f,
+        digReadyPoint = new Vector3(0f, 0.45f, -0.6f), digRaisePoint = new Vector3(0f, 1.0f, 0.15f), digStrikePoint = new Vector3(0f, 0.05f, -1f),
         buildCycleSeconds = 0.8f, buildCrouchDegrees = 20f, buildDipHeight = 0.06f,
         buildRaisePoint = new Vector3(0f, 0.7f, -0.55f), buildStrikePoint = new Vector3(0f, 0.08f, -0.85f),
     };
@@ -250,14 +255,15 @@ public class CreatureMotion
         Quaternion armLeftPose = Quaternion.AngleAxis(-BootSwing(Phase, t.armSwingDegrees, w, true), axis);
         Quaternion armRightPose = Quaternion.AngleAxis(-BootSwing(Phase, t.armSwingDegrees, w, false), axis);
 
-        // Dig: the right (pickaxe) arm chops in a loop; the body pitches into each strike.
-        float digArm = DigArmAngle(digClock, t) * DigWeight;
-        if (DigWeight > 0f) armRightPose = Quaternion.Slerp(armRightPose, Quaternion.Euler(0f, 0f, digArm), DigWeight);
-        // Build: the same arm aims its tool at the work straight ahead (the imp faces the site), raised at the top of
-        // the rise and down onto the site at the bottom of each crouch: a pat, not the dig's swing out to the side.
+        // Dig (and rearm): the right (pickaxe) arm chops at the work straight ahead (the imp faces it): wound up
+        // overhead, struck down onto the tile; the body pitches into each strike.
+        if (DigWeight > 0f)
+            armRightPose = Quaternion.Slerp(armRightPose, ArmAim(armRightRest, armRightTool, DigAimPoint(digClock, t)), DigWeight);
+        // Build: the same arm aims its tool at the work, raised at the top of the rise and down onto the site at the
+        // bottom of each crouch: a low pat, against the dig's overhead chop.
         float crouch = BuildCrouch(buildClock, t);
         if (BuildWeight > 0f)
-            armRightPose = Quaternion.Slerp(armRightPose, BuildArmAim(armRightRest, armRightTool, BuildAimPoint(buildClock, t)), BuildWeight);
+            armRightPose = Quaternion.Slerp(armRightPose, ArmAim(armRightRest, armRightTool, BuildAimPoint(buildClock, t)), BuildWeight);
         SetRotation(armLeft, armLeftPose);
         SetRotation(armRight, armRightPose);
 
@@ -412,9 +418,9 @@ public class CreatureMotion
 
     /// <summary>
     /// The arm pivot rotation that turns the tool's rest direction (pivot → tool tip) to point from the shoulder at
-    /// aimPoint, all in model space (the pivot has no rest rotation).
+    /// aimPoint, all in model space (the pivot has no rest rotation). Shared by the build pat and the dig chop.
     /// </summary>
-    public static Quaternion BuildArmAim(Vector3 shoulder, Vector3 toolRest, Vector3 aimPoint)
+    public static Quaternion ArmAim(Vector3 shoulder, Vector3 toolRest, Vector3 aimPoint)
     {
         Vector3 want = aimPoint - shoulder;
         if (toolRest.sqrMagnitude < 1e-8f || want.sqrMagnitude < 1e-8f) return Quaternion.identity;
@@ -431,17 +437,20 @@ public class CreatureMotion
         return far.sqrMagnitude > 1e-8f ? far.normalized : Vector3.down;
     }
 
-    /// <summary>The pickaxe arm's roll at a point in the dig loop: raise (eased), strike, recover (eased).</summary>
-    public static float DigArmAngle(float clock, MotionTuning t)
+    /// <summary>
+    /// Where the pick aims at a point in the dig loop (model space): ready → wound up overhead (eased), → struck onto
+    /// the tile (linear and fast: the punch), → back to ready (eased). The same phase timing as before #100.
+    /// </summary>
+    public static Vector3 DigAimPoint(float clock, MotionTuning t)
     {
         float period = t.digRaiseSeconds + t.digStrikeSeconds + t.digRecoverSeconds;
-        if (period <= 0f) return 0f;
+        if (period <= 0f) return t.digReadyPoint;
         float u = clock % period;
-        if (u < t.digRaiseSeconds) return Mathf.Lerp(0f, t.digRaiseDegrees, Mathf.SmoothStep(0f, 1f, u / t.digRaiseSeconds));
+        if (u < t.digRaiseSeconds) return Vector3.Lerp(t.digReadyPoint, t.digRaisePoint, Mathf.SmoothStep(0f, 1f, u / t.digRaiseSeconds));
         u -= t.digRaiseSeconds;
-        if (u < t.digStrikeSeconds) return Mathf.Lerp(t.digRaiseDegrees, t.digStrikeDegrees, u / t.digStrikeSeconds);
+        if (u < t.digStrikeSeconds) return Vector3.Lerp(t.digRaisePoint, t.digStrikePoint, u / t.digStrikeSeconds);
         u -= t.digStrikeSeconds;
-        return Mathf.Lerp(t.digStrikeDegrees, 0f, Mathf.SmoothStep(0f, 1f, u / Mathf.Max(1e-4f, t.digRecoverSeconds)));
+        return Vector3.Lerp(t.digStrikePoint, t.digReadyPoint, Mathf.SmoothStep(0f, 1f, u / Mathf.Max(1e-4f, t.digRecoverSeconds)));
     }
 
     // 1 at the moment of each strike, easing off through the recovery; 0 while raising.

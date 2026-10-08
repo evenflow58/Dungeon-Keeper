@@ -42,6 +42,7 @@ public class Hero : MonoBehaviour
     private Vector2Int segmentStart;
     private GameObject model;
     private CreatureMotion poser;
+    private HeroAI ai;
 
     private void Start()
     {
@@ -198,10 +199,23 @@ public class Hero : MonoBehaviour
     public void Pose(float deltaTime)
     {
         if (poser == null) return;
-        poser.Step(deltaTime, new CreatureMotion.Flags { Dead = IsDead });
+        if (ai == null) TryGetComponent(out ai);
+        poser.Step(deltaTime, new CreatureMotion.Flags { Dead = IsDead, FaceTarget = FacePoint() });
         if (IsDead && poser.DeathComplete) gameObject.SetActive(false);
     }
 
     /// <summary>Presentation only: an attack landed now (the AI's damage call) — lunge at the target.</summary>
     public void NotifyAttack(Vector3 targetPosition) => poser?.NotifyAttack(targetPosition);
+
+    // What he faces while stationary (#94): the minion he's fighting, else the Heart while standing beside it to
+    // strike (read from HeroAI's state; Unity null checks, not ?.).
+    private Vector3? FacePoint()
+    {
+        if (ai == null) return null;
+        if (ai.CurrentTarget != null) return ai.CurrentTarget.transform.position;
+        Heart heart = ai.Heart;
+        bool atHeart = heart != null && !heart.IsDestroyed && !IsMoving &&
+                       Mathf.Abs(CurrentTile.x - heart.Tile.x) + Mathf.Abs(CurrentTile.y - heart.Tile.y) == 1;
+        return atHeart ? heart.transform.position : (Vector3?)null;
+    }
 }

@@ -21,6 +21,9 @@ public class MotionTuning
     public float breathingAmount = 0.02f;  // Body pivot scale, ±fraction
     public float headSwayDegrees = 1.5f;
 
+    [Header("Facing")]
+    public float turnDegreesPerSecond = 540f; // Yaw rate toward the heading, on the shortest arc (#94)
+
     [Header("Blending")]
     public float poseBlendSeconds = 0.2f;  // Walk / sleep / dig weights ease over this
 
@@ -64,6 +67,10 @@ public class MotionTuning
 ///   Walk — phase advances with distance actually traveled (no skating at any speed); boots swing, arms counter-
 ///          swing, body bobs and leans into the direction of travel, head counter-bobs.
 ///   Idle — breathing and a slight head sway when nothing else owns the frame.
+///   Facing (#94) — the model root yaws toward its heading at turnDegreesPerSecond: the travel direction while
+///          moving, the work (Flags.FaceTarget) while stationary, otherwise the last heading. Yaw 0 puts the
+///          model's front at −Z (toward the camera); see HeadingYaw. Limb and body poses are model-local, so
+///          they turn with it.
 ///   Dig, Sleep, Eat, Lunge, Death — see their tunables in MotionTuning.
 /// A creature without a model (bare-staged in tests) has no driver; posing then no-ops at the call site.
 /// </summary>
@@ -77,6 +84,8 @@ public class CreatureMotion
         public bool Digging;
         public bool Sleeping;
         public bool Dead;
+        /// <summary>World point to face while stationary: the tile being worked, the opponent. Null: none.</summary>
+        public Vector3? FaceTarget;
     }
 
     private readonly Transform owner;
@@ -87,7 +96,7 @@ public class CreatureMotion
     private readonly MotionTuning t;
 
     private Vector3 lastPosition;
-    private Vector3 moveDirection = Vector3.back; // Toward the camera until it first moves
+    private float targetYaw; // Where the model is turning to; kept when nothing new asks (no return to camera)
     private float digClock;
     private float lungeClock = -1f;
     private Vector3 lungeDirection;
@@ -100,6 +109,9 @@ public class CreatureMotion
     public float SleepWeight { get; private set; }
     public float DigWeight { get; private set; }
     public float Clock { get; private set; }
+    /// <summary>The model's heading in degrees about +Y, in (−180, 180]; 0 faces the camera (−Z).</summary>
+    public float Yaw { get; private set; }
+    public float TargetYaw => targetYaw;
     public float DeathElapsed { get; private set; }
     public bool Dying { get; private set; }
     public PoseKind CurrentPose { get; private set; }
@@ -164,14 +176,24 @@ public class CreatureMotion
         if (deltaTime <= 0f) return; // Paused: frozen exactly where it was
 
         float distance = delta.magnitude;
-        if (distance > 1e-5f) moveDirection = delta / distance;
-        CurrentPose = SelectPose(flags.Dead || Dying, flags.Sleeping, flags.Digging, distance > 1e-5f);
+        bool moving = distance > 1e-5f;
+        CurrentPose = SelectPose(flags.Dead || Dying, flags.Sleeping, flags.Digging, moving);
 
         if (Dying)
         {
-            StepDeath(deltaTime);
+            StepDeath(deltaTime); // Heading is frozen through the fall
             return;
         }
+
+        Vector3? work = null;
+        if (flags.FaceTarget.HasValue)
+        {
+            Vector3 toWork = flags.FaceTarget.Value - owner.position;
+            toWork.y = 0f;
+            if (toWork.sqrMagnitude > 1e-6f) work = toWork;
+        }
+        targetYaw = SelectFacingYaw(moving ? delta : (Vector3?)null, flags.Sleeping, work, targetYaw);
+        Yaw = TurnToward(Yaw, targetYaw, t.turnDegreesPerSecond * deltaTime);
 
         Clock += deltaTime;
         Phase = AdvancePhase(Phase, distance, t.strideLength);
@@ -190,7 +212,9 @@ public class CreatureMotion
     private void Apply()
     {
         float w = WalkWeight;
-        Vector3 axis = Vector3.Cross(Vector3.up, moveDirection); // Limbs swing and the body leans along travel
+        // Pivots live in model-local space under the yaw, where the front is always −Z: limbs swing and the body
+        // leans along the model's own forward, so the walk turns with it.
+        Vector3 axis = Vector3.Cross(Vector3.up, Forward);
 
         // Walk: boots in opposite phase — each swings, lifts while it steps forward, and reaches out along travel
         // (out from under the body, where a rotation alone is too small to see); arms counter-swing.
@@ -225,24 +249,31 @@ public class CreatureMotion
         SetRotation(head, Quaternion.Euler(headPitch, 0f, headRoll));
 
         // Model root: walk bob, lunge step-in, and the lie-down on a cot.
+        // Offsets are in the owner's (world-aligned) space: the lunge toward the target, the cot's fixed spot.
         Vector3 offset = Vector3.up * (t.bobHeight * Mathf.Abs(Mathf.Sin(Phase)) * w)
                        + lungeDirection * (t.lungeDistance * lunge)
                        + t.sleepOffset * SleepWeight;
         model.localPosition = offset;
+        // Root rotation, applied right to left: the yaw; the waddle about the camera-facing axis (screen space,
+        // as #87 tuned it to read); the lie-down about the cot's long axis, head to the pillow (−X). Asleep, the
+        // heading is squared to ±Z (SleepYaw), so it lies on its side facing the way it came in.
         Quaternion lie = Quaternion.Slerp(Quaternion.identity, Quaternion.Euler(0f, 0f, t.sleepRollDegrees), SleepWeight);
-        model.localRotation = lie * Quaternion.Euler(0f, 0f, WaddleAngle(Phase, t.waddleDegrees, w));
+        model.localRotation = lie * Quaternion.Euler(0f, 0f, WaddleAngle(Phase, t.waddleDegrees, w)) * YawRotation(Yaw);
     }
 
     // The stepping foot (sin > 0 for the left) lifts; both reach ahead or behind along travel with the swing.
     private Vector3 FootOffset(float phase, bool left, float weight)
     {
         float s = Mathf.Sin(left ? phase : phase + Mathf.PI);
-        return (Vector3.up * (t.footLift * Mathf.Max(0f, s)) + moveDirection * (t.stepReach * s)) * weight;
+        return (Vector3.up * (t.footLift * Mathf.Max(0f, s)) + Forward * (t.stepReach * s)) * weight;
     }
 
-    // Lunges pitch toward the target; otherwise the body leans along travel.
+    // The model's front in its own space.
+    private static Vector3 Forward => Vector3.back;
+
+    // Lunges pitch toward the target (brought into model-local space); otherwise the body leans along travel.
     private Vector3 LeanAxis(Vector3 travelAxis, float lunge) =>
-        lunge > 0f ? Vector3.Cross(Vector3.up, lungeDirection) : travelAxis;
+        lunge > 0f ? Vector3.Cross(Vector3.up, Quaternion.Inverse(YawRotation(Yaw)) * lungeDirection) : travelAxis;
 
     private void StepDeath(float deltaTime)
     {
@@ -250,9 +281,10 @@ public class CreatureMotion
         float p = t.tipOverSeconds > 0f ? Mathf.Clamp01(DeathElapsed / t.tipOverSeconds) : 1f;
         float eased = p * p; // Accelerates like a fall
 
-        // Already lying (died asleep): stay down, no pop upright. Otherwise topple onto its right side.
+        // Already lying (died asleep): stay down, no pop upright. Otherwise topple sideways relative to its facing
+        // (a roll about its own forward axis, onto its local +X side).
         bool lying = SleepWeight > 0.5f;
-        Quaternion target = lying ? deathStartRotation : Quaternion.Euler(0f, 0f, -t.tipOverDegrees);
+        Quaternion target = lying ? deathStartRotation : YawRotation(Yaw) * Quaternion.Euler(0f, 0f, -t.tipOverDegrees);
         Vector3 targetPosition = lying ? deathStartPosition : new Vector3(0f, t.tipOverLift, 0f);
         model.localRotation = Quaternion.Slerp(deathStartRotation, target, eased);
         model.localPosition = Vector3.Lerp(deathStartPosition, targetPosition, eased);
@@ -288,6 +320,38 @@ public class CreatureMotion
     /// </summary>
     public static float WaddleAngle(float phase, float waddleDegrees, float weight) =>
         waddleDegrees * Mathf.Sin(phase) * weight;
+
+    /// <summary>
+    /// The yaw (degrees about +Y) that puts a model's front (−Z at yaw 0) along a ground direction:
+    /// −Z (toward the camera) 0, +Z (away) 180, +X −90, −X 90.
+    /// </summary>
+    public static float HeadingYaw(Vector3 direction) => Mathf.Atan2(-direction.x, -direction.z) * Mathf.Rad2Deg;
+
+    public static Quaternion YawRotation(float yaw) => Quaternion.Euler(0f, yaw, 0f);
+
+    /// <summary>One turn step: toward target on the shortest arc by at most maxDegrees, no overshoot; in (−180, 180].</summary>
+    public static float TurnToward(float yaw, float target, float maxDegrees)
+    {
+        float next = Mathf.MoveTowardsAngle(yaw, target, Mathf.Max(0f, maxDegrees));
+        float wrapped = Mathf.Repeat(next + 180f, 360f) - 180f;
+        return wrapped <= -180f ? 180f : wrapped;
+    }
+
+    /// <summary>
+    /// The heading to turn toward, in priority order: the movement direction while moving; squared to ±Z while
+    /// asleep (on its side across the cot, whichever of the two is nearer); the work while stationary and
+    /// working; otherwise the current target — the last heading, never back to the camera.
+    /// </summary>
+    public static float SelectFacingYaw(Vector3? movement, bool sleeping, Vector3? work, float currentTarget)
+    {
+        if (movement.HasValue) return HeadingYaw(movement.Value);
+        if (sleeping) return SleepYaw(currentTarget);
+        if (work.HasValue) return HeadingYaw(work.Value);
+        return currentTarget;
+    }
+
+    /// <summary>Asleep: the nearer of facing the camera (0) or away (180); a tie faces the camera.</summary>
+    public static float SleepYaw(float yaw) => Mathf.Abs(Mathf.DeltaAngle(yaw, 0f)) <= 90f ? 0f : 180f;
 
     /// <summary>Which pose owns the frame: death over sleep over dig over walk over idle.</summary>
     public static PoseKind SelectPose(bool dead, bool sleeping, bool digging, bool moving) =>

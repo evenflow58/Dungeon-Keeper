@@ -302,7 +302,13 @@ public class Goblin : MonoBehaviour
     {
         if (poser == null) return;
         if (ai == null) TryGetComponent(out ai);
-        poser.Step(deltaTime, new CreatureMotion.Flags { Sleeping = ai != null && ai.IsSleeping, Dead = IsDead });
+        Health opponent = ai != null ? ai.CurrentTarget : null; // Unity null checks, not ?.
+        poser.Step(deltaTime, new CreatureMotion.Flags
+        {
+            Sleeping = ai != null && ai.IsSleeping,
+            Dead = IsDead,
+            FaceTarget = opponent != null ? opponent.transform.position : (Vector3?)null, // Fighting: face it (#94)
+        });
         if (IsDead && poser.DeathComplete) gameObject.SetActive(false);
     }
 

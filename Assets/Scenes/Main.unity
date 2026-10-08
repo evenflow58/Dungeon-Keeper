@@ -178,6 +178,7 @@ MonoBehaviour:
     breathingRate: 0.25
     breathingAmount: 0.02
     headSwayDegrees: 1.5
+    turnDegreesPerSecond: 540
     poseBlendSeconds: 0.2
     tipOverSeconds: 0.35
     tipOverDegrees: 85
@@ -877,6 +878,7 @@ MonoBehaviour:
     breathingRate: 0.25
     breathingAmount: 0.02
     headSwayDegrees: 1.5
+    turnDegreesPerSecond: 540
     poseBlendSeconds: 0.2
     tipOverSeconds: 0.35
     tipOverDegrees: 85
@@ -1071,6 +1073,7 @@ MonoBehaviour:
     breathingRate: 0.25
     breathingAmount: 0.02
     headSwayDegrees: 1.5
+    turnDegreesPerSecond: 540
     poseBlendSeconds: 0.2
     tipOverSeconds: 0.35
     tipOverDegrees: 85
@@ -1286,6 +1289,7 @@ MonoBehaviour:
     breathingRate: 0.25
     breathingAmount: 0.02
     headSwayDegrees: 1.5
+    turnDegreesPerSecond: 540
     poseBlendSeconds: 0.2
     tipOverSeconds: 0.35
     tipOverDegrees: 85

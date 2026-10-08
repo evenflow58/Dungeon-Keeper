@@ -106,7 +106,7 @@ public class CreatureMotionTests
         for (int i = 0; i < 40; i++) { goblin.transform.position += Vector3.right * 0.06f; goblin.Pose(Dt); }
         Transform bootL = Pivot(goblin, CreatureModel.BootLeftPivot), bootR = Pivot(goblin, CreatureModel.BootRightPivot);
         Transform armL = Pivot(goblin, CreatureModel.ArmLeftPivot);
-        Vector3 axis = Vector3.Cross(Vector3.up, Vector3.right); // Walking +X swings about this axis
+        Vector3 axis = Vector3.Cross(Vector3.up, Vector3.back); // Model-local: limbs swing along the model's own front (−Z)
         float l = SignedAngle(bootL.localRotation, axis), r = SignedAngle(bootR.localRotation, axis), a = SignedAngle(armL.localRotation, axis);
         Assert.AreEqual(-l, r, 0.5f, "Boots mirror each other");
         Assert.LessOrEqual(a * l, 0f, "Left arm swings against the left boot");
@@ -138,12 +138,11 @@ public class CreatureMotionTests
         {
             goblin.transform.position += Vector3.right * 0.06f; // 3 t/s along +X
             goblin.Pose(Dt);
-            Vector3 e = goblin.Model.transform.localEulerAngles;
-            maxRock = Mathf.Max(maxRock, Mathf.Abs(e.z > 180f ? e.z - 360f : e.z));
+            maxRock = Mathf.Max(maxRock, Vector3.Angle(goblin.Model.transform.up, Vector3.up)); // Yaw doesn't tilt
             float liftL = bootL.localPosition.y - restL.y, liftR = bootR.localPosition.y - restR.y;
             maxLiftL = Mathf.Max(maxLiftL, liftL);
             maxLiftR = Mathf.Max(maxLiftR, liftR);
-            maxReach = Mathf.Max(maxReach, Mathf.Abs(bootL.localPosition.x - restL.x));
+            maxReach = Mathf.Max(maxReach, Mathf.Abs(bootL.localPosition.z - restL.z)); // Along the model's front
             if (liftL > 0.01f && liftR > 0.01f) bothUpAtOnce = true;
         }
         Assert.Greater(maxRock, 6f, "The body rocks visibly");
@@ -154,7 +153,160 @@ public class CreatureMotionTests
 
         for (int i = 0; i < 30; i++) goblin.Pose(Dt); // Stop: settle back
         Assert.Less(Vector3.Distance(restL, bootL.localPosition), 1e-3f, "Feet plant back at rest");
-        Assert.Less(Quaternion.Angle(Quaternion.identity, goblin.Model.transform.localRotation), 0.5f, "Upright at rest");
+        Assert.Less(Vector3.Angle(goblin.Model.transform.up, Vector3.up), 0.5f, "Upright at rest");
+    }
+
+    // --- Facing (#94): yaw 0 puts the model's front (−Z) toward the camera ---
+
+    private static Vector3 Front(Goblin g) => g.Model.transform.TransformDirection(Vector3.back);
+
+    [Test]
+    public void HeadingYaw_PutsTheFrontAlongEachBoardDirection()
+    {
+        Assert.AreEqual(0f, CreatureMotion.HeadingYaw(Vector3.back), 1e-4f, "South (toward the camera): face visible");
+        Assert.AreEqual(180f, Mathf.Abs(CreatureMotion.HeadingYaw(Vector3.forward)), 1e-4f, "North (away): back to camera");
+        Assert.AreEqual(-90f, CreatureMotion.HeadingYaw(Vector3.right), 1e-4f, "East: profile");
+        Assert.AreEqual(90f, CreatureMotion.HeadingYaw(Vector3.left), 1e-4f, "West: profile");
+        foreach (Vector3 d in new[] { Vector3.back, Vector3.forward, Vector3.right, Vector3.left })
+        {
+            Vector3 front = CreatureMotion.YawRotation(CreatureMotion.HeadingYaw(d)) * Vector3.back;
+            Assert.Less(Vector3.Distance(d, front), 1e-4f, $"Front lies along {d}");
+        }
+    }
+
+    [Test]
+    public void TurnToward_TakesTheShortArc_AtTheRate_WithoutOvershoot()
+    {
+        Assert.AreEqual(10f, CreatureMotion.TurnToward(0f, 90f, 10f), 1e-4f, "90° one way: turns that way");
+        Assert.AreEqual(-10f, CreatureMotion.TurnToward(0f, -90f, 10f), 1e-4f, "90° the other way");
+        Assert.AreEqual(-10f, CreatureMotion.TurnToward(0f, 270f, 10f), 1e-4f, "270° is 90° the short way");
+        Assert.AreEqual(180f, CreatureMotion.TurnToward(170f, -170f, 10f), 1e-4f, "Across the ±180 seam, not the long way");
+        Assert.AreEqual(5f, CreatureMotion.TurnToward(0f, 5f, 10f), 1e-4f, "Lands on the target, no overshoot");
+        Assert.AreEqual(30f, CreatureMotion.TurnToward(30f, 90f, 0f), "Zero step: no change");
+
+        float yaw = 0f, prevGap = 180f;
+        for (int i = 0; i < 40; i++)
+        {
+            yaw = CreatureMotion.TurnToward(yaw, 135f, 10.8f);
+            float gap = Mathf.Abs(Mathf.DeltaAngle(yaw, 135f));
+            Assert.LessOrEqual(gap, prevGap, "Closes monotonically, never hunts");
+            prevGap = gap;
+        }
+        Assert.AreEqual(135f, yaw, 1e-4f, "Arrives and holds");
+    }
+
+    [Test]
+    public void SelectFacingYaw_MovingBeatsWorkingBeatsLastHeading()
+    {
+        Assert.AreEqual(-90f, CreatureMotion.SelectFacingYaw(Vector3.right, false, Vector3.left, 45f), 1e-4f, "Moving wins over work");
+        Assert.AreEqual(90f, CreatureMotion.SelectFacingYaw(null, false, Vector3.left, 45f), 1e-4f, "Stationary: face the work");
+        Assert.AreEqual(45f, CreatureMotion.SelectFacingYaw(null, false, null, 45f), "Idle: keep the last heading");
+        Assert.AreEqual(180f, CreatureMotion.SelectFacingYaw(null, true, Vector3.left, 150f), "Asleep: squared to the nearer of ±Z");
+        Assert.AreEqual(0f, CreatureMotion.SleepYaw(-60f));
+        Assert.AreEqual(0f, CreatureMotion.SleepYaw(90f), "A tie faces the camera");
+        Assert.AreEqual(180f, CreatureMotion.SleepYaw(-120f));
+    }
+
+    [Test]
+    public void Walking_TurnsTowardTravel_AtTheTurnRate_ThenKeepsTheHeadingWhenIdle()
+    {
+        Goblin goblin = ModeledGoblin();
+        float rate = new MotionTuning().turnDegreesPerSecond;
+        goblin.Pose(Dt);
+        Assert.AreEqual(0f, goblin.Motion.Yaw, 1e-4f, "Spawns facing the camera");
+
+        goblin.transform.position += Vector3.forward * 0.06f; // North, away from the camera
+        goblin.Pose(Dt);
+        Assert.AreEqual(rate * Dt, Mathf.Abs(goblin.Motion.Yaw), 1e-3f, "One step of turn, not a snap");
+
+        for (int i = 0; i < 30; i++) { goblin.transform.position += Vector3.forward * 0.06f; goblin.Pose(Dt); }
+        Assert.Less(Vector3.Distance(Front(goblin), Vector3.forward), 0.01f, "Back to the camera, walking north");
+
+        for (int i = 0; i < 100; i++) goblin.Pose(Dt); // Idle for 2 s
+        Assert.Less(Vector3.Distance(Front(goblin), Vector3.forward), 0.01f, "Keeps its heading: no snap back to the camera");
+
+        for (int i = 0; i < 30; i++) { goblin.transform.position += Vector3.right * 0.06f; goblin.Pose(Dt); }
+        // Mid-walk the waddle (a roll about Z) tilts an east-pointing front out of the ground plane, so read the yaw.
+        Assert.AreEqual(-90f, goblin.Motion.Yaw, 1e-3f, "Corner: turns to profile walking east");
+    }
+
+    [Test]
+    public void Paused_FreezesMidTurn_ResumeCompletesIt()
+    {
+        Goblin goblin = ModeledGoblin();
+        goblin.Pose(Dt);
+        for (int i = 0; i < 5; i++) { goblin.transform.position += Vector3.left * 0.06f; goblin.Pose(Dt); }
+        float mid = goblin.Motion.Yaw;
+        Assert.That(mid, Is.GreaterThan(5f).And.LessThan(85f), "Mid-turn toward west (90)");
+
+        Quaternion frozen = goblin.Model.transform.localRotation;
+        for (int i = 0; i < 20; i++) goblin.Pose(0f);
+        Assert.AreEqual(mid, goblin.Motion.Yaw, "Paused: the turn holds");
+        Assert.AreEqual(0f, Quaternion.Angle(frozen, goblin.Model.transform.localRotation), 1e-3f);
+
+        for (int i = 0; i < 20; i++) goblin.Pose(Dt);
+        Assert.AreEqual(90f, goblin.Motion.Yaw, 1e-3f, "Resumed: finishes turning west");
+    }
+
+    [Test]
+    public void Stationary_Work_TurnsToFaceIt()
+    {
+        Goblin goblin = ModeledGoblin();
+        CreatureMotion m = goblin.Motion;
+        Vector3 east = goblin.transform.position + Vector3.right;
+        for (int i = 0; i < 20; i++) m.Step(Dt, new CreatureMotion.Flags { Digging = true, FaceTarget = east });
+        Assert.Less(Vector3.Distance(Front(goblin), Vector3.right), 0.01f, "Faces the work tile");
+
+        for (int i = 0; i < 20; i++) m.Step(Dt, new CreatureMotion.Flags());
+        Assert.Less(Vector3.Distance(Front(goblin), Vector3.right), 0.01f, "Work done: keeps facing it");
+
+        for (int i = 0; i < 20; i++)
+        {
+            goblin.transform.position += Vector3.back * 0.06f;
+            m.Step(Dt, new CreatureMotion.Flags { FaceTarget = goblin.transform.position + Vector3.right });
+        }
+        Assert.Less(Vector3.Distance(Front(goblin), Vector3.back), 0.01f, "Walking off: travel beats the work");
+    }
+
+    [Test]
+    public void Sleeping_AfterWalkingNorth_LiesOnTheCotFacingNorth_HeadToThePillow()
+    {
+        Goblin goblin = ModeledGoblin();
+        CreatureMotion m = goblin.Motion;
+        m.Step(Dt, new CreatureMotion.Flags());
+        for (int i = 0; i < 30; i++) { goblin.transform.position += Vector3.forward * 0.06f; m.Step(Dt, new CreatureMotion.Flags()); }
+        for (int i = 0; i < 30; i++) m.Step(Dt, new CreatureMotion.Flags { Sleeping = true });
+
+        Assert.Less(goblin.Model.transform.up.x, -0.95f, "Lying along the cot, head toward the pillow (−X)");
+        Assert.Greater(Vector3.Dot(Front(goblin), Vector3.forward), 0.95f, "Still facing north, on its side");
+    }
+
+    [Test]
+    public void Sleeping_AfterWalkingEast_SquaresToTheCot_HeadStillToThePillow()
+    {
+        Goblin goblin = ModeledGoblin();
+        CreatureMotion m = goblin.Motion;
+        m.Step(Dt, new CreatureMotion.Flags());
+        for (int i = 0; i < 30; i++) { goblin.transform.position += Vector3.right * 0.06f; m.Step(Dt, new CreatureMotion.Flags()); }
+        for (int i = 0; i < 30; i++) m.Step(Dt, new CreatureMotion.Flags { Sleeping = true });
+
+        Assert.Less(goblin.Model.transform.up.x, -0.95f, "Head on the pillow whatever the arrival heading");
+        Assert.Greater(Mathf.Abs(Front(goblin).z), 0.95f, "On its side (facing ±Z), not face-down or face-up");
+    }
+
+    [Test]
+    public void Death_TipsOverSidewaysRelativeToFacing()
+    {
+        Goblin goblin = ModeledGoblin();
+        goblin.Pose(Dt);
+        for (int i = 0; i < 30; i++) { goblin.transform.position += Vector3.right * 0.06f; goblin.Pose(Dt); }
+        for (int i = 0; i < 20; i++) goblin.Pose(Dt); // Stand still facing east
+
+        goblin.Motion.BeginDeath();
+        for (int i = 0; i < 30; i++) goblin.Motion.Step(Dt, new CreatureMotion.Flags { Dead = true });
+        Vector3 up = goblin.Model.transform.up;
+        Assert.Greater(Mathf.Abs(up.z), 0.95f, "Fell to its side (across its east facing), not on its face or back");
+        Assert.Less(Mathf.Abs(up.x), 0.1f);
     }
 
     // --- Pose selection and blending ---

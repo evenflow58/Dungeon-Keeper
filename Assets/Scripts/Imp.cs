@@ -184,6 +184,13 @@ public class Imp : MonoBehaviour
         if (poser == null) return;
         if (digger == null) TryGetComponent(out digger);
         bool working = digger != null && (digger.IsDigging || digger.IsRearming);
-        poser.Step(deltaTime, new CreatureMotion.Flags { Digging = working });
+        poser.Step(deltaTime, new CreatureMotion.Flags { Digging = working, FaceTarget = working ? WorkPoint() : null });
+    }
+
+    // The tile being worked (#94): the trap being rearmed, else the rock being dug. Unity null check on the trap.
+    private Vector3? WorkPoint()
+    {
+        if (digger.CurrentTrap != null) return digger.CurrentTrap.transform.position;
+        return digger.CurrentTarget.HasValue ? TileCenter(digger.CurrentTarget.Value) : (Vector3?)null;
     }
 }

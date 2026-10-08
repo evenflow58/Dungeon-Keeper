@@ -192,9 +192,10 @@ MonoBehaviour:
     digRaiseSeconds: 0.25
     digStrikeSeconds: 0.1
     digRecoverSeconds: 0.25
-    digRaiseDegrees: 110
-    digStrikeDegrees: -15
     digBodyDegrees: 6
+    digReadyPoint: {x: 0, y: 0.45, z: -0.6}
+    digRaisePoint: {x: 0, y: 1, z: 0.15}
+    digStrikePoint: {x: 0, y: 0.05, z: -1}
     buildCycleSeconds: 0.8
     buildCrouchDegrees: 20
     buildDipHeight: 0.06
@@ -900,9 +901,10 @@ MonoBehaviour:
     digRaiseSeconds: 0.25
     digStrikeSeconds: 0.1
     digRecoverSeconds: 0.25
-    digRaiseDegrees: 110
-    digStrikeDegrees: -15
     digBodyDegrees: 6
+    digReadyPoint: {x: 0, y: 0.45, z: -0.6}
+    digRaisePoint: {x: 0, y: 1, z: 0.15}
+    digStrikePoint: {x: 0, y: 0.05, z: -1}
     buildCycleSeconds: 0.8
     buildCrouchDegrees: 20
     buildDipHeight: 0.06
@@ -1100,9 +1102,10 @@ MonoBehaviour:
     digRaiseSeconds: 0.25
     digStrikeSeconds: 0.1
     digRecoverSeconds: 0.25
-    digRaiseDegrees: 110
-    digStrikeDegrees: -15
     digBodyDegrees: 6
+    digReadyPoint: {x: 0, y: 0.45, z: -0.6}
+    digRaisePoint: {x: 0, y: 1, z: 0.15}
+    digStrikePoint: {x: 0, y: 0.05, z: -1}
     buildCycleSeconds: 0.8
     buildCrouchDegrees: 20
     buildDipHeight: 0.06
@@ -1321,9 +1324,10 @@ MonoBehaviour:
     digRaiseSeconds: 0.25
     digStrikeSeconds: 0.1
     digRecoverSeconds: 0.25
-    digRaiseDegrees: 110
-    digStrikeDegrees: -15
     digBodyDegrees: 6
+    digReadyPoint: {x: 0, y: 0.45, z: -0.6}
+    digRaisePoint: {x: 0, y: 1, z: 0.15}
+    digStrikePoint: {x: 0, y: 0.05, z: -1}
     buildCycleSeconds: 0.8
     buildCrouchDegrees: 20
     buildDipHeight: 0.06

@@ -119,6 +119,44 @@ public class CreatureMotionTests
         return Vector3.Dot(qAxis, axis) >= 0f ? angle : -angle;
     }
 
+    [Test]
+    public void Walk_Waddles_AndFeetLiftAndStepOut_SoItReadsFromTheCamera()
+    {
+        // The rotation-only swing of small boots under the vest was too subtle to see at game zoom: the walk
+        // must change the silhouette — the body rocks foot to foot and the feet visibly step.
+        Assert.AreEqual(8f, CreatureMotion.WaddleAngle(Mathf.PI / 2f, 8f, 1f), 1e-4f);
+        Assert.AreEqual(-8f, CreatureMotion.WaddleAngle(3f * Mathf.PI / 2f, 8f, 1f), 1e-4f, "Rocks back the other way");
+
+        Goblin goblin = ModeledGoblin();
+        Transform bootL = Pivot(goblin, CreatureModel.BootLeftPivot), bootR = Pivot(goblin, CreatureModel.BootRightPivot);
+        Vector3 restL = bootL.localPosition, restR = bootR.localPosition;
+        goblin.Pose(Dt);
+
+        float maxRock = 0f, maxLiftL = 0f, maxLiftR = 0f, maxReach = 0f;
+        bool bothUpAtOnce = false;
+        for (int i = 0; i < 60; i++)
+        {
+            goblin.transform.position += Vector3.right * 0.06f; // 3 t/s along +X
+            goblin.Pose(Dt);
+            Vector3 e = goblin.Model.transform.localEulerAngles;
+            maxRock = Mathf.Max(maxRock, Mathf.Abs(e.z > 180f ? e.z - 360f : e.z));
+            float liftL = bootL.localPosition.y - restL.y, liftR = bootR.localPosition.y - restR.y;
+            maxLiftL = Mathf.Max(maxLiftL, liftL);
+            maxLiftR = Mathf.Max(maxLiftR, liftR);
+            maxReach = Mathf.Max(maxReach, Mathf.Abs(bootL.localPosition.x - restL.x));
+            if (liftL > 0.01f && liftR > 0.01f) bothUpAtOnce = true;
+        }
+        Assert.Greater(maxRock, 6f, "The body rocks visibly");
+        Assert.Greater(maxLiftL, 0.04f, "Left foot lifts");
+        Assert.Greater(maxLiftR, 0.04f, "Right foot lifts");
+        Assert.IsFalse(bothUpAtOnce, "Feet alternate: never both off the ground");
+        Assert.Greater(maxReach, 0.04f, "Feet step out along travel");
+
+        for (int i = 0; i < 30; i++) goblin.Pose(Dt); // Stop: settle back
+        Assert.Less(Vector3.Distance(restL, bootL.localPosition), 1e-3f, "Feet plant back at rest");
+        Assert.Less(Quaternion.Angle(Quaternion.identity, goblin.Model.transform.localRotation), 0.5f, "Upright at rest");
+    }
+
     // --- Pose selection and blending ---
 
     [Test]

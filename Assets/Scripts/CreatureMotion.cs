@@ -7,8 +7,11 @@ public class MotionTuning
     [Header("Walk")]
     public float strideLength = 0.6f;      // Tiles of travel per full cycle (two steps): ~5 steps/s at a goblin's 3 t/s
     public float swingDegrees = 28f;       // Boot swing at the ankles
-    public float armSwingDegrees = 24f;    // Arms counter-swing against the same-side boot
-    public float bobHeight = 0.03f;        // Tiles, twice per cycle
+    public float armSwingDegrees = 35f;    // Arms counter-swing against the same-side boot
+    public float bobHeight = 0.05f;        // Tiles, twice per cycle (a bounce on each step)
+    public float waddleDegrees = 8f;       // The whole body rocks foot to foot, in screen space: reads from the camera at any heading
+    public float footLift = 0.05f;         // Tiles: the stepping boot lifts off the ground
+    public float stepReach = 0.05f;        // Tiles: boots step out ahead/behind along travel, out from under the body
     public float leanDegrees = 5f;         // Body leans into the direction of travel
     public float headBobDegrees = 2f;      // Head counter-bob
     public float fullWalkSpeed = 1f;       // Tiles/s at which the walk pose is fully weighted
@@ -50,8 +53,8 @@ public class MotionTuning
     public float sleepBreathingFactor = 0.5f; // Slower breathing asleep
 
     public static MotionTuning Goblin() => new MotionTuning();
-    public static MotionTuning Imp() => new MotionTuning { strideLength = 0.55f, bobHeight = 0.025f };
-    public static MotionTuning Hero() => new MotionTuning { strideLength = 0.7f, swingDegrees = 25f, armSwingDegrees = 18f, bobHeight = 0.025f };
+    public static MotionTuning Imp() => new MotionTuning { strideLength = 0.55f, bobHeight = 0.04f, footLift = 0.04f, stepReach = 0.04f };
+    public static MotionTuning Hero() => new MotionTuning { strideLength = 0.7f, swingDegrees = 25f, armSwingDegrees = 25f, bobHeight = 0.04f, waddleDegrees = 5f };
 }
 
 /// <summary>
@@ -80,6 +83,7 @@ public class CreatureMotion
     private readonly Transform model;
     private readonly Transform body, head, bootLeft, bootRight, armLeft, armRight;
     private readonly Vector3 bodyRestScale;
+    private readonly Vector3 bootLeftRest, bootRightRest;
     private readonly MotionTuning t;
 
     private Vector3 lastPosition;
@@ -117,6 +121,8 @@ public class CreatureMotion
         armLeft = CreatureModel.FindPivot(modelObject, CreatureModel.ArmLeftPivot);
         armRight = CreatureModel.FindPivot(modelObject, CreatureModel.ArmRightPivot);
         bodyRestScale = body != null ? body.localScale : Vector3.one;
+        bootLeftRest = bootLeft != null ? bootLeft.localPosition : Vector3.zero;
+        bootRightRest = bootRight != null ? bootRight.localPosition : Vector3.zero;
         lastPosition = owner.position;
     }
 
@@ -186,9 +192,12 @@ public class CreatureMotion
         float w = WalkWeight;
         Vector3 axis = Vector3.Cross(Vector3.up, moveDirection); // Limbs swing and the body leans along travel
 
-        // Walk: boots in opposite phase, arms counter-swing against the same-side boot.
+        // Walk: boots in opposite phase — each swings, lifts while it steps forward, and reaches out along travel
+        // (out from under the body, where a rotation alone is too small to see); arms counter-swing.
         SetRotation(bootLeft, Quaternion.AngleAxis(BootSwing(Phase, t.swingDegrees, w, true), axis));
         SetRotation(bootRight, Quaternion.AngleAxis(BootSwing(Phase, t.swingDegrees, w, false), axis));
+        SetPosition(bootLeft, bootLeftRest + FootOffset(Phase, true, w));
+        SetPosition(bootRight, bootRightRest + FootOffset(Phase, false, w));
         Quaternion armLeftPose = Quaternion.AngleAxis(-BootSwing(Phase, t.armSwingDegrees, w, true), axis);
         Quaternion armRightPose = Quaternion.AngleAxis(-BootSwing(Phase, t.armSwingDegrees, w, false), axis);
 
@@ -220,7 +229,15 @@ public class CreatureMotion
                        + lungeDirection * (t.lungeDistance * lunge)
                        + t.sleepOffset * SleepWeight;
         model.localPosition = offset;
-        model.localRotation = Quaternion.Slerp(Quaternion.identity, Quaternion.Euler(0f, 0f, t.sleepRollDegrees), SleepWeight);
+        Quaternion lie = Quaternion.Slerp(Quaternion.identity, Quaternion.Euler(0f, 0f, t.sleepRollDegrees), SleepWeight);
+        model.localRotation = lie * Quaternion.Euler(0f, 0f, WaddleAngle(Phase, t.waddleDegrees, w));
+    }
+
+    // The stepping foot (sin > 0 for the left) lifts; both reach ahead or behind along travel with the swing.
+    private Vector3 FootOffset(float phase, bool left, float weight)
+    {
+        float s = Mathf.Sin(left ? phase : phase + Mathf.PI);
+        return (Vector3.up * (t.footLift * Mathf.Max(0f, s)) + moveDirection * (t.stepReach * s)) * weight;
     }
 
     // Lunges pitch toward the target; otherwise the body leans along travel.
@@ -246,6 +263,11 @@ public class CreatureMotion
         if (pivot != null) pivot.localRotation = rotation;
     }
 
+    private static void SetPosition(Transform pivot, Vector3 position)
+    {
+        if (pivot != null) pivot.localPosition = position;
+    }
+
     // ---- pure math (EditMode-tested) ----
 
     /// <summary>Walk phase after traveling distance: one full cycle (2π) per strideLength — distance, not time.</summary>
@@ -259,6 +281,13 @@ public class CreatureMotion
     /// <summary>A boot's swing angle at a phase: the left leads, the right is half a cycle behind.</summary>
     public static float BootSwing(float phase, float swingDegrees, float weight, bool left) =>
         swingDegrees * Mathf.Sin(left ? phase : phase + Mathf.PI) * weight;
+
+    /// <summary>
+    /// The waddle: the whole model rocks foot to foot about the camera-facing axis, toward the planted (left at
+    /// phase π/2) foot — a toy walk whose silhouette change reads from above at any heading.
+    /// </summary>
+    public static float WaddleAngle(float phase, float waddleDegrees, float weight) =>
+        waddleDegrees * Mathf.Sin(phase) * weight;
 
     /// <summary>Which pose owns the frame: death over sleep over dig over walk over idle.</summary>
     public static PoseKind SelectPose(bool dead, bool sleeping, bool digging, bool moving) =>

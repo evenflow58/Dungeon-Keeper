@@ -167,8 +167,11 @@ MonoBehaviour:
   motion:
     strideLength: 0.55
     swingDegrees: 28
-    armSwingDegrees: 24
-    bobHeight: 0.025
+    armSwingDegrees: 35
+    bobHeight: 0.04
+    waddleDegrees: 8
+    footLift: 0.04
+    stepReach: 0.04
     leanDegrees: 5
     headBobDegrees: 2
     fullWalkSpeed: 1
@@ -861,8 +864,11 @@ MonoBehaviour:
   motion:
     strideLength: 0.6
     swingDegrees: 28
-    armSwingDegrees: 24
-    bobHeight: 0.03
+    armSwingDegrees: 35
+    bobHeight: 0.05
+    waddleDegrees: 8
+    footLift: 0.05
+    stepReach: 0.05
     leanDegrees: 5
     headBobDegrees: 2
     fullWalkSpeed: 1
@@ -1052,8 +1058,11 @@ MonoBehaviour:
   motion:
     strideLength: 0.6
     swingDegrees: 28
-    armSwingDegrees: 24
-    bobHeight: 0.03
+    armSwingDegrees: 35
+    bobHeight: 0.05
+    waddleDegrees: 8
+    footLift: 0.05
+    stepReach: 0.05
     leanDegrees: 5
     headBobDegrees: 2
     fullWalkSpeed: 1
@@ -1264,8 +1273,11 @@ MonoBehaviour:
   motion:
     strideLength: 0.6
     swingDegrees: 28
-    armSwingDegrees: 24
-    bobHeight: 0.03
+    armSwingDegrees: 35
+    bobHeight: 0.05
+    waddleDegrees: 8
+    footLift: 0.05
+    stepReach: 0.05
     leanDegrees: 5
     headBobDegrees: 2
     fullWalkSpeed: 1

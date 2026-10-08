@@ -178,15 +178,16 @@ public class Imp : MonoBehaviour
     /// <summary>
     /// Steps the pose driver by deltaTime (game time). Called from Update after Advance; public so tests can step
     /// it. The pickaxe swings while ImpDigger is digging or rearming; while building (#92) the imp faces the site
-    /// (its build pose is #93). No-op without a model.
+    /// and plays the crouch-and-rise build loop (#93). No-op without a model.
     /// </summary>
     public void Pose(float deltaTime)
     {
         if (poser == null) return;
         if (digger == null) TryGetComponent(out digger);
         bool swinging = digger != null && (digger.IsDigging || digger.IsRearming);
-        bool working = swinging || (digger != null && digger.IsBuilding);
-        poser.Step(deltaTime, new CreatureMotion.Flags { Digging = swinging, FaceTarget = working ? WorkPoint() : null });
+        bool building = digger != null && digger.IsBuilding;
+        bool working = swinging || building;
+        poser.Step(deltaTime, new CreatureMotion.Flags { Digging = swinging, Building = building, FaceTarget = working ? WorkPoint() : null });
     }
 
     // The tile being worked (#94): the site being built, the trap being rearmed, else the rock being dug.

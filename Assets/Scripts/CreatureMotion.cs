@@ -50,13 +50,24 @@ public class MotionTuning
     public float digStrikeDegrees = -15f;  // Follow-through below rest
     public float digBodyDegrees = 6f;      // Body pitch on the strike
 
+    [Header("Build (#93)")]
+    public float buildCycleSeconds = 0.8f;   // One crouch-and-rise with its pat at the bottom
+    public float buildCrouchDegrees = 20f;   // Body pitches forward toward the site at the bottom of the crouch
+    public float buildDipHeight = 0.06f;     // Tiles: the whole model dips at the bottom of the crouch
+    public float buildArmReachDegrees = 75f; // Working arm reaches forward and down to the site (not overhead)
+    public float buildArmRestFraction = 0.45f; // The arm's reach at the top of the rise, as a fraction of full
+
     [Header("Sleep")]
     public float sleepRollDegrees = 80f;   // Lies down head-toward the pillow (−X)
     public Vector3 sleepOffset = new Vector3(0.38f, 0.3f, 0f); // Model offset while lying on the cot
     public float sleepBreathingFactor = 0.5f; // Slower breathing asleep
 
     public static MotionTuning Goblin() => new MotionTuning();
-    public static MotionTuning Imp() => new MotionTuning { strideLength = 0.55f, bobHeight = 0.04f, footLift = 0.04f, stepReach = 0.04f };
+    public static MotionTuning Imp() => new MotionTuning
+    {
+        strideLength = 0.55f, bobHeight = 0.04f, footLift = 0.04f, stepReach = 0.04f,
+        buildCycleSeconds = 0.8f, buildCrouchDegrees = 20f, buildDipHeight = 0.06f, buildArmReachDegrees = 75f, buildArmRestFraction = 0.45f,
+    };
     public static MotionTuning Hero() => new MotionTuning { strideLength = 0.7f, swingDegrees = 25f, armSwingDegrees = 25f, bobHeight = 0.04f, waddleDegrees = 5f };
 }
 
@@ -71,17 +82,19 @@ public class MotionTuning
 ///          moving, the work (Flags.FaceTarget) while stationary, otherwise the last heading. Yaw 0 puts the
 ///          model's front at −Z (toward the camera); see HeadingYaw. Limb and body poses are model-local, so
 ///          they turn with it.
-///   Dig, Sleep, Eat, Lunge, Death — see their tunables in MotionTuning.
+///   Dig, Build, Sleep, Eat, Lunge, Death — see their tunables in MotionTuning.
 /// A creature without a model (bare-staged in tests) has no driver; posing then no-ops at the call site.
 /// </summary>
 public class CreatureMotion
 {
-    public enum PoseKind { Idle, Walk, Dig, Sleep, Dead }
+    public enum PoseKind { Idle, Walk, Dig, Building, Sleep, Dead }
 
     /// <summary>What the creature is doing this step (presentation inputs; derived from sim state).</summary>
     public struct Flags
     {
         public bool Digging;
+        /// <summary>Building a construction site (#93): the crouch-and-rise work loop.</summary>
+        public bool Building;
         public bool Sleeping;
         public bool Dead;
         /// <summary>World point to face while stationary: the tile being worked, the opponent. Null: none.</summary>
@@ -98,6 +111,7 @@ public class CreatureMotion
     private Vector3 lastPosition;
     private float targetYaw; // Where the model is turning to; kept when nothing new asks (no return to camera)
     private float digClock;
+    private float buildClock;
     private float lungeClock = -1f;
     private Vector3 lungeDirection;
     private float eatClock = -1f;
@@ -108,6 +122,7 @@ public class CreatureMotion
     public float WalkWeight { get; private set; }
     public float SleepWeight { get; private set; }
     public float DigWeight { get; private set; }
+    public float BuildWeight { get; private set; }
     public float Clock { get; private set; }
     /// <summary>The model's heading in degrees about +Y, in (−180, 180]; 0 faces the camera (−Z).</summary>
     public float Yaw { get; private set; }
@@ -177,7 +192,7 @@ public class CreatureMotion
 
         float distance = delta.magnitude;
         bool moving = distance > 1e-5f;
-        CurrentPose = SelectPose(flags.Dead || Dying, flags.Sleeping, flags.Digging, moving);
+        CurrentPose = SelectPose(flags.Dead || Dying, flags.Sleeping, flags.Digging, flags.Building, moving);
 
         if (Dying)
         {
@@ -203,6 +218,8 @@ public class CreatureMotion
         SleepWeight = Mathf.MoveTowards(SleepWeight, flags.Sleeping ? 1f : 0f, rate);
         DigWeight = Mathf.MoveTowards(DigWeight, flags.Digging ? 1f : 0f, rate);
         if (flags.Digging) digClock += deltaTime;
+        BuildWeight = Mathf.MoveTowards(BuildWeight, flags.Building ? 1f : 0f, rate);
+        if (flags.Building) buildClock += deltaTime;
         if (lungeClock >= 0f) lungeClock += deltaTime;
         if (eatClock >= 0f) eatClock += deltaTime;
 
@@ -228,6 +245,10 @@ public class CreatureMotion
         // Dig: the right (pickaxe) arm chops in a loop; the body pitches into each strike.
         float digArm = DigArmAngle(digClock, t) * DigWeight;
         if (DigWeight > 0f) armRightPose = Quaternion.Slerp(armRightPose, Quaternion.Euler(0f, 0f, digArm), DigWeight);
+        // Build: the same arm reaches forward and down to the site (a pitch, not the dig's overhead roll), patting
+        // deepest at the bottom of each crouch.
+        float crouch = BuildCrouch(buildClock, t);
+        if (BuildWeight > 0f) armRightPose = Quaternion.Slerp(armRightPose, Quaternion.Euler(BuildArmAngle(buildClock, t), 0f, 0f), BuildWeight);
         SetRotation(armLeft, armLeftPose);
         SetRotation(armRight, armRightPose);
 
@@ -240,7 +261,7 @@ public class CreatureMotion
         float lunge = LungeAmount(lungeClock, t);
         float strike = DigWeight * DigStrikeAmount(digClock, t);
         Quaternion bodyPose = Quaternion.AngleAxis(t.leanDegrees * w + t.lungeDegrees * lunge, LeanAxis(axis, lunge))
-                            * Quaternion.Euler(-t.digBodyDegrees * strike, 0f, 0f);
+                            * Quaternion.Euler(-t.digBodyDegrees * strike - t.buildCrouchDegrees * crouch * BuildWeight, 0f, 0f);
         SetRotation(body, bodyPose);
 
         // Head: counter-bob on the walk, a slight sway at rest, a dip when eating.
@@ -252,7 +273,8 @@ public class CreatureMotion
         // Offsets are in the owner's (world-aligned) space: the lunge toward the target, the cot's fixed spot.
         Vector3 offset = Vector3.up * (t.bobHeight * Mathf.Abs(Mathf.Sin(Phase)) * w)
                        + lungeDirection * (t.lungeDistance * lunge)
-                       + t.sleepOffset * SleepWeight;
+                       + t.sleepOffset * SleepWeight
+                       - Vector3.up * (t.buildDipHeight * crouch * BuildWeight);
         model.localPosition = offset;
         // Root rotation, applied right to left: the yaw; the waddle about the camera-facing axis (screen space,
         // as #87 tuned it to read); the lie-down about the cot's long axis, head to the pillow (−X). Asleep, the
@@ -355,7 +377,29 @@ public class CreatureMotion
 
     /// <summary>Which pose owns the frame: death over sleep over dig over walk over idle.</summary>
     public static PoseKind SelectPose(bool dead, bool sleeping, bool digging, bool moving) =>
-        dead ? PoseKind.Dead : sleeping ? PoseKind.Sleep : digging ? PoseKind.Dig : moving ? PoseKind.Walk : PoseKind.Idle;
+        SelectPose(dead, sleeping, digging, false, moving);
+
+    /// <summary>
+    /// Which pose owns the frame: death over sleep over dig/building over walk over idle. Building shares the
+    /// dig tier (the imp holds one job at a time, so they never truly compete; dig is checked first).
+    /// </summary>
+    public static PoseKind SelectPose(bool dead, bool sleeping, bool digging, bool building, bool moving) =>
+        dead ? PoseKind.Dead : sleeping ? PoseKind.Sleep : digging ? PoseKind.Dig : building ? PoseKind.Building
+        : moving ? PoseKind.Walk : PoseKind.Idle;
+
+    /// <summary>
+    /// The build loop's crouch, 0 (upright) to 1 (bottom), at a time into building: a smooth cosine dip once per
+    /// buildCycleSeconds, starting upright.
+    /// </summary>
+    public static float BuildCrouch(float clock, MotionTuning t)
+    {
+        if (t.buildCycleSeconds <= 0f) return 0f;
+        return 0.5f - 0.5f * Mathf.Cos(clock / t.buildCycleSeconds * 2f * Mathf.PI);
+    }
+
+    /// <summary>The working arm's forward pitch in the build loop: rest fraction of the reach at the top, full reach (the pat) at the bottom.</summary>
+    public static float BuildArmAngle(float clock, MotionTuning t) =>
+        t.buildArmReachDegrees * Mathf.Lerp(t.buildArmRestFraction, 1f, BuildCrouch(clock, t));
 
     /// <summary>The pickaxe arm's roll at a point in the dig loop: raise (eased), strike, recover (eased).</summary>
     public static float DigArmAngle(float clock, MotionTuning t)

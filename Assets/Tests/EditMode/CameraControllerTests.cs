@@ -111,6 +111,19 @@ public class CameraControllerTests
         Assert.Less(cameraObject.transform.position.z, -2f, "Behind the ground point");
     }
 
+    [Test]
+    public void ZoomLimits_ScaleFromTheBoardFramingSize()
+    {
+        controller.PitchAngle = 45f;
+        controller.ComputeBaseOrthographicSize();
+        Assert.AreEqual(13.5f * 0.3f, controller.MinOrthographicSize, 1e-4f, "Default closest zoom: 0.3x the framing size");
+        Assert.AreEqual(13.5f * 2f, controller.MaxOrthographicSize, 1e-4f, "Default farthest zoom: 2x the framing size");
+
+        controller.MinZoomScale = 0.25f;
+        controller.ComputeBaseOrthographicSize();
+        Assert.AreEqual(13.5f * 0.25f, controller.MinOrthographicSize, 1e-4f, "Tunable");
+    }
+
     // --- Zoom (#88): notch-correct, multiplicative, snappy ---
 
     private const float Min = 6.75f, Max = 27f, Step = 0.76f;

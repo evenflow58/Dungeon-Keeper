@@ -11,7 +11,9 @@ public class CameraController : MonoBehaviour
     [SerializeField] private float pitchAngle = 45f;
 
     [Header("Zoom")]
-    [SerializeField] private float zoomStepFactor = 0.76f; // Target size × this per wheel notch in (÷ out): max → min in ~5 notches
+    [SerializeField] private float zoomStepFactor = 0.76f; // Target size × this per wheel notch in (÷ out): ~1.3x per notch
+    [SerializeField] private float minZoomScale = 0.3f;    // Closest zoom, as a fraction of the board-framing size
+    [SerializeField] private float maxZoomScale = 2.0f;    // Farthest zoom, as a multiple of the board-framing size
     [SerializeField] private float zoomSharpness = 22f;    // Settle rate (1/s): 99% of the way in ~0.21 s, no overshoot
 
     [Header("Damping")]
@@ -40,6 +42,8 @@ public class CameraController : MonoBehaviour
     public float PanSpeed { get => panSpeed; set => panSpeed = value; }
     public float ZoomStepFactor { get => zoomStepFactor; set => zoomStepFactor = value; }
     public float ZoomSharpness { get => zoomSharpness; set => zoomSharpness = value; }
+    public float MinZoomScale { get => minZoomScale; set => minZoomScale = value; }
+    public float MaxZoomScale { get => maxZoomScale; set => maxZoomScale = value; }
     public float TargetOrthographicSize => targetOrthographicSize;
     public float PitchAngle { get => pitchAngle; set => pitchAngle = value; }
     public float BaseOrthographicSize => baseOrthographicSize;
@@ -121,8 +125,8 @@ public class CameraController : MonoBehaviour
         float sizeForHeight = dungeonBoard.Height * 0.5f * sin;
 
         baseOrthographicSize = Mathf.Max(sizeForWidth, sizeForHeight);
-        minOrthographicSize = baseOrthographicSize * 0.5f;
-        maxOrthographicSize = baseOrthographicSize * 2.0f;
+        minOrthographicSize = baseOrthographicSize * minZoomScale;
+        maxOrthographicSize = baseOrthographicSize * maxZoomScale;
     }
 
     private void LateUpdate()

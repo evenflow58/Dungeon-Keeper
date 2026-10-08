@@ -384,6 +384,8 @@ MonoBehaviour:
   panSpeed: 20
   pitchAngle: 45
   zoomStepFactor: 0.76
+  minZoomScale: 0.3
+  maxZoomScale: 2
   zoomSharpness: 22
   panDamping: 12
   cameraDistance: 25

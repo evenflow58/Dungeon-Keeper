@@ -129,7 +129,7 @@ public class AlertToasts : MonoBehaviour
     {
         if (placementManager == null) return;
         var seen = new HashSet<SpikeTrap>();
-        foreach (SpikeTrap trap in placementManager.GetSpikeTraps())
+        foreach (SpikeTrap trap in placementManager.GetBuiltSpikeTraps()) // A site isn't a trap yet
         {
             seen.Add(trap);
             bool armed = trap.IsArmed;

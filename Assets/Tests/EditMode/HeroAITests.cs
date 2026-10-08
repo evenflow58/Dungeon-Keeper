@@ -233,7 +233,7 @@ public class HeroAITests
     public void ArmedTrapOnPath_WoundsOnce_LeavesItSpent_CrossingBackDoesNothing()
     {
         manager.SpikeDamage = 3;
-        Assert.IsTrue(manager.TryPlace(PlaceableType.SpikeTrap, new Vector2Int(24, 16), PlaceFrom, out Placeable p));
+        Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.SpikeTrap, new Vector2Int(24, 16), PlaceFrom, out Placeable p));
         SpikeTrap trap = p.GetComponent<SpikeTrap>();
         AddHero(24, 18, entrance: new Vector2Int(24, 19)); // his route down the x=24 column crosses (24,16)
         Health health = hero.Health;

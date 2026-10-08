@@ -34,7 +34,7 @@ public class PropModelTests
 
     private Placeable Place(PlaceableType type, int x, int y)
     {
-        Assert.IsTrue(manager.TryPlace(type, new Vector2Int(x, y), ImpTile, out Placeable p));
+        Assert.IsTrue(manager.TryPlaceBuilt(type, new Vector2Int(x, y), ImpTile, out Placeable p));
         return p;
     }
 

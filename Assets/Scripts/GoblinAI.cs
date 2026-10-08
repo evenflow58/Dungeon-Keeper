@@ -150,7 +150,7 @@ public class GoblinAI : MonoBehaviour
     private bool TryStartEat()
     {
         if (placementManager == null || goblin.Hunger >= hungerThreshold) return false;
-        if (!TrySelectPlot(Board, placementManager.GetMushroomPlots(), goblin.CurrentTile, out MushroomPlot plot, out Vector2Int stand))
+        if (!TrySelectPlot(Board, placementManager.GetBuiltMushroomPlots(), goblin.CurrentTile, out MushroomPlot plot, out Vector2Int stand))
             return false;
         if (!goblin.SetDestination(stand)) return false;
 
@@ -165,7 +165,7 @@ public class GoblinAI : MonoBehaviour
     {
         if (placementManager == null || goblin.Energy >= energyThreshold) return false;
 
-        List<Placeable> cots = placementManager.GetCots();
+        List<Placeable> cots = placementManager.GetBuiltCots();
         // A failed claim means another goblin just took that cot; it's now IsClaimed, so reselect.
         for (int attempt = 0; attempt < cots.Count; attempt++)
         {
@@ -437,7 +437,7 @@ public class GoblinAI : MonoBehaviour
 
     private bool HasReachableFood() =>
         placementManager != null &&
-        TrySelectPlot(Board, placementManager.GetMushroomPlots(), goblin.CurrentTile, out _, out _);
+        TrySelectPlot(Board, placementManager.GetBuiltMushroomPlots(), goblin.CurrentTile, out _, out _);
 
     // ---- selection (static for tests) ----
 
@@ -469,7 +469,7 @@ public class GoblinAI : MonoBehaviour
     }
 
     /// <summary>
-    /// Nearest plot with FoodCount &gt; 0, by FindPathToNeighbor path length (the goblin eats from beside
+    /// Nearest built plot with FoodCount &gt; 0, by FindPathToNeighbor path length (the goblin eats from beside
     /// the plot, never standing on it). Ties keep list (scan) order; unreachable plots are skipped.
     /// </summary>
     public static bool TrySelectPlot(DungeonBoard board, IReadOnlyList<MushroomPlot> plots, Vector2Int fromTile,
@@ -481,7 +481,7 @@ public class GoblinAI : MonoBehaviour
 
         foreach (MushroomPlot candidate in plots)
         {
-            if (candidate == null || candidate.FoodCount <= 0) continue;
+            if (candidate == null || !candidate.IsBuilt || candidate.FoodCount <= 0) continue; // A site feeds no one
 
             List<Vector2Int> path = Pathfinder.FindPathToNeighbor(board, fromTile, candidate.Tile);
             if (path.Count == 0 || path.Count >= bestCost) continue; // Unreachable, or not strictly nearer
@@ -494,7 +494,7 @@ public class GoblinAI : MonoBehaviour
     }
 
     /// <summary>
-    /// Nearest unclaimed Lair Cot by FindPath length to the cot tile itself (the goblin sleeps on it).
+    /// Nearest built, unclaimed Lair Cot by FindPath length to the cot tile itself (the goblin sleeps on it).
     /// Ties keep list (scan) order; unreachable cots are skipped. Doesn't claim.
     /// </summary>
     public static bool TrySelectCot(DungeonBoard board, IReadOnlyList<Placeable> cots, Vector2Int fromTile, out Placeable cot)
@@ -504,7 +504,7 @@ public class GoblinAI : MonoBehaviour
 
         foreach (Placeable candidate in cots)
         {
-            if (candidate == null || candidate.IsClaimed) continue;
+            if (candidate == null || !candidate.IsBuilt || candidate.IsClaimed) continue; // A site can't be slept on
 
             List<Vector2Int> path = Pathfinder.FindPath(board, fromTile, candidate.Tile);
             if (path.Count == 0 || path.Count >= bestCost) continue;

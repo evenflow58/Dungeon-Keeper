@@ -68,7 +68,7 @@ public class GoblinAITests
 
     private MushroomPlot PlacePlot(int x, int y, int food)
     {
-        Assert.IsTrue(manager.TryPlace(PlaceableType.MushroomPlot, new Vector2Int(x, y), PlaceFrom, out Placeable p));
+        Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.MushroomPlot, new Vector2Int(x, y), PlaceFrom, out Placeable p));
         var plot = p.GetComponent<MushroomPlot>();
         plot.Tick(food); // 1 s per food
         Assert.AreEqual(food, plot.FoodCount);
@@ -77,7 +77,7 @@ public class GoblinAITests
 
     private Placeable PlaceCot(int x, int y)
     {
-        Assert.IsTrue(manager.TryPlace(PlaceableType.LairCot, new Vector2Int(x, y), PlaceFrom, out Placeable cot));
+        Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.LairCot, new Vector2Int(x, y), PlaceFrom, out Placeable cot));
         return cot;
     }
 
@@ -130,11 +130,48 @@ public class GoblinAITests
         MushroomPlot plotB = PlacePlot(23, 17, 0);
         Placeable cotA = PlaceCot(22, 18);
         MushroomPlot plotA = PlacePlot(22, 14, 1);
-        manager.TryPlace(PlaceableType.SpikeTrap, new Vector2Int(21, 13), PlaceFrom, out _);
+        manager.TryPlaceBuilt(PlaceableType.SpikeTrap, new Vector2Int(21, 13), PlaceFrom, out _);
         cotA.TryClaim(); // claimed cots are still listed
 
         CollectionAssert.AreEqual(new[] { plotA, plotB }, manager.GetMushroomPlots());
         CollectionAssert.AreEqual(new[] { cotA, cotB }, manager.GetCots());
+    }
+
+    // --- Construction sites (#91): a placed but unbuilt cot or plot does nothing for a goblin ---
+
+    [Test]
+    public void TiredGoblin_IgnoresACotSite_ThenSleepsOnItOnceBuilt()
+    {
+        var (goblin, ai) = AddGoblin(23, 15, energy: 20f);
+        Assert.IsTrue(manager.TryPlace(PlaceableType.LairCot, new Vector2Int(26, 18), PlaceFrom, out Placeable site));
+
+        StepFor(2f);
+        Assert.AreNotEqual(GoblinAI.Goal.Sleep, ai.CurrentGoal, "A site isn't a cot");
+        Assert.IsFalse(site.IsClaimed);
+        Assert.IsNull(ai.ClaimedCot);
+
+        site.CompleteConstruction();
+        StepUntil(() => ai.IsSleeping, 8f, "goblin to sleep on the finished cot");
+        Assert.AreEqual(site.Tile, goblin.CurrentTile);
+    }
+
+    [Test]
+    public void HungryGoblin_GetsNothingFromAPlotSite_ThenEatsOnceBuiltAndGrown()
+    {
+        var (goblin, ai) = AddGoblin(24, 16, hunger: 20f);
+        Assert.IsTrue(manager.TryPlace(PlaceableType.MushroomPlot, new Vector2Int(21, 13), PlaceFrom, out Placeable site));
+        var plot = site.GetComponent<MushroomPlot>();
+        plot.Tick(5f); // Five foods' worth of time at 1 s per food: a site grows none of it
+
+        StepFor(2f);
+        Assert.AreEqual(0, plot.FoodCount);
+        Assert.AreNotEqual(GoblinAI.Goal.Eat, ai.CurrentGoal, "Nothing to eat at a site");
+        Assert.AreEqual(20f, goblin.Hunger, 1e-3f);
+
+        site.CompleteConstruction();
+        plot.Tick(2f);
+        StepUntil(() => plot.FoodCount == 1, 10f, "goblin to eat from the finished plot");
+        Assert.AreEqual(70f, goblin.Hunger, 1e-3f);
     }
 
     // --- Eating ---

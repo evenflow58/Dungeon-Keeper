@@ -28,6 +28,12 @@ public class SpikeTrap : MonoBehaviour
 
     public bool IsArmed { get; private set; }
 
+    /// <summary>
+    /// False while a construction site (#91): unarmed, untriggerable, and not rearmable — and not a spent trap
+    /// either, so rearm work must exclude it explicitly (ImpDigger.TrySelectWork does).
+    /// </summary>
+    public bool IsBuilt => GetComponent<Placeable>().IsBuilt;
+
     /// <summary>True while the spikes are raised (Armed); false while retracted into the plate (Spent).</summary>
     public bool SpikesVisible => spikes != null && spikesRaised;
 
@@ -42,6 +48,13 @@ public class SpikeTrap : MonoBehaviour
     public void Initialize(int spikeDamage)
     {
         damage = spikeDamage;
+        IsArmed = IsBuilt; // A site starts unarmed; OnConstructed arms it
+        RefreshVisual();
+    }
+
+    /// <summary>Placeable.CompleteConstruction calls this: the finished trap starts Armed.</summary>
+    public void OnConstructed()
+    {
         IsArmed = true;
         RefreshVisual();
     }
@@ -64,9 +77,10 @@ public class SpikeTrap : MonoBehaviour
         return true;
     }
 
-    /// <summary>Returns the trap to Armed. Idempotent.</summary>
+    /// <summary>Returns the trap to Armed. Idempotent. No-op on a site: only construction finishes a trap.</summary>
     public void Rearm()
     {
+        if (!IsBuilt) return;
         IsArmed = true;
         RefreshVisual();
     }
@@ -74,6 +88,7 @@ public class SpikeTrap : MonoBehaviour
     private void RefreshVisual()
     {
         if (spikes == null) spikes = CreateSpikes();
+        spikes.gameObject.SetActive(IsBuilt); // A site shows only its materials pile
         spikesRaised = IsArmed;
         spikes.localScale = new Vector3(1f, IsArmed ? 1f : retractedScale, 1f);
         // Spent: the squashed spikes also sink below the plate's top, so a spent trap reads as a bare plate.

@@ -146,11 +146,11 @@ public class HeroSpawner : MonoBehaviour
         dungeonBoard != null && heart != null &&
         Pathfinder.FindPathToNeighbor(dungeonBoard, dungeonBoard.EntranceTile, heart.Tile).Count > 0;
 
-    /// <summary>True when requiredCots Lair Cots and requiredPlots Mushroom Plots are placed (both).</summary>
+    /// <summary>True when requiredCots Lair Cots and requiredPlots Mushroom Plots are built (both); sites don't count.</summary>
     public bool BuildingsTriggerMet() =>
         placementManager != null &&
-        placementManager.GetCots().Count >= requiredCots &&
-        placementManager.GetMushroomPlots().Count >= requiredPlots;
+        placementManager.CountBuilt(PlaceableType.LairCot) >= requiredCots &&
+        placementManager.CountBuilt(PlaceableType.MushroomPlot) >= requiredPlots;
 
     private void PollOutcome()
     {

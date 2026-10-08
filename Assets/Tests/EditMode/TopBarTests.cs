@@ -105,7 +105,7 @@ public class TopBarTests
     }
 
     private void Place(PlaceableType type, int x, int y) =>
-        Assert.IsTrue(manager.TryPlace(type, new Vector2Int(x, y), PlaceFrom, out _));
+        Assert.IsTrue(manager.TryPlaceBuilt(type, new Vector2Int(x, y), PlaceFrom, out _));
 
     private void KillActiveHero()
     {
@@ -142,12 +142,12 @@ public class TopBarTests
     [Test]
     public void Food_ReflectsStockedPlots()
     {
-        Assert.IsTrue(manager.TryPlace(PlaceableType.MushroomPlot, new Vector2Int(21, 13), PlaceFrom, out Placeable p1));
+        Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.MushroomPlot, new Vector2Int(21, 13), PlaceFrom, out Placeable p1));
         p1.GetComponent<MushroomPlot>().Tick(1f);
         bar.Refresh();
         Assert.AreEqual("Food: 1", bar.FoodText);
 
-        Assert.IsTrue(manager.TryPlace(PlaceableType.MushroomPlot, new Vector2Int(22, 13), PlaceFrom, out Placeable p2));
+        Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.MushroomPlot, new Vector2Int(22, 13), PlaceFrom, out Placeable p2));
         p2.GetComponent<MushroomPlot>().Tick(2f);
         bar.Refresh();
         Assert.AreEqual("Food: 3", bar.FoodText, "Sums across plots");

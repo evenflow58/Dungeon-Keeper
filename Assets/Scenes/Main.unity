@@ -382,10 +382,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CameraController
   dungeonBoard: {fileID: 565044520}
   panSpeed: 20
-  zoomSpeed: 2
   pitchAngle: 45
+  zoomStepFactor: 0.76
+  minZoomScale: 0.3
+  maxZoomScale: 2
+  zoomSharpness: 22
   panDamping: 12
-  zoomDamping: 16
   cameraDistance: 25
 --- !u!1 &410087039
 GameObject:

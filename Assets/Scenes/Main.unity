@@ -198,7 +198,7 @@ MonoBehaviour:
     buildCycleSeconds: 0.8
     buildCrouchDegrees: 20
     buildDipHeight: 0.06
-    buildArmReachDegrees: 75
+    buildArmReachDegrees: 100
     buildArmRestFraction: 0.45
     sleepRollDegrees: 80
     sleepOffset: {x: 0.38, y: 0.3, z: 0}
@@ -906,7 +906,7 @@ MonoBehaviour:
     buildCycleSeconds: 0.8
     buildCrouchDegrees: 20
     buildDipHeight: 0.06
-    buildArmReachDegrees: 75
+    buildArmReachDegrees: 100
     buildArmRestFraction: 0.45
     sleepRollDegrees: 80
     sleepOffset: {x: 0.38, y: 0.3, z: 0}
@@ -1106,7 +1106,7 @@ MonoBehaviour:
     buildCycleSeconds: 0.8
     buildCrouchDegrees: 20
     buildDipHeight: 0.06
-    buildArmReachDegrees: 75
+    buildArmReachDegrees: 100
     buildArmRestFraction: 0.45
     sleepRollDegrees: 80
     sleepOffset: {x: 0.38, y: 0.3, z: 0}
@@ -1327,7 +1327,7 @@ MonoBehaviour:
     buildCycleSeconds: 0.8
     buildCrouchDegrees: 20
     buildDipHeight: 0.06
-    buildArmReachDegrees: 75
+    buildArmReachDegrees: 100
     buildArmRestFraction: 0.45
     sleepRollDegrees: 80
     sleepOffset: {x: 0.38, y: 0.3, z: 0}

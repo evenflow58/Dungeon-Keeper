@@ -54,7 +54,7 @@ public class MotionTuning
     public float buildCycleSeconds = 0.8f;   // One crouch-and-rise with its pat at the bottom
     public float buildCrouchDegrees = 20f;   // Body pitches forward toward the site at the bottom of the crouch
     public float buildDipHeight = 0.06f;     // Tiles: the whole model dips at the bottom of the crouch
-    public float buildArmReachDegrees = 75f; // Working arm reaches forward and down to the site (not overhead)
+    public float buildArmReachDegrees = 100f; // Working arm tips its held tool forward and down onto the site (not overhead)
     public float buildArmRestFraction = 0.45f; // The arm's reach at the top of the rise, as a fraction of full
 
     [Header("Sleep")]
@@ -66,7 +66,7 @@ public class MotionTuning
     public static MotionTuning Imp() => new MotionTuning
     {
         strideLength = 0.55f, bobHeight = 0.04f, footLift = 0.04f, stepReach = 0.04f,
-        buildCycleSeconds = 0.8f, buildCrouchDegrees = 20f, buildDipHeight = 0.06f, buildArmReachDegrees = 75f, buildArmRestFraction = 0.45f,
+        buildCycleSeconds = 0.8f, buildCrouchDegrees = 20f, buildDipHeight = 0.06f, buildArmReachDegrees = 100f, buildArmRestFraction = 0.45f,
     };
     public static MotionTuning Hero() => new MotionTuning { strideLength = 0.7f, swingDegrees = 25f, armSwingDegrees = 25f, bobHeight = 0.04f, waddleDegrees = 5f };
 }
@@ -245,10 +245,10 @@ public class CreatureMotion
         // Dig: the right (pickaxe) arm chops in a loop; the body pitches into each strike.
         float digArm = DigArmAngle(digClock, t) * DigWeight;
         if (DigWeight > 0f) armRightPose = Quaternion.Slerp(armRightPose, Quaternion.Euler(0f, 0f, digArm), DigWeight);
-        // Build: the same arm reaches forward and down to the site (a pitch, not the dig's overhead roll), patting
-        // deepest at the bottom of each crouch.
+        // Build: the same arm pitches its upright tool forward and down onto the site (a forward pitch, not the dig
+        // swing out to the side), patting deepest at the bottom of each crouch. Negative X pitch tips the top forward.
         float crouch = BuildCrouch(buildClock, t);
-        if (BuildWeight > 0f) armRightPose = Quaternion.Slerp(armRightPose, Quaternion.Euler(BuildArmAngle(buildClock, t), 0f, 0f), BuildWeight);
+        if (BuildWeight > 0f) armRightPose = Quaternion.Slerp(armRightPose, Quaternion.Euler(-BuildArmAngle(buildClock, t), 0f, 0f), BuildWeight);
         SetRotation(armLeft, armLeftPose);
         SetRotation(armRight, armRightPose);
 

@@ -117,14 +117,16 @@ public class BuildAnimationTests
         Assert.AreEqual(1f, CreatureMotion.BuildCrouch(bottom, t), 1e-4f, "Precondition: at the bottom");
         Assert.AreEqual(1f, m.BuildWeight, 1e-4f);
 
-        Vector3 hang = arm.localRotation * Vector3.down; // Where the arm points, in model space (front is −Z)
-        Assert.Less(hang.z, -0.5f, "Reaches forward toward the site");
-        Assert.Less(hang.y, 0f, "Still below the shoulder: no overhead raise (that's the dig)");
+        // The imp holds its pick upright above the shoulder pivot: where the tool points, in model space (front −Z).
+        Vector3 tool = arm.localRotation * Vector3.up;
+        Assert.Less(tool.z, -0.9f, "Tipped forward onto the site");
+        Assert.Less(tool.y, 0.2f, "Down at site level: not held up, not overhead");
+        Assert.AreEqual(0f, tool.x, 1e-4f, "In the forward plane");
         Assert.Less(imp.Model.transform.localPosition.y, -0.03f, "The whole imp dips at the bottom");
 
-        // Contrast: the dig swing's peak is overhead.
-        Vector3 digPeak = Quaternion.Euler(0f, 0f, t.digRaiseDegrees) * Vector3.down;
-        Assert.Greater(digPeak.y, 0f, "The dig raises the pick overhead; the build never does");
+        // Contrast: the dig swings the same pick out to the side (a roll), never forward.
+        Vector3 digPeak = Quaternion.Euler(0f, 0f, t.digRaiseDegrees) * Vector3.up;
+        Assert.Greater(Mathf.Abs(digPeak.x), 0.9f, "The dig's silhouette is sideways; the build's is forward");
     }
 
     [Test]

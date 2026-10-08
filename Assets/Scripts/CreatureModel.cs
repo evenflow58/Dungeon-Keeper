@@ -175,6 +175,52 @@ public static class CreatureModel
         return material;
     }
 
+    private static readonly Dictionary<Color, Material> ghostMaterials = new Dictionary<Color, Material>();
+
+    /// <summary>
+    /// A shared translucent lit material (#104's order marker): URP Lit switched to its Transparent surface, alpha
+    /// blended from the color's alpha, no depth write. One per color (alpha included), created on first use.
+    /// </summary>
+    public static Material GhostMaterialFor(Color color)
+    {
+        if (ghostMaterials.TryGetValue(color, out Material cached) && cached != null) return cached;
+
+        Shader shader = Shader.Find(LitShaderName) ?? Shader.Find("Universal Render Pipeline/Simple Lit");
+        var material = new Material(shader) { name = $"Ghost {ColorUtility.ToHtmlStringRGBA(color)}" };
+        material.SetColor("_BaseColor", color);
+        material.SetFloat("_Smoothness", 0.1f);
+        material.SetFloat("_Surface", 1f); // Transparent
+        material.SetFloat("_Blend", 0f);   // Alpha
+        material.SetOverrideTag("RenderType", "Transparent");
+        material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+        material.SetFloat("_ZWrite", 0f);
+        material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+        material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+        ghostMaterials[color] = material;
+        return material;
+    }
+
+    /// <summary>
+    /// Builds a translucent ghost of a recipe under root: every part where the recipe puts it, each in its own color
+    /// pulled toward tint at the given alpha, casting no shadows (#104's order marker).
+    /// </summary>
+    public static GameObject BuildGhost(Transform root, string name, IList<Part> parts, Color tint, float tintAmount, float alpha)
+    {
+        var model = new GameObject(name);
+        model.transform.SetParent(root, false);
+        foreach (Part part in parts)
+        {
+            MeshRenderer r = CreatePart(model.transform, part, 0.1f);
+            Color c = Color.Lerp(part.Color, tint, tintAmount);
+            c.a = alpha;
+            r.sharedMaterial = GhostMaterialFor(c);
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
+        }
+        return model;
+    }
+
     /// <summary>The shared lit material for a color at a smoothness: one per pair, created on first use.</summary>
     public static Material MaterialFor(Color color, float smoothness)
     {

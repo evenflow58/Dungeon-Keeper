@@ -6,6 +6,11 @@ using UnityEngine;
 /// a target must be Floor, unoccupied, and reachable by the imp. TileState is never changed.
 /// Placing creates a construction site (#91) that occupies its tile at once but does nothing until built;
 /// consumers read the built-only queries (GetBuilt…, CountBuilt, TotalFood).
+/// Orders cost materials (#104): each site records CostFor(type) and waits unfunded until the funding pass pays for
+/// it from the Stockpile — strictly in placement order (a later, cheaper order never jumps an earlier one), deducted
+/// at funding. The pass runs at placement and every frame while anything waits, so an affordable order funds at once
+/// and a waiting one funds the frame the stockpile covers it. Only funded sites are build jobs. With no Stockpile
+/// wired, every order funds at once (an unwired system degrades, never blocks). Placing is never blocked by cost.
 /// </summary>
 [DisallowMultipleComponent]
 public class PlacementManager : MonoBehaviour
@@ -13,6 +18,7 @@ public class PlacementManager : MonoBehaviour
     [Header("References")]
     [SerializeField] private DungeonBoard dungeonBoard;
     [SerializeField] private BoardRenderer boardRenderer;
+    [SerializeField] private Stockpile stockpile; // Pays for orders (#104); null = orders fund at once
 
     [Header("Placeable Visuals (Placeholder Art)")]
     [SerializeField] private Color lairCotColor = new Color(0.40f, 0.60f, 0.90f, 1f);      // Blue
@@ -34,6 +40,12 @@ public class PlacementManager : MonoBehaviour
     [SerializeField] private float mushroomPlotBuildSeconds = 6f;
     [SerializeField] private float spikeTrapBuildSeconds = 5f;
 
+    // What an order costs (#104): stone for every type in this epic (CostFor answers a material + amount pair).
+    [Header("Build Costs")]
+    [SerializeField] private int lairCotStoneCost = 3;
+    [SerializeField] private int mushroomPlotStoneCost = 4;
+    [SerializeField] private int spikeTrapStoneCost = 2;
+
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
     public float MushroomGrowthSecondsPerFood { get => mushroomGrowthSecondsPerFood; set => mushroomGrowthSecondsPerFood = value; }
@@ -42,6 +54,41 @@ public class PlacementManager : MonoBehaviour
     public float LairCotBuildSeconds { get => lairCotBuildSeconds; set => lairCotBuildSeconds = value; }
     public float MushroomPlotBuildSeconds { get => mushroomPlotBuildSeconds; set => mushroomPlotBuildSeconds = value; }
     public float SpikeTrapBuildSeconds { get => spikeTrapBuildSeconds; set => spikeTrapBuildSeconds = value; }
+    public Stockpile Stockpile { get => stockpile; set => stockpile = value; }
+    public int LairCotStoneCost { get => lairCotStoneCost; set => lairCotStoneCost = value; }
+    public int MushroomPlotStoneCost { get => mushroomPlotStoneCost; set => mushroomPlotStoneCost = value; }
+    public int SpikeTrapStoneCost { get => spikeTrapStoneCost; set => spikeTrapStoneCost = value; }
+
+    /// <summary>What an order of this type costs: a material and an amount (stone for every type in this epic).</summary>
+    public MaterialAmount CostFor(PlaceableType type)
+    {
+        switch (type)
+        {
+            case PlaceableType.LairCot: return new MaterialAmount(MaterialType.Stone, lairCotStoneCost);
+            case PlaceableType.MushroomPlot: return new MaterialAmount(MaterialType.Stone, mushroomPlotStoneCost);
+            case PlaceableType.SpikeTrap: return new MaterialAmount(MaterialType.Stone, spikeTrapStoneCost);
+            default: return new MaterialAmount(MaterialType.Stone, 0);
+        }
+    }
+
+    /// <summary>
+    /// True when an order of this type placed now would fund on the spot: no stockpile (orders fund at once), or
+    /// nothing already waiting (strict FIFO: a new order queues behind them) and the stock covers the cost. The build
+    /// bar shows the cost red when this is false; placing is never blocked by it.
+    /// </summary>
+    public bool WouldFundNow(PlaceableType type)
+    {
+        if (stockpile == null) return true; // Unity null check: unwired means free
+        MaterialAmount cost = CostFor(type);
+        return awaitingFunding.Count == 0 && stockpile.Count(cost.type) >= cost.amount;
+    }
+
+    /// <summary>Orders waiting for materials, in placement (funding) order.</summary>
+    public List<Placeable> GetAwaitingFunding()
+    {
+        PruneAwaiting();
+        return new List<Placeable>(awaitingFunding);
+    }
 
     /// <summary>Game seconds of imp work to finish a construction site of this type.</summary>
     public float BuildSecondsFor(PlaceableType type)
@@ -75,7 +122,41 @@ public class PlacementManager : MonoBehaviour
     }
 
     private readonly Dictionary<Vector2Int, Placeable> placed = new Dictionary<Vector2Int, Placeable>();
+    private readonly List<Placeable> awaitingFunding = new List<Placeable>(); // Placement order: the FIFO line
+    private long nextOrderIndex;
     private Transform holder;
+
+    private void Update()
+    {
+        if (awaitingFunding.Count > 0) RunFundingPass(); // Every frame while anything waits: funds within a frame of affording
+    }
+
+    /// <summary>
+    /// Funds waiting orders strictly in placement order: the head order is paid in full via Stockpile.TrySpend (all or
+    /// nothing) and released to the build queue; the pass stops at the first order the stock can't cover, so nothing
+    /// behind it jumps the line. Built or removed orders leave the line unpaid. Returns how many it funded.
+    /// Runs at placement and from Update while anything waits; public so tests can drive it.
+    /// </summary>
+    public int RunFundingPass()
+    {
+        int funded = 0;
+        while (awaitingFunding.Count > 0)
+        {
+            Placeable head = awaitingFunding[0];
+            if (head == null || head.IsBuilt || head.IsFunded) // Gone, staged complete, or already funded: no charge
+            {
+                awaitingFunding.RemoveAt(0);
+                continue;
+            }
+            if (stockpile != null && !stockpile.TrySpend(head.RequiredMaterial, head.RequiredAmount)) break; // Head-of-line wait
+            awaitingFunding.RemoveAt(0);
+            head.MarkFunded();
+            funded++;
+        }
+        return funded;
+    }
+
+    private void PruneAwaiting() => awaitingFunding.RemoveAll(p => p == null || p.IsBuilt || p.IsFunded);
 
     private void Awake()
     {
@@ -122,12 +203,14 @@ public class PlacementManager : MonoBehaviour
     /// <summary>Built Lair Cots only, in scan order: the ones a goblin can claim.</summary>
     public List<Placeable> GetBuiltCots() => Collect<Placeable>(PlaceableType.LairCot, builtOnly: true);
 
-    /// <summary>Every unbuilt construction site, any type, in board scan order: the imp's build jobs (#92).</summary>
+    /// <summary>Build jobs (#92): every FUNDED, unbuilt site, any type, in board scan order. Orders still awaiting
+    /// materials are excluded (#104): they are not work until paid for.</summary>
     public List<Placeable> GetConstructionSites()
     {
+        // Funded and unbuilt only (#104): an order awaiting materials is not yet a build job.
         var sites = new List<Placeable>();
         foreach (Placeable p in placed.Values)
-            if (p != null && !p.IsBuilt) sites.Add(p);
+            if (p != null && !p.IsBuilt && p.IsFunded) sites.Add(p);
         sites.Sort((a, b) => CompareScanOrder(a.Tile, b.Tile));
         return sites;
     }
@@ -177,6 +260,16 @@ public class PlacementManager : MonoBehaviour
         else if (type == PlaceableType.SpikeTrap)
             go.AddComponent<SpikeTrap>().Initialize(spikeDamage);
         placed[tile] = placeable;
+
+        // The order (#104): stamp its place in line and cost, then fund it now if it can be (it waits otherwise).
+        MaterialAmount cost = CostFor(type);
+        placeable.SetOrder(nextOrderIndex++, cost.type, cost.amount);
+        if (stockpile == null) placeable.MarkFunded(); // Unwired: no waiting, exactly as before #104
+        else
+        {
+            awaitingFunding.Add(placeable);
+            RunFundingPass();
+        }
         return true;
     }
 

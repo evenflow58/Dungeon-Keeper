@@ -667,6 +667,9 @@ MonoBehaviour:
   barPadding: 8
   validPreviewColor: {r: 0.4, g: 0.9, b: 0.4, a: 0.35}
   invalidPreviewColor: {r: 0.9, g: 0.3, b: 0.3, a: 0.35}
+  unaffordablePreviewColor: {r: 0.95, g: 0.45, b: 0.2, a: 0.35}
+  unaffordableCostColor: {r: 1, g: 0.38, b: 0.38, a: 1}
+  costRefreshSeconds: 0.25
   feedbackFlashSeconds: 0.25
 --- !u!114 &565044525
 MonoBehaviour:
@@ -682,6 +685,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: DungeonKeeper::PlacementManager
   dungeonBoard: {fileID: 565044520}
   boardRenderer: {fileID: 565044519}
+  stockpile: {fileID: 565044532}
   lairCotColor: {r: 0.4, g: 0.6, b: 0.9, a: 1}
   mushroomPlotColor: {r: 0.35, g: 0.75, b: 0.35, a: 1}
   spikeTrapColor: {r: 0.55, g: 0.55, b: 0.6, a: 1}
@@ -692,6 +696,9 @@ MonoBehaviour:
   lairCotBuildSeconds: 4
   mushroomPlotBuildSeconds: 6
   spikeTrapBuildSeconds: 5
+  lairCotStoneCost: 3
+  mushroomPlotStoneCost: 4
+  spikeTrapStoneCost: 2
 --- !u!114 &565044526
 MonoBehaviour:
   m_ObjectHideFlags: 0

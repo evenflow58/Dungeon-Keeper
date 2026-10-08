@@ -291,7 +291,8 @@ public class ImpDigger : MonoBehaviour
         {
             foreach (Placeable candidate in sites)
             {
-                if (candidate == null || candidate.IsBuilt) continue; // Only sites are build work
+                // Only funded sites are build work: an order awaiting materials is never travelled to (#104).
+                if (candidate == null || candidate.IsBuilt || !candidate.IsFunded) continue;
 
                 List<Vector2Int> path = Pathfinder.FindPathToNeighbor(board, fromTile, candidate.Tile);
                 if (path.Count == 0 || path.Count >= bestCost) continue; // Unreachable, or not strictly nearer

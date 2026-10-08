@@ -112,6 +112,20 @@ public static class PropModel
         new Part("Crate",  Shape.Box,  new Vector3(-0.3f * s, 0.08f, -0.28f * s), new Vector3(0.16f, 0.16f, 0.16f), crate, new Vector3(0f, -15f, 0f)),
     };
 
+    /// <summary>An order's ground outline (#104): a thin square frame around the footprint, just above the floor.</summary>
+    public static Part[] OrderOutlineRecipe(float s, float thickness, Color color)
+    {
+        float h = s * 0.5f, y = 0.012f;
+        Vector3 along = new Vector3(s + thickness, 0.02f, thickness), across = new Vector3(thickness, 0.02f, s + thickness);
+        return new[]
+        {
+            new Part("Front", Shape.Box, new Vector3(0f, y, -h), along, color),
+            new Part("Back",  Shape.Box, new Vector3(0f, y, h),  along, color),
+            new Part("Left",  Shape.Box, new Vector3(-h, y, 0f), across, color),
+            new Part("Right", Shape.Box, new Vector3(h, y, 0f),  across, color),
+        };
+    }
+
     // ---- The Heart: a faceted crystal on a low stone plinth ----
 
     public static Part[] HeartRecipe(float height, float width, Color crystal, Color plinth, float plinthHeight) => new[]

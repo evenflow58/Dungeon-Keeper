@@ -7,6 +7,8 @@ using UnityEngine.UI;
 /// <summary>
 /// Build bar UI + placement mode. Selecting a placeable type enters placement mode (dig designation
 /// is disabled); left-click/drag places on every valid tile in the rect; Esc or right-click exits.
+/// Each button shows its type's cost (#104), red while an order wouldn't fund right now; the drag preview takes the
+/// unaffordable tint then too. Placing is never blocked by cost: the order waits for materials.
 /// </summary>
 [DisallowMultipleComponent]
 public class PlacementController : MonoBehaviour
@@ -28,6 +30,11 @@ public class PlacementController : MonoBehaviour
     [Header("Drag Preview")]
     [SerializeField] private Color validPreviewColor = new Color(0.4f, 0.9f, 0.4f, 0.35f);
     [SerializeField] private Color invalidPreviewColor = new Color(0.9f, 0.3f, 0.3f, 0.35f);
+    [SerializeField] private Color unaffordablePreviewColor = new Color(0.95f, 0.45f, 0.2f, 0.35f); // Placeable, but it will wait (#104)
+
+    [Header("Costs (#104)")]
+    [SerializeField] private Color unaffordableCostColor = new Color(1f, 0.38f, 0.38f, 1f);
+    [SerializeField] private float costRefreshSeconds = 0.25f; // How often the bar re-checks affordability (unscaled)
     [SerializeField] private float feedbackFlashSeconds = 0.25f;
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
@@ -68,6 +75,8 @@ public class PlacementController : MonoBehaviour
     private SpriteRenderer previewSprite;
     private Canvas barCanvas;
     private Image[] buttonImages;
+    private Text[] buttonLabels;
+    private float costRefreshTimer;
 
     // ---- lifecycle ----
 
@@ -151,6 +160,13 @@ public class PlacementController : MonoBehaviour
         {
             digReenableFrame = -1;
             if (!IsPlacing && digDesignator != null) digDesignator.enabled = true;
+        }
+
+        costRefreshTimer += Time.unscaledDeltaTime; // Prices track the stockpile even while paused
+        if (costRefreshTimer >= costRefreshSeconds)
+        {
+            costRefreshTimer = 0f;
+            RefreshCostLabels();
         }
 
         if (feedbackTimer > 0f)
@@ -288,7 +304,8 @@ public class PlacementController : MonoBehaviour
         // Flat on the floor it places onto, just above the ground.
         previewSprite.transform.position   = new Vector3(center.x, boardRenderer.OverlayLift, center.z);
         previewSprite.transform.localScale = new Vector3(rect.width, rect.height, 1f);
-        previewSprite.color   = previewValid.Value ? validPreviewColor : invalidPreviewColor;
+        bool affordable = SelectedType == null || placementManager == null || placementManager.WouldFundNow(SelectedType.Value);
+        previewSprite.color   = !previewValid.Value ? invalidPreviewColor : affordable ? validPreviewColor : unaffordablePreviewColor;
         previewSprite.enabled = true;
     }
 
@@ -357,6 +374,7 @@ public class PlacementController : MonoBehaviour
 
         Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         buttonImages = new Image[BarTypes.Length];
+        buttonLabels = new Text[BarTypes.Length];
 
         for (int i = 0; i < BarTypes.Length; i++)
         {
@@ -384,6 +402,7 @@ public class PlacementController : MonoBehaviour
             text.color = Color.white;
             text.alignment = TextAnchor.MiddleCenter;
             text.text = BarLabels[i];
+            text.supportRichText = true; // The cost is colored on its own
             text.raycastTarget = false;
             var textRect = textGo.GetComponent<RectTransform>();
             textRect.anchorMin = Vector2.zero;
@@ -391,10 +410,28 @@ public class PlacementController : MonoBehaviour
             textRect.offsetMin = textRect.offsetMax = Vector2.zero;
 
             buttonImages[i] = image;
+            buttonLabels[i] = text;
         }
 
         RefreshButtons();
+        RefreshCostLabels();
     }
+
+    /// <summary>Re-labels each button with its type's cost, red where an order wouldn't fund right now.</summary>
+    private void RefreshCostLabels()
+    {
+        if (buttonLabels == null || placementManager == null) return;
+        for (int i = 0; i < BarTypes.Length; i++)
+        {
+            if (buttonLabels[i] == null) continue;
+            MaterialAmount cost = placementManager.CostFor(BarTypes[i]);
+            buttonLabels[i].text = CostLabel(BarLabels[i], cost.amount, placementManager.WouldFundNow(BarTypes[i]), unaffordableCostColor);
+        }
+    }
+
+    /// <summary>A build button's label (#104): "Lair Cot · 3", the cost in rich-text red when it wouldn't fund now.</summary>
+    public static string CostLabel(string name, int cost, bool affordable, Color unaffordableColor) =>
+        affordable ? $"{name} · {cost}" : $"{name} · <color=#{ColorUtility.ToHtmlStringRGB(unaffordableColor)}>{cost}</color>";
 
     private void RefreshButtons()
     {

@@ -13,6 +13,9 @@ public enum PlaceableType
 /// Its look is a code-built model (ticket #77): a cot, a mushroom mound, or a trap's base plate.
 /// Placement is an order (#91): it starts as an inert construction site (a materials pile) until
 /// CompleteConstruction, which the builder calls (story #92; tests and staging call it directly).
+/// Orders cost materials (#104): an order records its requirement and waits UNFUNDED — showing an order marker (a
+/// translucent ghost of the finished model on a ground outline), no pile — until PlacementManager's funding pass
+/// pays for it; then the marker goes, the pile arrives, and it's the #91 site from there.
 /// </summary>
 [DisallowMultipleComponent]
 public class Placeable : MonoBehaviour
@@ -36,6 +39,13 @@ public class Placeable : MonoBehaviour
     [SerializeField] private float completionBounceScale = 1.12f; // Pop overshoot when the build completes
     [SerializeField] private float completionBounceSeconds = 0.3f;
 
+    [Header("Order Marker (#104)")]
+    [SerializeField] private Color orderMarkerTint = new Color(0.45f, 0.80f, 1.00f, 1f); // Blueprint cyan: unlike amber designations
+    [SerializeField] private float orderGhostTintAmount = 0.6f; // How far the ghost's part colors pull toward the tint
+    [SerializeField] private float orderGhostAlpha = 0.35f;     // The ghost of what will stand here
+    [SerializeField] private float orderOutlineAlpha = 0.85f;   // The ground outline: the order's footprint, readable flat
+    [SerializeField] private float orderOutlineThickness = 0.05f;
+
     public PlaceableType Type { get; private set; }
     public Vector2Int Tile { get; private set; }
 
@@ -58,8 +68,24 @@ public class Placeable : MonoBehaviour
     /// <summary>The code-built finished model (cot / mound / plate); null before Initialize, inactive while a site.</summary>
     public GameObject Model { get; private set; }
 
-    /// <summary>The construction site's materials pile; null once built.</summary>
+    /// <summary>The construction site's materials pile; null once built, inactive while unfunded.</summary>
     public GameObject MaterialsPile { get; private set; }
+
+    /// <summary>The unfunded order's marker (ghost + outline); null once funded or built.</summary>
+    public GameObject OrderMarker { get; private set; }
+
+    /// <summary>The material this order costs, and how much (#104). Paid in full at funding.</summary>
+    public MaterialType RequiredMaterial { get; private set; }
+    public int RequiredAmount { get; private set; }
+
+    /// <summary>
+    /// False while the order waits for materials (#104): no pile, never a build job. PlacementManager's funding pass
+    /// (or an unwired stockpile, which funds at once) sets it; never unset.
+    /// </summary>
+    public bool IsFunded { get; private set; }
+
+    /// <summary>Placement order (#104): the funding pass serves waiting orders strictly in this order.</summary>
+    public long OrderIndex { get; private set; }
 
     /// <summary>How many of the finished model's parts (recipe order) the assembly currently shows.</summary>
     public int RevealedPartCount { get; private set; }
@@ -90,10 +116,33 @@ public class Placeable : MonoBehaviour
         Tile = tile;
         Size = size;
         IsBuilt = false;
+        IsFunded = false;
         buildProgress = 0f;
         CreateModel(color, size);
         Model.SetActive(false);
         CreateMaterialsPile(color, size);
+        MaterialsPile.SetActive(false); // The materials haven't arrived: funding brings them (#104)
+        CreateOrderMarker(color, size);
+    }
+
+    /// <summary>Stamps the order's place in line and its cost (#104). PlacementManager calls it right after Initialize.</summary>
+    public void SetOrder(long orderIndex, MaterialType material, int amount)
+    {
+        OrderIndex = orderIndex;
+        RequiredMaterial = material;
+        RequiredAmount = Mathf.Max(0, amount);
+    }
+
+    /// <summary>
+    /// The order is paid for (#104): the marker goes and the materials pile arrives — from here it's #91's site.
+    /// Called by PlacementManager's funding pass after the stockpile spend succeeds. Idempotent.
+    /// </summary>
+    public void MarkFunded()
+    {
+        if (IsFunded) return;
+        IsFunded = true;
+        DestroyOrderMarker();
+        if (!IsBuilt && MaterialsPile != null) MaterialsPile.SetActive(true);
     }
 
     /// <summary>
@@ -105,6 +154,7 @@ public class Placeable : MonoBehaviour
         if (IsBuilt) return;
         IsBuilt = true;
         buildProgress = 1f;
+        DestroyOrderMarker(); // Staging may complete an order that was never funded
 
         if (MaterialsPile != null)
         {
@@ -212,15 +262,37 @@ public class Placeable : MonoBehaviour
         IsClaimed = false;
     }
 
+    private CreatureModel.Part[] FinishedRecipe(Color color, float size) =>
+        Type == PlaceableType.LairCot ? PropModel.LairCotRecipe(size, cotFrameColor, color, cotPillowColor)
+        : Type == PlaceableType.MushroomPlot ? PropModel.MushroomPlotRecipe(size, plotSoilColor, plotStemColor, color)
+        : PropModel.SpikeTrapPlateRecipe(size, color);
+
     private void CreateModel(Color color, float size)
     {
         if (Model != null) return;
+        Model = CreatureModel.Build(transform, Type + "Model", FinishedRecipe(color, size), modelSmoothness);
+    }
 
-        CreatureModel.Part[] recipe =
-            Type == PlaceableType.LairCot ? PropModel.LairCotRecipe(size, cotFrameColor, color, cotPillowColor)
-            : Type == PlaceableType.MushroomPlot ? PropModel.MushroomPlotRecipe(size, plotSoilColor, plotStemColor, color)
-            : PropModel.SpikeTrapPlateRecipe(size, color);
-        Model = CreatureModel.Build(transform, Type + "Model", recipe, modelSmoothness);
+    // The order marker: a translucent ghost of the finished model (what will stand here) on an outline of its
+    // footprint (so even a flat trap plate reads at gameplay zoom), both in the blueprint tint.
+    private void CreateOrderMarker(Color color, float size)
+    {
+        if (OrderMarker != null) return;
+        OrderMarker = CreatureModel.BuildGhost(transform, Type + "Order", FinishedRecipe(color, size),
+            orderMarkerTint, orderGhostTintAmount, orderGhostAlpha);
+        Color outline = orderMarkerTint;
+        outline.a = orderOutlineAlpha;
+        GameObject frame = CreatureModel.BuildGhost(OrderMarker.transform, "Outline",
+            PropModel.OrderOutlineRecipe(size, orderOutlineThickness, outline), outline, 0f, orderOutlineAlpha);
+        frame.name = "Outline";
+    }
+
+    private void DestroyOrderMarker()
+    {
+        if (OrderMarker == null) return;
+        if (Application.isPlaying) Destroy(OrderMarker);
+        else DestroyImmediate(OrderMarker);
+        OrderMarker = null;
     }
 
     private void CreateMaterialsPile(Color color, float size)

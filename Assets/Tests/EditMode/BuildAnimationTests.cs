@@ -82,8 +82,15 @@ public class BuildAnimationTests
         Assert.AreEqual(0f, CreatureMotion.BuildCrouch(c, t), 1e-4f, "Full cycle: back up");
         Assert.AreEqual(CreatureMotion.BuildCrouch(0.3f, t), CreatureMotion.BuildCrouch(0.3f + c, t), 1e-4f, "Loops");
 
-        Assert.AreEqual(t.buildArmReachDegrees * t.buildArmRestFraction, CreatureMotion.BuildArmAngle(0f, t), 1e-3f, "Arm half-reached at the top");
-        Assert.AreEqual(t.buildArmReachDegrees, CreatureMotion.BuildArmAngle(c * 0.5f, t), 1e-3f, "The pat: full reach at the bottom");
+        Assert.AreEqual(t.buildRaisePoint, CreatureMotion.BuildAimPoint(0f, t), "Aimed up and forward at the top");
+        Assert.AreEqual(t.buildStrikePoint, CreatureMotion.BuildAimPoint(c * 0.5f, t), "The pat: aimed at the site at the bottom");
+        Assert.Less(t.buildStrikePoint.z, -0.5f, "The strike point is out on the site, a tile ahead");
+        Assert.AreEqual(0f, t.buildStrikePoint.x, "Straight ahead: the imp faces the site");
+
+        // The aim rotation turns the tool's rest direction onto the shoulder→aim line.
+        Vector3 shoulder = new Vector3(0.1f, 0.24f, 0f), rest = new Vector3(0.6f, 0.77f, -0.2f).normalized;
+        Quaternion q = CreatureMotion.BuildArmAim(shoulder, rest, t.buildStrikePoint);
+        Assert.Less(Vector3.Angle(q * rest, t.buildStrikePoint - shoulder), 0.01f);
     }
 
     private Imp ModeledImp()
@@ -98,12 +105,11 @@ public class BuildAnimationTests
     }
 
     [Test]
-    public void BuildingPose_BlendsIn_ReachesForwardAndDown_NotOverhead_AndDipsTheBody()
+    public void BuildingPose_BlendsIn_AndDipsTheBody()
     {
         Imp imp = ModeledImp();
         CreatureMotion m = imp.Motion;
         MotionTuning t = MotionTuning.Imp();
-        Transform arm = CreatureModel.FindPivot(imp.Model, CreatureModel.ArmRightPivot);
 
         m.Step(Dt, new CreatureMotion.Flags { Building = true });
         Assert.AreEqual(CreatureMotion.PoseKind.Building, m.CurrentPose);
@@ -116,17 +122,54 @@ public class BuildAnimationTests
         while (clock < bottom - 1e-4f) { m.Step(Dt, new CreatureMotion.Flags { Building = true }); clock += Dt; }
         Assert.AreEqual(1f, CreatureMotion.BuildCrouch(bottom, t), 1e-4f, "Precondition: at the bottom");
         Assert.AreEqual(1f, m.BuildWeight, 1e-4f);
-
-        // The imp holds its pick upright above the shoulder pivot: where the tool points, in model space (front −Z).
-        Vector3 tool = arm.localRotation * Vector3.up;
-        Assert.Less(tool.z, -0.9f, "Tipped forward onto the site");
-        Assert.Less(tool.y, 0.2f, "Down at site level: not held up, not overhead");
-        Assert.AreEqual(0f, tool.x, 1e-4f, "In the forward plane");
         Assert.Less(imp.Model.transform.localPosition.y, -0.03f, "The whole imp dips at the bottom");
+    }
 
-        // Contrast: the dig swings the same pick out to the side (a roll), never forward.
+    /// <summary>Steps a building imp facing site until clock (seconds of building) is reached; returns the pick's world ray.</summary>
+    private static Ray PickRay(Imp imp, Placeable site, float seconds)
+    {
+        for (float c = 0f; c < seconds - 1e-4f; c += Dt)
+            imp.Motion.Step(Dt, new CreatureMotion.Flags { Building = true, FaceTarget = site.transform.position });
+        Transform arm = CreatureModel.FindPivot(imp.Model, CreatureModel.ArmRightPivot);
+        Vector3 head = arm.Find("PickHead").position;
+        return new Ray(arm.position, head - arm.position);
+    }
+
+    [Test]
+    public void BuildingPose_ThePickPointsAtTheSite_AtAnyHeading()
+    {
+        // A site beside the imp to each side: the imp turns to face it, and the pick (shoulder → pick head) aims at
+        // the site's tile — not off to the side, not behind, not overhead (the bug Evan caught in Play).
+        MotionTuning t = MotionTuning.Imp();
+        foreach (Vector2Int offset in new[] { new Vector2Int(1, 0), new Vector2Int(-1, 0), new Vector2Int(0, 1), new Vector2Int(0, -1) })
+        {
+            Imp imp = ModeledImp();
+            Placeable site = PlaceSite(PlaceableType.LairCot, PlaceFrom.x + offset.x, PlaceFrom.y + offset.y);
+            Vector3 toSite = site.transform.position - imp.transform.position;
+            toSite.y = 0f;
+
+            // Bottom of the crouch (the pat): the pick's line comes down onto the site's tile.
+            Ray strike = PickRay(imp, site, t.buildCycleSeconds * 1.5f);
+            Assert.Less(strike.direction.y, 0f, $"{offset}: pointing down at the bottom");
+            float s = (0.05f - strike.origin.y) / strike.direction.y;
+            Vector3 hit = strike.origin + strike.direction * s;
+            Assert.Less(Mathf.Abs(hit.x - site.transform.position.x), 0.4f, $"{offset}: lands on the site (x), hit {hit}");
+            Assert.Less(Mathf.Abs(hit.z - site.transform.position.z), 0.4f, $"{offset}: lands on the site (z), hit {hit}");
+
+            // Top of the rise: still aimed toward the site (raised), never sideways or back.
+            Ray raise = PickRay(imp, site, t.buildCycleSeconds * 0.5f);
+            Vector3 flat = raise.direction;
+            flat.y = 0f;
+            Assert.Greater(Vector3.Dot(flat.normalized, toSite.normalized), 0.95f, $"{offset}: raised toward the site");
+            Assert.Greater(raise.direction.y, 0f, $"{offset}: raised at the top");
+
+            Object.DestroyImmediate(creatureGo);
+            Object.DestroyImmediate(site.gameObject);
+        }
+
+        // Contrast: the dig swings the same pick out to the side (a roll about the forward axis), never forward.
         Vector3 digPeak = Quaternion.Euler(0f, 0f, t.digRaiseDegrees) * Vector3.up;
-        Assert.Greater(Mathf.Abs(digPeak.x), 0.9f, "The dig's silhouette is sideways; the build's is forward");
+        Assert.Greater(Mathf.Abs(digPeak.x), 0.9f, "The dig's silhouette is sideways; the build's points at the work");
     }
 
     [Test]

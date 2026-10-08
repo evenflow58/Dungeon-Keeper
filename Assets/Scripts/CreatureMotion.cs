@@ -54,8 +54,11 @@ public class MotionTuning
     public float buildCycleSeconds = 0.8f;   // One crouch-and-rise with its pat at the bottom
     public float buildCrouchDegrees = 20f;   // Body pitches forward toward the site at the bottom of the crouch
     public float buildDipHeight = 0.06f;     // Tiles: the whole model dips at the bottom of the crouch
-    public float buildArmReachDegrees = 100f; // Working arm tips its held tool forward and down onto the site (not overhead)
-    public float buildArmRestFraction = 0.45f; // The arm's reach at the top of the rise, as a fraction of full
+    // The working arm AIMS its tool (the line from the shoulder to the tool's far end) at a point in front of the
+    // creature, in model space (tiles; front is −Z, the site is 1 tile ahead): up and forward at the top of the rise,
+    // down onto the site at the bottom of the crouch. Never overhead; always toward the work.
+    public Vector3 buildRaisePoint = new Vector3(0f, 0.7f, -0.55f);
+    public Vector3 buildStrikePoint = new Vector3(0f, 0.08f, -0.85f);
 
     [Header("Sleep")]
     public float sleepRollDegrees = 80f;   // Lies down head-toward the pillow (−X)
@@ -66,7 +69,8 @@ public class MotionTuning
     public static MotionTuning Imp() => new MotionTuning
     {
         strideLength = 0.55f, bobHeight = 0.04f, footLift = 0.04f, stepReach = 0.04f,
-        buildCycleSeconds = 0.8f, buildCrouchDegrees = 20f, buildDipHeight = 0.06f, buildArmReachDegrees = 100f, buildArmRestFraction = 0.45f,
+        buildCycleSeconds = 0.8f, buildCrouchDegrees = 20f, buildDipHeight = 0.06f,
+        buildRaisePoint = new Vector3(0f, 0.7f, -0.55f), buildStrikePoint = new Vector3(0f, 0.08f, -0.85f),
     };
     public static MotionTuning Hero() => new MotionTuning { strideLength = 0.7f, swingDegrees = 25f, armSwingDegrees = 25f, bobHeight = 0.04f, waddleDegrees = 5f };
 }
@@ -106,6 +110,8 @@ public class CreatureMotion
     private readonly Transform body, head, bootLeft, bootRight, armLeft, armRight;
     private readonly Vector3 bodyRestScale;
     private readonly Vector3 bootLeftRest, bootRightRest;
+    private readonly Vector3 armRightRest;   // The right shoulder pivot's model-space position
+    private readonly Vector3 armRightTool;   // Direction from that pivot to its farthest part (the pick head), at rest
     private readonly MotionTuning t;
 
     private Vector3 lastPosition;
@@ -150,6 +156,8 @@ public class CreatureMotion
         bodyRestScale = body != null ? body.localScale : Vector3.one;
         bootLeftRest = bootLeft != null ? bootLeft.localPosition : Vector3.zero;
         bootRightRest = bootRight != null ? bootRight.localPosition : Vector3.zero;
+        armRightRest = armRight != null ? armRight.localPosition : Vector3.zero;
+        armRightTool = ToolDirection(armRight);
         lastPosition = owner.position;
     }
 
@@ -245,10 +253,11 @@ public class CreatureMotion
         // Dig: the right (pickaxe) arm chops in a loop; the body pitches into each strike.
         float digArm = DigArmAngle(digClock, t) * DigWeight;
         if (DigWeight > 0f) armRightPose = Quaternion.Slerp(armRightPose, Quaternion.Euler(0f, 0f, digArm), DigWeight);
-        // Build: the same arm pitches its upright tool forward and down onto the site (a forward pitch, not the dig
-        // swing out to the side), patting deepest at the bottom of each crouch. Negative X pitch tips the top forward.
+        // Build: the same arm aims its tool at the work straight ahead (the imp faces the site), raised at the top of
+        // the rise and down onto the site at the bottom of each crouch: a pat, not the dig's swing out to the side.
         float crouch = BuildCrouch(buildClock, t);
-        if (BuildWeight > 0f) armRightPose = Quaternion.Slerp(armRightPose, Quaternion.Euler(-BuildArmAngle(buildClock, t), 0f, 0f), BuildWeight);
+        if (BuildWeight > 0f)
+            armRightPose = Quaternion.Slerp(armRightPose, BuildArmAim(armRightRest, armRightTool, BuildAimPoint(buildClock, t)), BuildWeight);
         SetRotation(armLeft, armLeftPose);
         SetRotation(armRight, armRightPose);
 
@@ -397,9 +406,30 @@ public class CreatureMotion
         return 0.5f - 0.5f * Mathf.Cos(clock / t.buildCycleSeconds * 2f * Mathf.PI);
     }
 
-    /// <summary>The working arm's forward pitch in the build loop: rest fraction of the reach at the top, full reach (the pat) at the bottom.</summary>
-    public static float BuildArmAngle(float clock, MotionTuning t) =>
-        t.buildArmReachDegrees * Mathf.Lerp(t.buildArmRestFraction, 1f, BuildCrouch(clock, t));
+    /// <summary>Where the working arm's tool points in the build loop (model space): the raise point at the top, the strike point (on the site) at the bottom.</summary>
+    public static Vector3 BuildAimPoint(float clock, MotionTuning t) =>
+        Vector3.Lerp(t.buildRaisePoint, t.buildStrikePoint, BuildCrouch(clock, t));
+
+    /// <summary>
+    /// The arm pivot rotation that turns the tool's rest direction (pivot → tool tip) to point from the shoulder at
+    /// aimPoint, all in model space (the pivot has no rest rotation).
+    /// </summary>
+    public static Quaternion BuildArmAim(Vector3 shoulder, Vector3 toolRest, Vector3 aimPoint)
+    {
+        Vector3 want = aimPoint - shoulder;
+        if (toolRest.sqrMagnitude < 1e-8f || want.sqrMagnitude < 1e-8f) return Quaternion.identity;
+        return Quaternion.FromToRotation(toolRest, want);
+    }
+
+    /// <summary>The direction from a pivot to its farthest part (for the imp's right arm, the pick head); down when it has none.</summary>
+    public static Vector3 ToolDirection(Transform pivot)
+    {
+        if (pivot == null) return Vector3.down;
+        Vector3 far = Vector3.zero;
+        foreach (Transform part in pivot)
+            if (part.localPosition.sqrMagnitude > far.sqrMagnitude) far = part.localPosition;
+        return far.sqrMagnitude > 1e-8f ? far.normalized : Vector3.down;
+    }
 
     /// <summary>The pickaxe arm's roll at a point in the dig loop: raise (eased), strike, recover (eased).</summary>
     public static float DigArmAngle(float clock, MotionTuning t)

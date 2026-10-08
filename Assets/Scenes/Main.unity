@@ -198,8 +198,8 @@ MonoBehaviour:
     buildCycleSeconds: 0.8
     buildCrouchDegrees: 20
     buildDipHeight: 0.06
-    buildArmReachDegrees: 100
-    buildArmRestFraction: 0.45
+    buildRaisePoint: {x: 0, y: 0.7, z: -0.55}
+    buildStrikePoint: {x: 0, y: 0.08, z: -0.85}
     sleepRollDegrees: 80
     sleepOffset: {x: 0.38, y: 0.3, z: 0}
     sleepBreathingFactor: 0.5
@@ -906,8 +906,8 @@ MonoBehaviour:
     buildCycleSeconds: 0.8
     buildCrouchDegrees: 20
     buildDipHeight: 0.06
-    buildArmReachDegrees: 100
-    buildArmRestFraction: 0.45
+    buildRaisePoint: {x: 0, y: 0.7, z: -0.55}
+    buildStrikePoint: {x: 0, y: 0.08, z: -0.85}
     sleepRollDegrees: 80
     sleepOffset: {x: 0.38, y: 0.3, z: 0}
     sleepBreathingFactor: 0.5
@@ -1106,8 +1106,8 @@ MonoBehaviour:
     buildCycleSeconds: 0.8
     buildCrouchDegrees: 20
     buildDipHeight: 0.06
-    buildArmReachDegrees: 100
-    buildArmRestFraction: 0.45
+    buildRaisePoint: {x: 0, y: 0.7, z: -0.55}
+    buildStrikePoint: {x: 0, y: 0.08, z: -0.85}
     sleepRollDegrees: 80
     sleepOffset: {x: 0.38, y: 0.3, z: 0}
     sleepBreathingFactor: 0.5
@@ -1327,8 +1327,8 @@ MonoBehaviour:
     buildCycleSeconds: 0.8
     buildCrouchDegrees: 20
     buildDipHeight: 0.06
-    buildArmReachDegrees: 100
-    buildArmRestFraction: 0.45
+    buildRaisePoint: {x: 0, y: 0.7, z: -0.55}
+    buildStrikePoint: {x: 0, y: 0.08, z: -0.85}
     sleepRollDegrees: 80
     sleepOffset: {x: 0.38, y: 0.3, z: 0}
     sleepBreathingFactor: 0.5

@@ -18,6 +18,7 @@ public class TopBarTests
     private HeroSpawner spawner;
     private GameManager game;
     private TopBar bar;
+    private Stockpile stockpile;
     private readonly List<GameObject> goblinGos = new List<GameObject>();
     private readonly List<Goblin> goblins = new List<Goblin>();
     private int baselineGoblins; // Living goblins already loaded outside this test (e.g. the open Main scene's three)
@@ -59,6 +60,8 @@ public class TopBarTests
         bar.PlacementManager = manager;
         bar.HeroSpawner = spawner;
         bar.GameManager = game;
+        stockpile = managerGo.AddComponent<Stockpile>(); // On the DungeonManager, as in the scene
+        bar.Stockpile = stockpile;
 
         foreach (Vector2Int t in new[] { new Vector2Int(23, 15), new Vector2Int(25, 15), new Vector2Int(24, 17) })
             AddGoblin(t);
@@ -251,10 +254,35 @@ public class TopBarTests
         bar.PlacementManager = null;
         bar.HeroSpawner = null;
         bar.GameManager = null;
+        bar.Stockpile = null;
 
         Assert.DoesNotThrow(() => bar.Refresh());
         Assert.AreEqual("Food: 0", bar.FoodText);
+        Assert.AreEqual("Stone: 0", bar.MaterialText);
         Assert.AreEqual($"Next hero: {TopBar.Dash}", bar.NextHeroText);
+    }
+
+    [Test]
+    public void Materials_ShowTheStockpilesStone_FromTheFirstRefresh()
+    {
+        bar.Refresh();
+        Assert.AreEqual("Stone: 10", bar.MaterialText, "A fresh game starts with 10 stone");
+
+        stockpile.Add(MaterialType.Stone, 5);
+        bar.Refresh();
+        Assert.AreEqual("Stone: 15", bar.MaterialText, "Polled on refresh");
+
+        Assert.IsTrue(stockpile.TrySpend(MaterialType.Stone, 15));
+        bar.Refresh();
+        Assert.AreEqual("Stone: 0", bar.MaterialText);
+    }
+
+    [Test]
+    public void MaterialReadout_FormatsNameAndCount()
+    {
+        Assert.AreEqual("Stone: 10", TopBar.MaterialReadout("Stone", 10));
+        Assert.AreEqual("Stone: 0", TopBar.MaterialReadout("Stone", 0));
+        Assert.AreEqual("Stone: 1234", TopBar.MaterialReadout("Stone", 1234));
     }
 
     [Test]

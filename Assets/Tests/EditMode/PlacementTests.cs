@@ -183,7 +183,7 @@ public class PlacementTests
     [Test]
     public void LairCot_ClaimRelease()
     {
-        manager.TryPlace(PlaceableType.LairCot, new Vector2Int(22, 14), ImpTile, out Placeable cot);
+        manager.TryPlaceBuilt(PlaceableType.LairCot, new Vector2Int(22, 14), ImpTile, out Placeable cot); // Only a built cot is claimable (#91)
 
         Assert.IsFalse(cot.IsClaimed);
         Assert.IsTrue(cot.TryClaim());

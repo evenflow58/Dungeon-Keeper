@@ -67,12 +67,12 @@ public class PlacementManager : MonoBehaviour
     public Placeable GetAt(Vector2Int tile) => placed.TryGetValue(tile, out Placeable p) ? p : null;
 
     /// <summary>Placeables of a type, construction sites included.</summary>
-    public int CountOfType(PlaceableType type) => Count(type, builtOnly: false);
+    public int CountOfType(PlaceableType type) => CountMatching(type, builtOnly: false);
 
     /// <summary>Built placeables of a type: what the game consumes (sites don't count, #91).</summary>
-    public int CountBuilt(PlaceableType type) => Count(type, builtOnly: true);
+    public int CountBuilt(PlaceableType type) => CountMatching(type, builtOnly: true);
 
-    private int Count(PlaceableType type, bool builtOnly)
+    private int CountMatching(PlaceableType type, bool builtOnly)
     {
         int n = 0;
         foreach (Placeable p in placed.Values)

@@ -226,7 +226,8 @@ public class CreatureMotionTests
         Assert.Less(Vector3.Distance(Front(goblin), Vector3.forward), 0.01f, "Keeps its heading: no snap back to the camera");
 
         for (int i = 0; i < 30; i++) { goblin.transform.position += Vector3.right * 0.06f; goblin.Pose(Dt); }
-        Assert.Less(Vector3.Distance(Front(goblin), Vector3.right), 0.01f, "Corner: turns to profile walking east");
+        // Mid-walk the waddle (a roll about Z) tilts an east-pointing front out of the ground plane, so read the yaw.
+        Assert.AreEqual(-90f, goblin.Motion.Yaw, 1e-3f, "Corner: turns to profile walking east");
     }
 
     [Test]

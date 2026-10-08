@@ -282,7 +282,7 @@ public class CreatureMotion
         float eased = p * p; // Accelerates like a fall
 
         // Already lying (died asleep): stay down, no pop upright. Otherwise topple sideways relative to its facing
-        // (a roll about its own forward axis, onto its right side).
+        // (a roll about its own forward axis, onto its local +X side).
         bool lying = SleepWeight > 0.5f;
         Quaternion target = lying ? deathStartRotation : YawRotation(Yaw) * Quaternion.Euler(0f, 0f, -t.tipOverDegrees);
         Vector3 targetPosition = lying ? deathStartPosition : new Vector3(0f, t.tipOverLift, 0f);

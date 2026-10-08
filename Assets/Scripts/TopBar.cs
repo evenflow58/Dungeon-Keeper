@@ -2,8 +2,8 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// The top bar (DESIGN §A.7): living goblins, food stock, and the next-hero state, polled every
-/// pollIntervalSeconds. Built in code like the build bar (own overlay Canvas, no scene-authored UI) and
+/// The top bar (DESIGN §A.7): living goblins, food stock, the stockpile's stone (#102), and the next-hero state,
+/// polled every pollIntervalSeconds. Built in code like the build bar (own overlay Canvas, no scene-authored UI) and
 /// display-only: no raycaster and raycastTarget off on everything, so it never blocks board input — the
 /// player digs right under it (the door column).
 /// Updates after the simulation each frame (execution order), so a poll never catches a half-updated frame,
@@ -19,6 +19,7 @@ public class TopBar : MonoBehaviour
     [SerializeField] private PlacementManager placementManager;
     [SerializeField] private HeroSpawner heroSpawner;
     [SerializeField] private GameManager gameManager; // Optional: once the game has ended, the hero readout shows a dash
+    [SerializeField] private Stockpile stockpile;     // The materials readout's source (#102)
 
     [Header("Appearance")]
     [SerializeField] private int fontSize = 20;                                    // Persistent HUD: larger than the build bar's 14
@@ -32,16 +33,19 @@ public class TopBar : MonoBehaviour
     public PlacementManager PlacementManager { get => placementManager; set => placementManager = value; }
     public HeroSpawner HeroSpawner { get => heroSpawner; set => heroSpawner = value; }
     public GameManager GameManager { get => gameManager; set => gameManager = value; }
+    public Stockpile Stockpile { get => stockpile; set => stockpile = value; }
     public int FontSize { get => fontSize; set => fontSize = value; }
     public float PollIntervalSeconds { get => pollIntervalSeconds; set => pollIntervalSeconds = value; }
 
-    /// <summary>The three readouts as of the last Refresh (also what the labels show).</summary>
+    /// <summary>The readouts as of the last Refresh (also what the labels show).</summary>
     public string GoblinText { get; private set; } = "";
     public string FoodText { get; private set; } = "";
+    public string MaterialText { get; private set; } = "";
     public string NextHeroText { get; private set; } = "";
 
     private Text goblinLabel;
     private Text foodLabel;
+    private Text materialLabel;
     private Text nextHeroLabel;
     private float pollTimer;
 
@@ -50,6 +54,7 @@ public class TopBar : MonoBehaviour
         placementManager ??= FindAnyObjectByType<PlacementManager>();
         heroSpawner ??= FindAnyObjectByType<HeroSpawner>();
         gameManager ??= FindAnyObjectByType<GameManager>();
+        stockpile ??= FindAnyObjectByType<Stockpile>();
 
         CreateBar();
         Refresh();
@@ -63,17 +68,25 @@ public class TopBar : MonoBehaviour
         Refresh();
     }
 
-    /// <summary>Recomputes the three readouts and shows them. Called on the poll; public so tests can call it.</summary>
+    /// <summary>Recomputes the readouts and shows them. Called on the poll; public so tests can call it.</summary>
     public void Refresh()
     {
         GoblinText = $"Goblins: {CountLivingGoblins()}";
         FoodText = $"Food: {(placementManager != null ? placementManager.TotalFood : 0)}";
+        // Unity null check, not ?.: an unwired bar degrades to "Stone: 0" like the food readout.
+        MaterialText = stockpile != null
+            ? MaterialReadout(stockpile.DisplayName(MaterialType.Stone), stockpile.Count(MaterialType.Stone))
+            : MaterialReadout(MaterialType.Stone.ToString(), 0);
         NextHeroText = NextHeroReadout(heroSpawner, gameManager);
 
         if (goblinLabel != null) goblinLabel.text = GoblinText;
         if (foodLabel != null) foodLabel.text = FoodText;
+        if (materialLabel != null) materialLabel.text = MaterialText;
         if (nextHeroLabel != null) nextHeroLabel.text = NextHeroText;
     }
+
+    /// <summary>The materials readout text: "Stone: 10".</summary>
+    public static string MaterialReadout(string displayName, int count) => $"{displayName}: {count}";
 
     private static int CountLivingGoblins()
     {
@@ -136,13 +149,15 @@ public class TopBar : MonoBehaviour
         barRect.sizeDelta = new Vector2(0f, barHeight);
 
         Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        goblinLabel = CreateLabel(barGo.transform, "GoblinReadout", font, 0f, TextAnchor.MiddleLeft);
-        foodLabel = CreateLabel(barGo.transform, "FoodReadout", font, 1f / 3f, TextAnchor.MiddleCenter);
-        nextHeroLabel = CreateLabel(barGo.transform, "NextHeroReadout", font, 2f / 3f, TextAnchor.MiddleRight);
+        // Outer thirds as before (the next-hero text runs long); the middle third holds food and stone side by side.
+        goblinLabel = CreateLabel(barGo.transform, "GoblinReadout", font, 0f, 1f / 3f, TextAnchor.MiddleLeft);
+        foodLabel = CreateLabel(barGo.transform, "FoodReadout", font, 1f / 3f, 1f / 6f, TextAnchor.MiddleCenter);
+        materialLabel = CreateLabel(barGo.transform, "MaterialReadout", font, 1f / 2f, 1f / 6f, TextAnchor.MiddleCenter);
+        nextHeroLabel = CreateLabel(barGo.transform, "NextHeroReadout", font, 2f / 3f, 1f / 3f, TextAnchor.MiddleRight);
     }
 
-    // A label filling one third of the bar (starting at xMin), padded at the outer edges.
-    private Text CreateLabel(Transform parent, string name, Font font, float xMin, TextAnchor alignment)
+    // A label filling width (a fraction of the bar) from xMin, padded at its edges.
+    private Text CreateLabel(Transform parent, string name, Font font, float xMin, float width, TextAnchor alignment)
     {
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
@@ -156,7 +171,7 @@ public class TopBar : MonoBehaviour
 
         var rect = go.GetComponent<RectTransform>();
         rect.anchorMin = new Vector2(xMin, 0f);
-        rect.anchorMax = new Vector2(xMin + 1f / 3f, 1f);
+        rect.anchorMax = new Vector2(xMin + width, 1f);
         rect.offsetMin = new Vector2(sidePadding, 0f);
         rect.offsetMax = new Vector2(-sidePadding, 0f);
         return text;

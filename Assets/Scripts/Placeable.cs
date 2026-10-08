@@ -40,8 +40,8 @@ public class Placeable : MonoBehaviour
     [SerializeField] private float completionBounceSeconds = 0.3f;
 
     [Header("Order Marker (#104)")]
-    [SerializeField] private Color orderMarkerTint = new Color(0.45f, 0.80f, 1.00f, 1f); // Blueprint cyan: unlike amber designations
-    [SerializeField] private float orderGhostTintAmount = 0.6f; // How far the ghost's part colors pull toward the tint
+    [SerializeField] private Color orderMarkerTint = new Color(0.45f, 0.80f, 1.00f, 1f); // Blueprint cyan: the outline always; the ghost when the material has no color
+    [SerializeField] private float orderGhostTintAmount = 0.6f; // How far the ghost's part colors pull toward its tint (the material's color, #109)
     [SerializeField] private float orderGhostAlpha = 0.35f;     // The ghost of what will stand here
     [SerializeField] private float orderOutlineAlpha = 0.85f;   // The ground outline: the order's footprint, readable flat
     [SerializeField] private float orderOutlineThickness = 0.05f;
@@ -74,9 +74,22 @@ public class Placeable : MonoBehaviour
     /// <summary>The unfunded order's marker (ghost + outline); null once funded or built.</summary>
     public GameObject OrderMarker { get; private set; }
 
-    /// <summary>The material this order costs, and how much (#104). Paid in full at funding.</summary>
-    public MaterialType RequiredMaterial { get; private set; }
+    /// <summary>
+    /// The material this placeable was ordered in (#109) — what its order costs, and once built what it's made of. Set at
+    /// placement and kept after construction (later stories read material properties through it).
+    /// </summary>
+    public MaterialType OrderedMaterial { get; private set; }
+
+    /// <summary>How much of OrderedMaterial the order costs (#104). Paid in full at funding.</summary>
     public int RequiredAmount { get; private set; }
+
+    /// <summary>The order marker ghost's current body tint (#109): the ordered material's color, or the cyan fallback.</summary>
+    public Color OrderGhostTint { get; private set; }
+
+    /// <summary>The marker's "ordered" blueprint color: the outline always, and the ghost body's fallback tint.</summary>
+    public Color OrderMarkerFallbackTint => orderMarkerTint;
+
+    private Color primaryColor; // The type's color the models were built with (kept to rebuild the marker's ghost)
 
     /// <summary>
     /// False while the order waits for materials (#104): no pile, never a build job. PlacementManager's funding pass
@@ -118,6 +131,8 @@ public class Placeable : MonoBehaviour
         IsBuilt = false;
         IsFunded = false;
         buildProgress = 0f;
+        primaryColor = color;
+        OrderGhostTint = orderMarkerTint;
         CreateModel(color, size);
         Model.SetActive(false);
         CreateMaterialsPile(color, size);
@@ -129,9 +144,28 @@ public class Placeable : MonoBehaviour
     public void SetOrder(long orderIndex, MaterialType material, int amount)
     {
         OrderIndex = orderIndex;
-        RequiredMaterial = material;
+        OrderedMaterial = material;
         RequiredAmount = Mathf.Max(0, amount);
     }
+
+    /// <summary>
+    /// The marker's ghost body takes this tint (#109: the ordered material's catalog color, chosen by MarkerTintFor);
+    /// the outline stays the blueprint "ordered" color. No-op once the marker is gone (funded or built).
+    /// </summary>
+    public void TintOrderMarker(Color tint)
+    {
+        OrderGhostTint = tint;
+        if (OrderMarker == null) return;
+        DestroyOrderMarker();
+        CreateOrderMarker(primaryColor, Size);
+    }
+
+    /// <summary>
+    /// The ghost tint for an order in this material (#109): the stockpile catalog's color for it, else the fallback
+    /// (#104's blueprint cyan) when there's no stockpile or no definition.
+    /// </summary>
+    public static Color MarkerTintFor(Stockpile stockpile, MaterialType material, Color fallback) =>
+        stockpile != null && stockpile.TryGetColor(material, out Color color) ? color : fallback;
 
     /// <summary>
     /// The order is paid for (#104): the marker goes and the materials pile arrives — from here it's #91's site.
@@ -273,13 +307,13 @@ public class Placeable : MonoBehaviour
         Model = CreatureModel.Build(transform, Type + "Model", FinishedRecipe(color, size), modelSmoothness);
     }
 
-    // The order marker: a translucent ghost of the finished model (what will stand here) on an outline of its
-    // footprint (so even a flat trap plate reads at gameplay zoom), both in the blueprint tint.
+    // The order marker: a translucent ghost of the finished model (what will stand here, tinted by what it's ordered in)
+    // on an outline of its footprint (so even a flat trap plate reads at gameplay zoom) in the blueprint "ordered" tint.
     private void CreateOrderMarker(Color color, float size)
     {
         if (OrderMarker != null) return;
         OrderMarker = CreatureModel.BuildGhost(transform, Type + "Order", FinishedRecipe(color, size),
-            orderMarkerTint, orderGhostTintAmount, orderGhostAlpha);
+            OrderGhostTint, orderGhostTintAmount, orderGhostAlpha);
         Color outline = orderMarkerTint;
         outline.a = orderOutlineAlpha;
         GameObject frame = CreatureModel.BuildGhost(OrderMarker.transform, "Outline",

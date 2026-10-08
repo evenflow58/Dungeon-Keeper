@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -9,6 +10,8 @@ using UnityEngine.UI;
 /// is disabled); left-click/drag places on every valid tile in the rect; Esc or right-click exits.
 /// Each button shows its type's cost (#104), red while an order wouldn't fund right now; the drag preview takes the
 /// unaffordable tint then too. Placing is never blocked by cost: the order waits for materials.
+/// A material selector (#109) at the bar's end reads the current material and cycles through the materials the
+/// selected type can be ordered in; orders are placed in it, and the cost labels follow it.
 /// </summary>
 [DisallowMultipleComponent]
 public class PlacementController : MonoBehaviour
@@ -35,6 +38,7 @@ public class PlacementController : MonoBehaviour
     [Header("Costs (#104)")]
     [SerializeField] private Color unaffordableCostColor = new Color(1f, 0.38f, 0.38f, 1f);
     [SerializeField] private float costRefreshSeconds = 0.25f; // How often the bar re-checks affordability (unscaled)
+    [SerializeField] private float materialButtonWidth = 110f;  // The material selector at the bar's end (#109)
     [SerializeField] private float feedbackFlashSeconds = 0.25f;
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
@@ -45,6 +49,12 @@ public class PlacementController : MonoBehaviour
     public Camera MainCamera { get => mainCamera; set => mainCamera = value; }
 
     public PlaceableType? SelectedType { get; private set; }
+
+    /// <summary>
+    /// The bar's current material (#109): what an order of the selected type is placed in. Stone by default; selecting a
+    /// type that can't be ordered in it falls back to that type's first cost row.
+    /// </summary>
+    public MaterialType SelectedMaterial { get; private set; } = MaterialType.Stone;
     public bool IsPlacing => SelectedType != null;
     public bool IsDragging => isDragging;
 
@@ -76,6 +86,7 @@ public class PlacementController : MonoBehaviour
     private Canvas barCanvas;
     private Image[] buttonImages;
     private Text[] buttonLabels;
+    private Text materialLabel;
     private float costRefreshTimer;
 
     // ---- lifecycle ----
@@ -129,9 +140,42 @@ public class PlacementController : MonoBehaviour
 
         CancelDrag();
         SelectedType = type;
+        SelectedMaterial = MaterialFor(type);
         digReenableFrame = -1;
         if (digDesignator != null) digDesignator.enabled = false;
         RefreshButtons();
+        RefreshCostLabels();
+    }
+
+    /// <summary>The materials the selected type can be ordered in (#109): its cost rows'; empty with no type selected.</summary>
+    public List<MaterialType> AvailableMaterials =>
+        SelectedType != null && placementManager != null ? placementManager.MaterialsFor(SelectedType.Value) : new List<MaterialType>();
+
+    /// <summary>Sets the bar's material (#109), if the selected type (or, with none, any) can be ordered in it.</summary>
+    public bool SelectMaterial(MaterialType material)
+    {
+        if (SelectedType != null && !AvailableMaterials.Contains(material)) return false;
+        SelectedMaterial = material;
+        RefreshCostLabels();
+        return true;
+    }
+
+    /// <summary>The selector's click (#109): the next material the selected type can be ordered in, wrapping.</summary>
+    public void CycleMaterial()
+    {
+        List<MaterialType> available = AvailableMaterials;
+        if (available.Count == 0) return;
+        int i = available.IndexOf(SelectedMaterial);
+        SelectMaterial(available[(i + 1) % available.Count]);
+    }
+
+    // The material an order of this type would use: the bar's current material if the type has a row for it, else the
+    // type's default (first row).
+    private MaterialType MaterialFor(PlaceableType type)
+    {
+        if (placementManager == null) return SelectedMaterial;
+        if (placementManager.TryGetCost(type, SelectedMaterial, out _)) return SelectedMaterial;
+        return placementManager.TryGetDefaultMaterial(type, out MaterialType fallback) ? fallback : SelectedMaterial;
     }
 
     /// <summary>Exits placement mode and restores dig designation immediately.</summary>
@@ -255,7 +299,7 @@ public class PlacementController : MonoBehaviour
 
         RectInt rect = DigDesignator.NormalizeRect(dragAnchor, dragCurrent);
         LastApplyCount = placementManager != null && imp != null && SelectedType != null
-            ? placementManager.ApplyRect(SelectedType.Value, rect, imp.CurrentTile)
+            ? placementManager.ApplyRect(SelectedType.Value, SelectedMaterial, rect, imp.CurrentTile)
             : 0;
 
         if (LastApplyCount > 0)
@@ -304,7 +348,7 @@ public class PlacementController : MonoBehaviour
         // Flat on the floor it places onto, just above the ground.
         previewSprite.transform.position   = new Vector3(center.x, boardRenderer.OverlayLift, center.z);
         previewSprite.transform.localScale = new Vector3(rect.width, rect.height, 1f);
-        bool affordable = SelectedType == null || placementManager == null || placementManager.WouldFundNow(SelectedType.Value);
+        bool affordable = SelectedType == null || placementManager == null || placementManager.WouldFundNow(SelectedType.Value, SelectedMaterial);
         previewSprite.color   = !previewValid.Value ? invalidPreviewColor : affordable ? validPreviewColor : unaffordablePreviewColor;
         previewSprite.enabled = true;
     }
@@ -369,7 +413,7 @@ public class PlacementController : MonoBehaviour
         barRect.pivot = new Vector2(0.5f, 0f);
         barRect.anchoredPosition = new Vector2(0f, barPadding);
         barRect.sizeDelta = new Vector2(
-            BarTypes.Length * buttonSize.x + (BarTypes.Length + 1) * barPadding,
+            BarTypes.Length * buttonSize.x + (BarTypes.Length + 1) * barPadding + materialButtonWidth + barPadding,
             buttonSize.y + 2f * barPadding);
 
         Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -413,19 +457,64 @@ public class PlacementController : MonoBehaviour
             buttonLabels[i] = text;
         }
 
+        CreateMaterialSelector(barGo.transform, font);
+
         RefreshButtons();
         RefreshCostLabels();
     }
 
-    /// <summary>Re-labels each button with its type's cost, red where an order wouldn't fund right now.</summary>
+    // The selector (#109): one button at the bar's end, reading the current material; a click cycles it.
+    private void CreateMaterialSelector(Transform bar, Font font)
+    {
+        var go = new GameObject("MaterialSelector");
+        go.transform.SetParent(bar, false);
+        var image = go.AddComponent<Image>();
+        image.color = buttonNormalColor;
+        var button = go.AddComponent<Button>();
+        button.targetGraphic = image;
+        button.onClick.AddListener(CycleMaterial);
+        var rect = go.GetComponent<RectTransform>();
+        rect.anchorMin = rect.anchorMax = new Vector2(0f, 0.5f);
+        rect.pivot = new Vector2(0f, 0.5f);
+        rect.anchoredPosition = new Vector2(barPadding + BarTypes.Length * (buttonSize.x + barPadding), 0f);
+        rect.sizeDelta = new Vector2(materialButtonWidth, buttonSize.y);
+
+        var textGo = new GameObject("Label");
+        textGo.transform.SetParent(go.transform, false);
+        materialLabel = textGo.AddComponent<Text>();
+        materialLabel.font = font;
+        materialLabel.fontSize = 14;
+        materialLabel.color = Color.white;
+        materialLabel.alignment = TextAnchor.MiddleCenter;
+        materialLabel.raycastTarget = false;
+        var textRect = textGo.GetComponent<RectTransform>();
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = textRect.offsetMax = Vector2.zero;
+    }
+
+    /// <summary>
+    /// Re-labels each button with its cost in the material an order of that type would use (#109), red where it
+    /// wouldn't fund right now, and the selector with the current material's name.
+    /// </summary>
     private void RefreshCostLabels()
     {
-        if (buttonLabels == null || placementManager == null) return;
-        for (int i = 0; i < BarTypes.Length; i++)
+        if (placementManager == null) return;
+        if (buttonLabels != null)
         {
-            if (buttonLabels[i] == null) continue;
-            MaterialAmount cost = placementManager.CostFor(BarTypes[i]);
-            buttonLabels[i].text = CostLabel(BarLabels[i], cost.amount, placementManager.WouldFundNow(BarTypes[i]), unaffordableCostColor);
+            for (int i = 0; i < BarTypes.Length; i++)
+            {
+                if (buttonLabels[i] == null) continue;
+                MaterialType material = MaterialFor(BarTypes[i]);
+                buttonLabels[i].text = placementManager.TryGetCost(BarTypes[i], material, out MaterialAmount cost)
+                    ? CostLabel(BarLabels[i], cost.amount, placementManager.WouldFundNow(BarTypes[i], material), unaffordableCostColor)
+                    : BarLabels[i];
+            }
+        }
+        if (materialLabel != null)
+        {
+            Stockpile stockpile = placementManager.Stockpile;
+            materialLabel.text = stockpile != null ? stockpile.DisplayName(SelectedMaterial) : SelectedMaterial.ToString();
         }
     }
 

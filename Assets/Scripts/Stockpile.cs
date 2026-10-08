@@ -131,6 +131,14 @@ public class Stockpile : MonoBehaviour
         return false;
     }
 
+    /// <summary>A material's catalog color (#109); false (and default) when it has no definition.</summary>
+    public bool TryGetColor(MaterialType type, out Color color)
+    {
+        bool found = TryGetDefinition(type, out MaterialDefinition d);
+        color = found ? d.color : default;
+        return found;
+    }
+
     /// <summary>A material's display name: its definition's, else the enum name.</summary>
     public string DisplayName(MaterialType type) =>
         TryGetDefinition(type, out MaterialDefinition d) && !string.IsNullOrEmpty(d.displayName) ? d.displayName : type.ToString();

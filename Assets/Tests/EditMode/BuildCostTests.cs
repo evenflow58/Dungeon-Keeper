@@ -108,11 +108,12 @@ public class BuildCostTests
     // --- The cost table and the order record ---
 
     [Test]
-    public void CostFor_AnswersTheTable_StoneForEveryType()
+    public void TryGetCost_AnswersTheTable_StoneForEveryType()
     {
+        // #109: the per-type CostFor became type x material rows; the shipped Stone rows hold #104's costs.
         foreach (var (type, amount) in new[] { (PlaceableType.LairCot, 3), (PlaceableType.MushroomPlot, 4), (PlaceableType.SpikeTrap, 2) })
         {
-            MaterialAmount cost = manager.CostFor(type);
+            Assert.IsTrue(manager.TryGetCost(type, MaterialType.Stone, out MaterialAmount cost), $"{type} is orderable in Stone");
             Assert.AreEqual(MaterialType.Stone, cost.type, $"{type}");
             Assert.AreEqual(amount, cost.amount, $"{type}");
         }
@@ -123,7 +124,7 @@ public class BuildCostTests
     {
         Placeable cot = Order(PlaceableType.LairCot, 21, 13);
         Placeable plot = Order(PlaceableType.MushroomPlot, 22, 13);
-        Assert.AreEqual(MaterialType.Stone, cot.RequiredMaterial);
+        Assert.AreEqual(MaterialType.Stone, cot.OrderedMaterial);
         Assert.AreEqual(3, cot.RequiredAmount);
         Assert.AreEqual(4, plot.RequiredAmount);
         Assert.Less(cot.OrderIndex, plot.OrderIndex, "Placement order");
@@ -143,7 +144,7 @@ public class BuildCostTests
         manager.RunFundingPass();
         manager.RunFundingPass();
         Assert.AreEqual(7, Stone, "Charged exactly once");
-        Assert.IsTrue(manager.WouldFundNow(PlaceableType.LairCot));
+        Assert.IsTrue(manager.WouldFundNow(PlaceableType.LairCot, MaterialType.Stone));
     }
 
     [Test]
@@ -155,7 +156,7 @@ public class BuildCostTests
         Assert.AreEqual(2, Stone, "Nothing deducted");
         CollectionAssert.DoesNotContain(manager.GetConstructionSites(), plot);
         CollectionAssert.AreEqual(new[] { plot }, manager.GetAwaitingFunding());
-        Assert.IsFalse(manager.WouldFundNow(PlaceableType.MushroomPlot));
+        Assert.IsFalse(manager.WouldFundNow(PlaceableType.MushroomPlot, MaterialType.Stone));
         Assert.IsFalse(ImpDigger.TrySelectWork(board, new List<Placeable> { plot }, null, ImpTile, out _, out _, out Placeable none, out _),
             "Selection never sees an unfunded site, even handed one directly");
         Assert.IsNull(none);
@@ -180,7 +181,7 @@ public class BuildCostTests
         AssertWaiting(plot, "Plot");
         AssertWaiting(trap, "Trap: no jumping the line");
         Assert.AreEqual(3, Stone);
-        Assert.IsFalse(manager.WouldFundNow(PlaceableType.SpikeTrap), "A new order would queue behind them");
+        Assert.IsFalse(manager.WouldFundNow(PlaceableType.SpikeTrap, MaterialType.Stone), "A new order would queue behind them");
 
         stockpile.Add(MaterialType.Stone, 1);
         Assert.AreEqual(1, manager.RunFundingPass());
@@ -233,7 +234,7 @@ public class BuildCostTests
         Placeable plot = Order(PlaceableType.MushroomPlot, 22, 14);
         AssertFunded(plot, "Unwired: no waiting");
         CollectionAssert.Contains(manager.GetConstructionSites(), plot);
-        Assert.IsTrue(manager.WouldFundNow(PlaceableType.MushroomPlot));
+        Assert.IsTrue(manager.WouldFundNow(PlaceableType.MushroomPlot, MaterialType.Stone));
         Assert.AreEqual(10, Stone, "Nothing charged anywhere");
         StepUntil(() => plot.IsBuilt, 10f, "the imp to build it");
     }
@@ -272,9 +273,9 @@ public class BuildCostTests
     public void WouldFundNow_TracksTheStockAndTheLine()
     {
         SetStock(3);
-        Assert.IsTrue(manager.WouldFundNow(PlaceableType.LairCot), "3 covers 3");
-        Assert.IsFalse(manager.WouldFundNow(PlaceableType.MushroomPlot), "3 doesn't cover 4");
+        Assert.IsTrue(manager.WouldFundNow(PlaceableType.LairCot, MaterialType.Stone), "3 covers 3");
+        Assert.IsFalse(manager.WouldFundNow(PlaceableType.MushroomPlot, MaterialType.Stone), "3 doesn't cover 4");
         stockpile.Add(MaterialType.Stone, 1);
-        Assert.IsTrue(manager.WouldFundNow(PlaceableType.MushroomPlot));
+        Assert.IsTrue(manager.WouldFundNow(PlaceableType.MushroomPlot, MaterialType.Stone));
     }
 }

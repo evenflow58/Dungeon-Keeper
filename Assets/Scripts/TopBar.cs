@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -74,9 +75,7 @@ public class TopBar : MonoBehaviour
         GoblinText = $"Goblins: {CountLivingGoblins()}";
         FoodText = $"Food: {(placementManager != null ? placementManager.TotalFood : 0)}";
         // Unity null check, not ?.: an unwired bar degrades to "Stone: 0" like the food readout.
-        MaterialText = stockpile != null
-            ? MaterialReadout(stockpile.DisplayName(MaterialType.Stone), stockpile.Count(MaterialType.Stone))
-            : MaterialReadout(MaterialType.Stone.ToString(), 0);
+        MaterialText = MaterialsReadout(CatalogCounts(stockpile));
         NextHeroText = NextHeroReadout(heroSpawner, gameManager);
 
         if (goblinLabel != null) goblinLabel.text = GoblinText;
@@ -85,8 +84,29 @@ public class TopBar : MonoBehaviour
         if (nextHeroLabel != null) nextHeroLabel.text = NextHeroText;
     }
 
-    /// <summary>The materials readout text: "Stone: 10".</summary>
+    /// <summary>One material's readout segment: "Stone: 10".</summary>
     public static string MaterialReadout(string displayName, int count) => $"{displayName}: {count}";
+
+    /// <summary>The materials readout (#109): every catalog material's segment, in catalog order, joined by " · ".</summary>
+    public static string MaterialsReadout(IList<(string name, int count)> materials)
+    {
+        if (materials == null || materials.Count == 0) return MaterialReadout(MaterialType.Stone.ToString(), 0);
+        var segments = new string[materials.Count];
+        for (int i = 0; i < materials.Count; i++) segments[i] = MaterialReadout(materials[i].name, materials[i].count);
+        return string.Join(" · ", segments);
+    }
+
+    // Each catalog material's name and count, in catalog order. Unwired (Unity null check) or an empty catalog
+    // degrades to stone at 0 / stone's count, as before #109.
+    private static List<(string name, int count)> CatalogCounts(Stockpile stockpile)
+    {
+        var list = new List<(string name, int count)>();
+        if (stockpile == null) return list;
+        foreach (MaterialDefinition d in stockpile.Definitions)
+            if (d != null) list.Add((stockpile.DisplayName(d.type), stockpile.Count(d.type)));
+        if (list.Count == 0) list.Add((stockpile.DisplayName(MaterialType.Stone), stockpile.Count(MaterialType.Stone)));
+        return list;
+    }
 
     private static int CountLivingGoblins()
     {

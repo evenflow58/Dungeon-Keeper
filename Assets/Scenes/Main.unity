@@ -680,6 +680,9 @@ MonoBehaviour:
   mushroomGrowthSecondsPerFood: 30
   mushroomCapacity: 5
   spikeDamage: 1
+  lairCotBuildSeconds: 4
+  mushroomPlotBuildSeconds: 6
+  spikeTrapBuildSeconds: 5
 --- !u!114 &565044526
 MonoBehaviour:
   m_ObjectHideFlags: 0

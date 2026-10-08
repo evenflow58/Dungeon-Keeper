@@ -28,11 +28,32 @@ public class PlacementManager : MonoBehaviour
     [Header("Spike Trap")]
     [SerializeField] private int spikeDamage = 1; // Provisional: hero HP lands with Epic #5
 
+    // How long the imp works at a construction site to finish it (#92), in game seconds.
+    [Header("Build Times")]
+    [SerializeField] private float lairCotBuildSeconds = 4f;
+    [SerializeField] private float mushroomPlotBuildSeconds = 6f;
+    [SerializeField] private float spikeTrapBuildSeconds = 5f;
+
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
     public float MushroomGrowthSecondsPerFood { get => mushroomGrowthSecondsPerFood; set => mushroomGrowthSecondsPerFood = value; }
     public int MushroomCapacity { get => mushroomCapacity; set => mushroomCapacity = value; }
     public int SpikeDamage { get => spikeDamage; set => spikeDamage = value; }
+    public float LairCotBuildSeconds { get => lairCotBuildSeconds; set => lairCotBuildSeconds = value; }
+    public float MushroomPlotBuildSeconds { get => mushroomPlotBuildSeconds; set => mushroomPlotBuildSeconds = value; }
+    public float SpikeTrapBuildSeconds { get => spikeTrapBuildSeconds; set => spikeTrapBuildSeconds = value; }
+
+    /// <summary>Game seconds of imp work to finish a construction site of this type.</summary>
+    public float BuildSecondsFor(PlaceableType type)
+    {
+        switch (type)
+        {
+            case PlaceableType.LairCot: return lairCotBuildSeconds;
+            case PlaceableType.MushroomPlot: return mushroomPlotBuildSeconds;
+            case PlaceableType.SpikeTrap: return spikeTrapBuildSeconds;
+            default: return 0f;
+        }
+    }
 
     public int Count => placed.Count;
 
@@ -100,6 +121,16 @@ public class PlacementManager : MonoBehaviour
 
     /// <summary>Built Lair Cots only, in scan order: the ones a goblin can claim.</summary>
     public List<Placeable> GetBuiltCots() => Collect<Placeable>(PlaceableType.LairCot, builtOnly: true);
+
+    /// <summary>Every unbuilt construction site, any type, in board scan order: the imp's build jobs (#92).</summary>
+    public List<Placeable> GetConstructionSites()
+    {
+        var sites = new List<Placeable>();
+        foreach (Placeable p in placed.Values)
+            if (p != null && !p.IsBuilt) sites.Add(p);
+        sites.Sort((a, b) => CompareScanOrder(a.Tile, b.Tile));
+        return sites;
+    }
 
     // The type's component on each matching placeable (a placeable missing it is skipped), in scan order.
     private List<T> Collect<T>(PlaceableType type, bool builtOnly) where T : Component

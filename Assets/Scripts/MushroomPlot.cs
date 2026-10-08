@@ -26,6 +26,9 @@ public class MushroomPlot : MonoBehaviour
 
     public Vector2Int Tile => GetComponent<Placeable>().Tile;
 
+    /// <summary>False while a construction site (#91): no growth, holds no food, nothing to take.</summary>
+    public bool IsBuilt => GetComponent<Placeable>().IsBuilt;
+
     public int FoodCount { get; private set; }
 
     /// <summary>Progress in seconds toward the next food. Held at 0 while at capacity.</summary>
@@ -53,6 +56,7 @@ public class MushroomPlot : MonoBehaviour
     /// </summary>
     public void Tick(float deltaTime)
     {
+        if (!IsBuilt) return; // A site grows nothing
         if (FoodCount >= capacity)
         {
             GrowthElapsed = 0f; // No banking while full
@@ -71,13 +75,21 @@ public class MushroomPlot : MonoBehaviour
         if (FoodCount != before) RefreshPips();
     }
 
-    /// <summary>Takes one food. False when empty. Doesn't touch growth progress.</summary>
+    /// <summary>Takes one food. False when empty or still a site. Doesn't touch growth progress.</summary>
     public bool TryTakeFood()
     {
-        if (FoodCount == 0) return false;
+        if (!IsBuilt || FoodCount == 0) return false;
         FoodCount--;
         RefreshPips();
         return true;
+    }
+
+    /// <summary>Placeable.CompleteConstruction calls this: growth starts now, from empty.</summary>
+    public void OnConstructed()
+    {
+        FoodCount = 0;
+        GrowthElapsed = 0f;
+        RefreshPips();
     }
 
     /// <summary>

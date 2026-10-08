@@ -79,6 +79,39 @@ public static class PropModel
         return parts;
     }
 
+    // ---- Construction sites (#91): a materials pile per type, shown until the placeable is built ----
+
+    /// <summary>Cot materials: a loose stack of frame planks, a crate, and a folded bolt of mattress cloth.</summary>
+    public static Part[] CotMaterialsRecipe(float s, Color wood, Color crate, Color cloth) => new[]
+    {
+        new Part("Plank0", Shape.Box, new Vector3(0f, 0.02f, -0.12f * s),         new Vector3(0.9f * s, 0.04f, 0.12f * s), wood, new Vector3(0f, 8f, 0f)),
+        new Part("Plank1", Shape.Box, new Vector3(0.02f * s, 0.06f, -0.1f * s),   new Vector3(0.88f * s, 0.04f, 0.12f * s), wood, new Vector3(0f, -6f, 0f)),
+        new Part("Plank2", Shape.Box, new Vector3(-0.05f * s, 0.02f, 0.03f * s),  new Vector3(0.85f * s, 0.04f, 0.12f * s), wood, new Vector3(0f, 3f, 0f)),
+        new Part("Crate",  Shape.Box, new Vector3(0.24f * s, 0.11f, 0.22f * s),   new Vector3(0.22f, 0.22f, 0.22f), crate, new Vector3(0f, 20f, 0f)),
+        new Part("Cloth",  Shape.Box, new Vector3(-0.2f * s, 0.03f, 0.24f * s),   new Vector3(0.32f * s, 0.06f, 0.2f * s), cloth, new Vector3(0f, -10f, 0f)),
+    };
+
+    /// <summary>Plot materials: a heap of fresh soil with spawn caps on it, and two sacks beside it.</summary>
+    public static Part[] PlotMaterialsRecipe(float s, Color soil, Color sack, Color cap) => new[]
+    {
+        new Part("Soil",   Shape.Sphere, new Vector3(0f, 0f, 0.06f * s),             new Vector3(0.6f * s, 0.18f, 0.5f * s), soil), // Half sunk
+        new Part("Spawn0", Shape.Sphere, new Vector3(0.06f * s, 0.085f, 0.1f * s),   new Vector3(0.09f, 0.05f, 0.09f), cap),
+        new Part("Spawn1", Shape.Sphere, new Vector3(-0.08f * s, 0.075f, 0.16f * s), new Vector3(0.07f, 0.04f, 0.07f), cap),
+        new Part("Sack0",  Shape.Sphere, new Vector3(-0.24f * s, 0.09f, -0.16f * s), new Vector3(0.22f, 0.18f, 0.2f), sack),
+        new Part("Sack1",  Shape.Sphere, new Vector3(0.24f * s, 0.08f, -0.12f * s),  new Vector3(0.2f, 0.16f, 0.18f), sack, new Vector3(0f, 30f, 0f)),
+    };
+
+    /// <summary>Trap materials: two plate sections stacked askew, loose spikes lying on the floor, a parts crate.</summary>
+    public static Part[] TrapMaterialsRecipe(float s, Color plate, Color spike, Color crate) => new[]
+    {
+        new Part("PlateA", Shape.Box,  new Vector3(-0.06f * s, 0.012f, 0.04f * s), new Vector3(0.6f * s, 0.024f, 0.6f * s), plate, new Vector3(0f, 12f, 0f)),
+        new Part("PlateB", Shape.Box,  new Vector3(0.05f * s, 0.036f, -0.02f * s), new Vector3(0.45f * s, 0.024f, 0.45f * s), plate, new Vector3(0f, -20f, 0f)),
+        // Cones lie on their sides (base at the part's origin, pointing along −X / turned).
+        new Part("Spike0", Shape.Cone, new Vector3(0.42f * s, 0.05f, 0.28f * s),  new Vector3(0.1f, 0.26f, 0.1f), spike, new Vector3(0f, 0f, 90f)),
+        new Part("Spike1", Shape.Cone, new Vector3(0.4f * s, 0.05f, 0.08f * s),   new Vector3(0.1f, 0.26f, 0.1f), spike, new Vector3(0f, 25f, 90f)),
+        new Part("Crate",  Shape.Box,  new Vector3(-0.3f * s, 0.08f, -0.28f * s), new Vector3(0.16f, 0.16f, 0.16f), crate, new Vector3(0f, -15f, 0f)),
+    };
+
     // ---- The Heart: a faceted crystal on a low stone plinth ----
 
     public static Part[] HeartRecipe(float height, float width, Color crystal, Color plinth, float plinthHeight) => new[]

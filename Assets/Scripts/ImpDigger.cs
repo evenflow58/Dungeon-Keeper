@@ -97,7 +97,7 @@ public class ImpDigger : MonoBehaviour
         Vector2Int target, standPoint;
         SpikeTrap trap = null;
         bool found = placementManager != null
-            ? TrySelectWork(dungeonBoard, placementManager.GetSpikeTraps(), imp.CurrentTile, out target, out standPoint, out trap)
+            ? TrySelectWork(dungeonBoard, placementManager.GetBuiltSpikeTraps(), imp.CurrentTile, out target, out standPoint, out trap)
             : TrySelectTarget(dungeonBoard, imp.CurrentTile, out target, out standPoint); // No manager: dig-only
         if (!found) return;
 
@@ -218,7 +218,8 @@ public class ImpDigger : MonoBehaviour
         {
             foreach (SpikeTrap candidate in traps)
             {
-                if (candidate == null || candidate.IsArmed) continue;
+                // Armed traps aren't work, and a construction site isn't a spent trap (#91): never rearm one.
+                if (candidate == null || !candidate.IsBuilt || candidate.IsArmed) continue;
 
                 List<Vector2Int> path = Pathfinder.FindPathToNeighbor(board, fromTile, candidate.Tile);
                 if (path.Count == 0 || path.Count >= bestCost) continue; // Unreachable, or not strictly nearer

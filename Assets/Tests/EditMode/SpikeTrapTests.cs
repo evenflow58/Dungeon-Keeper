@@ -56,7 +56,7 @@ public class SpikeTrapTests
 
     private SpikeTrap PlaceTrap(int x, int y)
     {
-        Assert.IsTrue(manager.TryPlace(PlaceableType.SpikeTrap, new Vector2Int(x, y), ImpTile, out Placeable p));
+        Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.SpikeTrap, new Vector2Int(x, y), ImpTile, out Placeable p));
         var trap = p.gameObject.GetComponent<SpikeTrap>();
         Assert.IsNotNull(trap);
         return trap;
@@ -131,8 +131,8 @@ public class SpikeTrapTests
     [Test]
     public void CotAndPlot_HaveNoSpikeTrapComponent()
     {
-        manager.TryPlace(PlaceableType.LairCot, new Vector2Int(22, 14), ImpTile, out Placeable cot);
-        manager.TryPlace(PlaceableType.MushroomPlot, new Vector2Int(23, 14), ImpTile, out Placeable plot);
+        manager.TryPlaceBuilt(PlaceableType.LairCot, new Vector2Int(22, 14), ImpTile, out Placeable cot);
+        manager.TryPlaceBuilt(PlaceableType.MushroomPlot, new Vector2Int(23, 14), ImpTile, out Placeable plot);
 
         Assert.IsFalse(cot.TryGetComponent(out SpikeTrap _));
         Assert.IsFalse(plot.TryGetComponent(out SpikeTrap _));
@@ -195,9 +195,9 @@ public class SpikeTrapTests
         // Placed out of scan order, with other types mixed in.
         SpikeTrap c = PlaceTrap(25, 13);
         SpikeTrap b = PlaceTrap(22, 17);
-        manager.TryPlace(PlaceableType.LairCot, new Vector2Int(21, 13), ImpTile, out _);
+        manager.TryPlaceBuilt(PlaceableType.LairCot, new Vector2Int(21, 13), ImpTile, out _);
         SpikeTrap a = PlaceTrap(22, 14);
-        manager.TryPlace(PlaceableType.MushroomPlot, new Vector2Int(23, 13), ImpTile, out _);
+        manager.TryPlaceBuilt(PlaceableType.MushroomPlot, new Vector2Int(23, 13), ImpTile, out _);
         a.TryTrigger(out _); // Spent traps are included too
 
         List<SpikeTrap> traps = manager.GetSpikeTraps();

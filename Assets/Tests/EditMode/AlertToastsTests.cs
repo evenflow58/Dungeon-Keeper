@@ -85,7 +85,7 @@ public class AlertToastsTests
 
     private SpikeTrap PlaceTrap(int x, int y)
     {
-        Assert.IsTrue(manager.TryPlace(PlaceableType.SpikeTrap, new Vector2Int(x, y), PlaceFrom, out Placeable p));
+        Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.SpikeTrap, new Vector2Int(x, y), PlaceFrom, out Placeable p));
         return p.GetComponent<SpikeTrap>();
     }
 

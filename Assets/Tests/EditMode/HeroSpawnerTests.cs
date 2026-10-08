@@ -54,7 +54,7 @@ public class HeroSpawnerTests
     }
 
     private void Place(PlaceableType type, int x, int y) =>
-        Assert.IsTrue(manager.TryPlace(type, new Vector2Int(x, y), PlaceFrom, out _));
+        Assert.IsTrue(manager.TryPlaceBuilt(type, new Vector2Int(x, y), PlaceFrom, out _));
 
     private void PlaceBuildingTrigger()
     {

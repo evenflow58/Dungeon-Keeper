@@ -231,7 +231,7 @@ public class GoblinCombatTests
 
     private MushroomPlot PlaceStockedPlot(int x, int y, int food)
     {
-        Assert.IsTrue(manager.TryPlace(PlaceableType.MushroomPlot, new Vector2Int(x, y), PlaceFrom, out Placeable p));
+        Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.MushroomPlot, new Vector2Int(x, y), PlaceFrom, out Placeable p));
         var plot = p.GetComponent<MushroomPlot>();
         plot.Tick(food);
         return plot;
@@ -332,7 +332,7 @@ public class GoblinCombatTests
     {
         var (attacker, ai) = AddFighter(23, 15);
         attacker.Energy = 20f;
-        Assert.IsTrue(manager.TryPlace(PlaceableType.LairCot, new Vector2Int(26, 18), PlaceFrom, out Placeable cot));
+        Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.LairCot, new Vector2Int(26, 18), PlaceFrom, out Placeable cot));
 
         StepUntil(() => ai.IsSleeping, 5f, "attacker to fall asleep");
         Assert.IsTrue(cot.IsClaimed);
@@ -350,7 +350,7 @@ public class GoblinCombatTests
     {
         var (attacker, ai) = AddFighter(23, 15);
         attacker.Energy = 20f;
-        Assert.IsTrue(manager.TryPlace(PlaceableType.LairCot, new Vector2Int(26, 18), PlaceFrom, out Placeable cot));
+        Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.LairCot, new Vector2Int(26, 18), PlaceFrom, out Placeable cot));
         StepUntil(() => ai.IsSleeping, 5f, "attacker to fall asleep");
 
         attacker.Health.TakeDamage(1000);

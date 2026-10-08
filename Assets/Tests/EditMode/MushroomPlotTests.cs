@@ -35,7 +35,7 @@ public class MushroomPlotTests
 
     private MushroomPlot PlacePlot(int x, int y)
     {
-        Assert.IsTrue(manager.TryPlace(PlaceableType.MushroomPlot, new Vector2Int(x, y), ImpTile, out Placeable p));
+        Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.MushroomPlot, new Vector2Int(x, y), ImpTile, out Placeable p));
         var plot = p.gameObject.GetComponent<MushroomPlot>();
         Assert.IsNotNull(plot);
         return plot;
@@ -67,8 +67,8 @@ public class MushroomPlotTests
     [Test]
     public void CotAndTrap_HaveNoMushroomPlotComponent()
     {
-        manager.TryPlace(PlaceableType.LairCot, new Vector2Int(22, 14), ImpTile, out Placeable cot);
-        manager.TryPlace(PlaceableType.SpikeTrap, new Vector2Int(23, 14), ImpTile, out Placeable trap);
+        manager.TryPlaceBuilt(PlaceableType.LairCot, new Vector2Int(22, 14), ImpTile, out Placeable cot);
+        manager.TryPlaceBuilt(PlaceableType.SpikeTrap, new Vector2Int(23, 14), ImpTile, out Placeable trap);
 
         Assert.IsFalse(cot.TryGetComponent(out MushroomPlot _));
         Assert.IsFalse(trap.TryGetComponent(out MushroomPlot _));
@@ -213,8 +213,8 @@ public class MushroomPlotTests
 
         MushroomPlot a = PlacePlot(22, 14);
         MushroomPlot b = PlacePlot(23, 14);
-        manager.TryPlace(PlaceableType.LairCot, new Vector2Int(25, 14), ImpTile, out _);
-        manager.TryPlace(PlaceableType.SpikeTrap, new Vector2Int(26, 14), ImpTile, out _);
+        manager.TryPlaceBuilt(PlaceableType.LairCot, new Vector2Int(25, 14), ImpTile, out _);
+        manager.TryPlaceBuilt(PlaceableType.SpikeTrap, new Vector2Int(26, 14), ImpTile, out _);
 
         a.Tick(3f * Interval);
         b.Tick(1f * Interval);

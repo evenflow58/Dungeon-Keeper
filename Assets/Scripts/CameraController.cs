@@ -8,12 +8,14 @@ public class CameraController : MonoBehaviour
 
     [Header("Camera Tuning")]
     [SerializeField] private float panSpeed = 20f;
-    [SerializeField] private float zoomSpeed = 2f;
     [SerializeField] private float pitchAngle = 45f;
+
+    [Header("Zoom")]
+    [SerializeField] private float zoomStepFactor = 0.76f; // Target size × this per wheel notch in (÷ out): max → min in ~5 notches
+    [SerializeField] private float zoomSharpness = 22f;    // Settle rate (1/s): 99% of the way in ~0.21 s, no overshoot
 
     [Header("Damping")]
     [SerializeField] private float panDamping = 12f;
-    [SerializeField] private float zoomDamping = 12f;
 
     [Header("Distance")]
     [SerializeField] private float cameraDistance = 25f;
@@ -36,7 +38,9 @@ public class CameraController : MonoBehaviour
     // Public properties
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public float PanSpeed { get => panSpeed; set => panSpeed = value; }
-    public float ZoomSpeed { get => zoomSpeed; set => zoomSpeed = value; }
+    public float ZoomStepFactor { get => zoomStepFactor; set => zoomStepFactor = value; }
+    public float ZoomSharpness { get => zoomSharpness; set => zoomSharpness = value; }
+    public float TargetOrthographicSize => targetOrthographicSize;
     public float PitchAngle { get => pitchAngle; set => pitchAngle = value; }
     public float BaseOrthographicSize => baseOrthographicSize;
     public float MinOrthographicSize => minOrthographicSize;
@@ -140,14 +144,36 @@ public class CameraController : MonoBehaviour
 
         if (Mathf.Abs(scroll.y) > 0.01f)
         {
-            float scrollTicks = scroll.y / 120f;
-
-            // Exponential / percentage zoom is responsive and intuitive across all zoom levels
-            float zoomFactor = Mathf.Pow(1.25f, -scrollTicks * (zoomSpeed * 0.75f));
-            targetOrthographicSize = Mathf.Clamp(targetOrthographicSize * zoomFactor, minOrthographicSize, maxOrthographicSize);
+            bool uniform = UnityEngine.InputSystem.InputSystem.settings.scrollDeltaBehavior ==
+                           UnityEngine.InputSystem.InputSettings.ScrollDeltaBehavior.UniformAcrossAllPlatforms;
+            float notches = NotchesFromScroll(scroll.y, uniform);
+            targetOrthographicSize = NextTargetSize(targetOrthographicSize, notches, zoomStepFactor, minOrthographicSize, maxOrthographicSize);
         }
 
-        cam.orthographicSize = Mathf.Lerp(cam.orthographicSize, targetOrthographicSize, Time.unscaledDeltaTime * zoomDamping); // View chrome: unaffected by game speed
+        // View chrome: unscaled time, so zoom works while paused and feels the same at 2×.
+        cam.orthographicSize = SettleSize(cam.orthographicSize, targetOrthographicSize, zoomSharpness, Time.unscaledDeltaTime);
+    }
+
+    // ---- zoom math (pure; EditMode-tested) ----
+
+    /// <summary>
+    /// Wheel notches in a scroll delta. The Input System's default scroll behavior (UniformAcrossAllPlatforms)
+    /// reports ±1 per notch; the legacy platform-specific range reports ±120 per notch on Windows.
+    /// </summary>
+    public static float NotchesFromScroll(float scrollY, bool uniformScroll) => uniformScroll ? scrollY : scrollY / 120f;
+
+    /// <summary>The target size after some notches: multiplied by stepFactor per notch in (positive), divided per notch out, clamped.</summary>
+    public static float NextTargetSize(float target, float notches, float stepFactor, float min, float max) =>
+        Mathf.Clamp(target * Mathf.Pow(stepFactor, notches), min, max);
+
+    /// <summary>
+    /// One step of the settle toward the target: an exponential approach (frame-rate independent, never overshoots),
+    /// snapping onto the target once within a hair so it doesn't creep for frames.
+    /// </summary>
+    public static float SettleSize(float current, float target, float sharpness, float deltaTime)
+    {
+        float next = Mathf.Lerp(current, target, 1f - Mathf.Exp(-sharpness * deltaTime));
+        return Mathf.Abs(next - target) < 0.001f * Mathf.Max(1f, target) ? target : next;
     }
 
     private void HandleMiddleMouseDrag()

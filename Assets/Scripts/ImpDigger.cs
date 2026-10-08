@@ -17,9 +17,11 @@ public class ImpDigger : MonoBehaviour
     [SerializeField] private DungeonBoard dungeonBoard;
     [SerializeField] private Imp imp;
     [SerializeField] private PlacementManager placementManager; // Source of traps, sites, and build times; null = dig-only
+    [SerializeField] private Stockpile stockpile;               // Where completed digs pay their yield (#103); null = no pay
 
     [Header("Digging")]
     [SerializeField] private float digSecondsPerTile = 2.5f;
+    [SerializeField] private int stoneYieldPerTile = 1;         // Stone paid into the stockpile per completed dig (#103)
     [SerializeField] private float idleRecheckSeconds = 0.25f; // How often an idle imp rescans for work
 
     [Header("Rearming")]
@@ -29,6 +31,8 @@ public class ImpDigger : MonoBehaviour
     public Imp Imp { get => imp; set => imp = value; }
     public PlacementManager PlacementManager { get => placementManager; set => placementManager = value; }
     public float DigSecondsPerTile { get => digSecondsPerTile; set => digSecondsPerTile = value; }
+    public Stockpile Stockpile { get => stockpile; set => stockpile = value; }
+    public int StoneYieldPerTile { get => stoneYieldPerTile; set => stoneYieldPerTile = value; }
     public float IdleRecheckSeconds { get => idleRecheckSeconds; set => idleRecheckSeconds = value; }
     public float RearmSecondsPerTrap { get => rearmSecondsPerTrap; set => rearmSecondsPerTrap = value; }
 
@@ -67,6 +71,7 @@ public class ImpDigger : MonoBehaviour
         imp ??= GetComponent<Imp>();
         dungeonBoard ??= FindAnyObjectByType<DungeonBoard>();
         placementManager ??= FindAnyObjectByType<PlacementManager>();
+        stockpile ??= FindAnyObjectByType<Stockpile>();
     }
 
     private void Update()
@@ -160,8 +165,22 @@ public class ImpDigger : MonoBehaviour
         if (DigElapsed < digSecondsPerTile) return;
 
         Vector2Int dug = CurrentTarget.Value;
+        bool pays = TryGetTileYield(dug, out MaterialType material, out int amount); // Asked before the tile changes
         DropTarget();
         dungeonBoard.SetTile(dug.x, dug.y, TileState.Floor);
+        if (pays && stockpile != null) stockpile.Add(material, amount); // The only place digging earns (#103)
+    }
+
+    /// <summary>
+    /// What digging out this tile yields (#103): the one seam the dig pipeline asks at conversion. Every rock tile
+    /// is stone today, stoneYieldPerTile of it; a future epic that gives tiles their own materials (veins) answers
+    /// here instead of touching the digger. False when the tile yields nothing.
+    /// </summary>
+    public bool TryGetTileYield(Vector2Int tile, out MaterialType material, out int amount)
+    {
+        material = MaterialType.Stone;
+        amount = stoneYieldPerTile;
+        return amount > 0;
     }
 
     private void TickBuilding(float deltaTime)

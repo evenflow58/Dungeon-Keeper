@@ -234,7 +234,9 @@ MonoBehaviour:
   dungeonBoard: {fileID: 565044520}
   imp: {fileID: 71735945}
   placementManager: {fileID: 565044525}
+  stockpile: {fileID: 565044532}
   digSecondsPerTile: 2.5
+  stoneYieldPerTile: 1
   idleRecheckSeconds: 0.25
   rearmSecondsPerTrap: 8
 --- !u!1 &330585543

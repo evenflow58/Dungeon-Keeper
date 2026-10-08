@@ -2,9 +2,11 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// The imp's work loop, with two job kinds: digging and trap rearming. It picks the nearest reachable
-/// work item (a Designated tile or a Spent Spike Trap), walks to a Floor tile next to it, works it
-/// (digSecondsPerTile to convert to Floor, or rearmSecondsPerTrap to re-arm), and repeats.
+/// The imp's work loop, with three job kinds: digging, building, and trap rearming. It picks the nearest
+/// reachable work item (a Designated tile, a construction site, or a Spent Spike Trap), walks to a Floor tile
+/// next to it, works it (digSecondsPerTile to convert to Floor; the site type's build time, read from
+/// PlacementManager.BuildSecondsFor, to complete a site; rearmSecondsPerTrap to re-arm), and repeats.
+/// Build progress lives on the site (Placeable.BuildProgress), so an interrupted build resumes where it stopped.
 /// Work with no reachable stand-point is left as it is and skipped.
 /// </summary>
 [DisallowMultipleComponent]
@@ -14,7 +16,7 @@ public class ImpDigger : MonoBehaviour
     [Header("References")]
     [SerializeField] private DungeonBoard dungeonBoard;
     [SerializeField] private Imp imp;
-    [SerializeField] private PlacementManager placementManager; // Source of Spike Traps; null = dig-only
+    [SerializeField] private PlacementManager placementManager; // Source of traps, sites, and build times; null = dig-only
 
     [Header("Digging")]
     [SerializeField] private float digSecondsPerTile = 2.5f;
@@ -33,8 +35,11 @@ public class ImpDigger : MonoBehaviour
     /// <summary>The Designated tile being dug, or null when not on a dig job.</summary>
     public Vector2Int? CurrentTarget { get; private set; }
 
-    /// <summary>The Spent trap being rearmed, or null when not on a rearm job. Never set alongside CurrentTarget.</summary>
+    /// <summary>The Spent trap being rearmed, or null when not on a rearm job. Never set alongside another job.</summary>
     public SpikeTrap CurrentTrap { get; private set; }
+
+    /// <summary>The construction site being built, or null when not on a build job. Never set alongside another job.</summary>
+    public Placeable CurrentSite { get; private set; }
 
     /// <summary>The Floor tile the imp stands on to work the current job (meaningful only while it has one).</summary>
     public Vector2Int StandPoint { get; private set; }
@@ -47,7 +52,10 @@ public class ImpDigger : MonoBehaviour
     public float RearmElapsed { get; private set; }
     public float RearmProgress => rearmSecondsPerTrap > 0f ? Mathf.Clamp01(RearmElapsed / rearmSecondsPerTrap) : 1f;
 
-    private bool HasJob => CurrentTarget != null || CurrentTrap != null;
+    /// <summary>True while stationary beside CurrentSite, writing progress onto it.</summary>
+    public bool IsBuilding { get; private set; }
+
+    private bool HasJob => CurrentTarget != null || CurrentTrap != null || CurrentSite != null;
 
     // True after a state transition (start, completed job, dropped job): select on the next Tick
     // instead of waiting for the idle recheck interval.
@@ -78,6 +86,8 @@ public class ImpDigger : MonoBehaviour
             TickIdle(deltaTime);
         else if (IsDigging)
             TickDigging(deltaTime);
+        else if (IsBuilding)
+            TickBuilding(deltaTime);
         else if (IsRearming)
             TickRearming(deltaTime);
         else
@@ -96,8 +106,10 @@ public class ImpDigger : MonoBehaviour
 
         Vector2Int target, standPoint;
         SpikeTrap trap = null;
+        Placeable site = null;
         bool found = placementManager != null
-            ? TrySelectWork(dungeonBoard, placementManager.GetBuiltSpikeTraps(), imp.CurrentTile, out target, out standPoint, out trap)
+            ? TrySelectWork(dungeonBoard, placementManager.GetConstructionSites(), placementManager.GetBuiltSpikeTraps(),
+                imp.CurrentTile, out target, out standPoint, out site, out trap)
             : TrySelectTarget(dungeonBoard, imp.CurrentTile, out target, out standPoint); // No manager: dig-only
         if (!found) return;
 
@@ -107,7 +119,8 @@ public class ImpDigger : MonoBehaviour
             selectPending = true; // Board changed between selection and dispatch
             return;
         }
-        if (trap != null) CurrentTrap = trap;
+        if (site != null) CurrentSite = site;
+        else if (trap != null) CurrentTrap = trap;
         else CurrentTarget = target;
         StandPoint = standPoint;
     }
@@ -121,7 +134,9 @@ public class ImpDigger : MonoBehaviour
             DropTarget(); // Designation cleared / trap re-armed en route, or the imp ended up elsewhere
             return;
         }
-        if (CurrentTrap != null)
+        if (CurrentSite != null)
+            IsBuilding = true; // Resumes from the site's own BuildProgress, never from zero
+        else if (CurrentTrap != null)
         {
             IsRearming = true;
             RearmElapsed = 0f;
@@ -149,6 +164,26 @@ public class ImpDigger : MonoBehaviour
         dungeonBoard.SetTile(dug.x, dug.y, TileState.Floor);
     }
 
+    private void TickBuilding(float deltaTime)
+    {
+        if (!IsJobStillNeeded() || !IsAdjacent(imp.CurrentTile, CurrentSite.Tile))
+        {
+            DropTarget(); // Built by other means, gone, or the imp is no longer beside it: progress stays on the site
+            return;
+        }
+
+        float seconds = placementManager != null ? placementManager.BuildSecondsFor(CurrentSite.Type) : 0f;
+        CurrentSite.BuildProgress += seconds > 0f ? deltaTime / seconds : 1f;
+        if (CurrentSite.BuildProgress < 1f - BuildCompleteTolerance) return;
+
+        Placeable built = CurrentSite;
+        DropTarget();
+        built.CompleteConstruction(); // #91's seam: the only door into the built state
+    }
+
+    // Progress is a sum of deltaTime / seconds steps; absorb float rounding so a build lands on its full duration.
+    private const float BuildCompleteTolerance = 1e-4f;
+
     private void TickRearming(float deltaTime)
     {
         if (!IsJobStillNeeded() || !IsAdjacent(imp.CurrentTile, CurrentTrap.Tile))
@@ -165,11 +200,13 @@ public class ImpDigger : MonoBehaviour
         rearmed.Rearm();
     }
 
-    /// <summary>Clears whichever job is held (dig or rearm) and asks for an immediate reselect.</summary>
+    /// <summary>Clears whichever job is held (dig, build, or rearm) and asks for an immediate reselect.</summary>
     private void DropTarget()
     {
         CurrentTarget = null;
         CurrentTrap = null;
+        CurrentSite = null;
+        IsBuilding = false;
         IsDigging = false;
         DigElapsed = 0f;
         IsRearming = false;
@@ -177,9 +214,12 @@ public class ImpDigger : MonoBehaviour
         selectPending = true;
     }
 
-    // A rearm job is needed while its trap exists and is Spent (== null is Unity's destroyed-object check).
+    // A build job is needed while its site exists unbuilt; a rearm job while its trap exists and is Spent
+    // (!= null is Unity's destroyed-object check); a dig while its tile is still Designated.
     private bool IsJobStillNeeded() =>
-        CurrentTrap != null ? !CurrentTrap.IsArmed : CurrentTarget != null && IsStillDesignated();
+        CurrentSite != null ? !CurrentSite.IsBuilt
+        : CurrentTrap != null ? !CurrentTrap.IsArmed
+        : CurrentTarget != null && IsStillDesignated();
 
     private bool IsStillDesignated()
     {
@@ -209,10 +249,40 @@ public class ImpDigger : MonoBehaviour
     /// FindPathToNeighbor (never onto the tile) — the imp never stands on a trap to rearm it.
     /// </summary>
     public static bool TrySelectWork(DungeonBoard board, IReadOnlyList<SpikeTrap> traps, Vector2Int fromTile,
-        out Vector2Int targetTile, out Vector2Int standPoint, out SpikeTrap trap)
+        out Vector2Int targetTile, out Vector2Int standPoint, out SpikeTrap trap) =>
+        TrySelectWork(board, null, traps, fromTile, out targetTile, out standPoint, out _, out trap);
+
+    /// <summary>
+    /// Unified dig + build + rearm selection (#92): nearest work wins across all three kinds, by path length to a
+    /// stand-point. Kinds are evaluated in order dig, build, rearm, each candidate replacing the best only when
+    /// strictly nearer, so exact ties break dig &gt; build &gt; rearm, then scan order within a kind.
+    /// Build candidates are unbuilt sites; like traps, a site's tile is Floor, so the imp stands BESIDE it
+    /// (FindPathToNeighbor, never onto it). Built placeables aren't build work; unreachable work is skipped.
+    /// Exactly one outcome is set: site (targetTile = its tile), trap (targetTile = its tile), or a dig
+    /// (site and trap null).
+    /// </summary>
+    public static bool TrySelectWork(DungeonBoard board, IReadOnlyList<Placeable> sites, IReadOnlyList<SpikeTrap> traps,
+        Vector2Int fromTile, out Vector2Int targetTile, out Vector2Int standPoint, out Placeable site, out SpikeTrap trap)
     {
         trap = null;
+        site = null;
         int bestCost = SelectNearestDig(board, fromTile, out targetTile, out standPoint);
+
+        if (sites != null)
+        {
+            foreach (Placeable candidate in sites)
+            {
+                if (candidate == null || candidate.IsBuilt) continue; // Only sites are build work
+
+                List<Vector2Int> path = Pathfinder.FindPathToNeighbor(board, fromTile, candidate.Tile);
+                if (path.Count == 0 || path.Count >= bestCost) continue; // Unreachable, or not strictly nearer
+
+                bestCost = path.Count;
+                site = candidate;
+                targetTile = candidate.Tile;
+                standPoint = path[path.Count - 1];
+            }
+        }
 
         if (traps != null)
         {
@@ -225,6 +295,7 @@ public class ImpDigger : MonoBehaviour
                 if (path.Count == 0 || path.Count >= bestCost) continue; // Unreachable, or not strictly nearer
 
                 bestCost = path.Count;
+                site = null; // A strictly nearer rearm beats the best build
                 trap = candidate;
                 targetTile = candidate.Tile;
                 standPoint = path[path.Count - 1];

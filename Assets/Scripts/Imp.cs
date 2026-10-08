@@ -177,19 +177,23 @@ public class Imp : MonoBehaviour
 
     /// <summary>
     /// Steps the pose driver by deltaTime (game time). Called from Update after Advance; public so tests can step
-    /// it. The pickaxe swings while ImpDigger is digging or rearming. No-op without a model.
+    /// it. The pickaxe swings while ImpDigger is digging or rearming; while building (#92) the imp faces the site
+    /// (its build pose is #93). No-op without a model.
     /// </summary>
     public void Pose(float deltaTime)
     {
         if (poser == null) return;
         if (digger == null) TryGetComponent(out digger);
-        bool working = digger != null && (digger.IsDigging || digger.IsRearming);
-        poser.Step(deltaTime, new CreatureMotion.Flags { Digging = working, FaceTarget = working ? WorkPoint() : null });
+        bool swinging = digger != null && (digger.IsDigging || digger.IsRearming);
+        bool working = swinging || (digger != null && digger.IsBuilding);
+        poser.Step(deltaTime, new CreatureMotion.Flags { Digging = swinging, FaceTarget = working ? WorkPoint() : null });
     }
 
-    // The tile being worked (#94): the trap being rearmed, else the rock being dug. Unity null check on the trap.
+    // The tile being worked (#94): the site being built, the trap being rearmed, else the rock being dug.
+    // Unity null checks on the site and trap.
     private Vector3? WorkPoint()
     {
+        if (digger.CurrentSite != null) return digger.CurrentSite.transform.position;
         if (digger.CurrentTrap != null) return digger.CurrentTrap.transform.position;
         return digger.CurrentTarget.HasValue ? TileCenter(digger.CurrentTarget.Value) : (Vector3?)null;
     }

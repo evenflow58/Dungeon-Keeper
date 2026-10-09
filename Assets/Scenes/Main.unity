@@ -708,6 +708,15 @@ MonoBehaviour:
   - type: 2
     material: 0
     amount: 2
+  - type: 0
+    material: 1
+    amount: 3
+  - type: 1
+    material: 1
+    amount: 4
+  - type: 2
+    material: 1
+    amount: 2
 --- !u!114 &565044526
 MonoBehaviour:
   m_ObjectHideFlags: 0

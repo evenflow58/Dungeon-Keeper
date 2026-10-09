@@ -14,6 +14,7 @@ public class GlimmerstoneTests
     private GameObject managerGo;
     private GameObject impGo;
     private DungeonBoard board;
+    private BoardRenderer boardRenderer;
     private Stockpile stockpile;
     private Imp imp;
     private ImpDigger digger;
@@ -25,7 +26,7 @@ public class GlimmerstoneTests
         managerGo = new GameObject("TestDungeonManager");
         board = managerGo.AddComponent<DungeonBoard>();
         board.InitializeBoard();
-        var boardRenderer = managerGo.AddComponent<BoardRenderer>();
+        boardRenderer = managerGo.AddComponent<BoardRenderer>();
         boardRenderer.Board = board;
         stockpile = managerGo.AddComponent<Stockpile>();
 
@@ -184,6 +185,87 @@ public class GlimmerstoneTests
         board.SetTile(24, 26, TileState.Rock); // Designation cleared mid-dig
         for (int i = 0; i < 100; i++) Step();
         Assert.AreEqual(TileState.Rock, board.GetTile(24, 26));
+        Assert.AreEqual(0, Count(MaterialType.Glimmerstone));
+        Assert.AreEqual(10, Count(MaterialType.Stone));
+    }
+
+    // --- Ordering in it (#114's amendment: #109 landed first, so the rows ship here) ---
+
+    private PlacementManager WiredPlacement()
+    {
+        var manager = managerGo.AddComponent<PlacementManager>();
+        manager.Board = board;
+        manager.Renderer = boardRenderer;
+        manager.Stockpile = stockpile;
+        manager.LairCotBuildSeconds = 1f;
+        digger.PlacementManager = manager; // The imp builds funded sites
+        return manager;
+    }
+
+    [Test]
+    public void TheCostTable_HasAGlimmerstoneRowForEveryType_AtStonesAmounts()
+    {
+        PlacementManager manager = WiredPlacement();
+        foreach (var (type, amount) in new[] { (PlaceableType.LairCot, 3), (PlaceableType.MushroomPlot, 4), (PlaceableType.SpikeTrap, 2) })
+        {
+            Assert.IsTrue(manager.TryGetCost(type, MaterialType.Glimmerstone, out MaterialAmount cost), $"{type} is orderable in Glimmerstone");
+            Assert.AreEqual(MaterialType.Glimmerstone, cost.type);
+            Assert.AreEqual(amount, cost.amount);
+            Assert.IsTrue(manager.TryGetCost(type, MaterialType.Stone, out MaterialAmount stone));
+            Assert.AreEqual(stone.amount, cost.amount, $"{type}: same amount as Stone");
+        }
+    }
+
+    [Test]
+    public void TheSelector_ListsGlimmerstone_ForEveryType()
+    {
+        PlacementManager manager = WiredPlacement();
+        var go = new GameObject("TestPlacementController");
+        try
+        {
+            var c = go.AddComponent<PlacementController>();
+            c.PlacementManager = manager;
+            foreach (PlaceableType type in new[] { PlaceableType.LairCot, PlaceableType.MushroomPlot, PlaceableType.SpikeTrap })
+            {
+                c.Select(type);
+                CollectionAssert.Contains(c.AvailableMaterials, MaterialType.Glimmerstone, $"{type}");
+                Assert.IsTrue(c.SelectMaterial(MaterialType.Glimmerstone), $"{type}");
+                c.ClearSelection();
+            }
+        }
+        finally { Object.DestroyImmediate(go); }
+    }
+
+    [Test]
+    public void AGlimmerstoneOrder_StampsGlimmerstone_FundsFromItsStock_StoneUntouched_AndIsBuiltInIt()
+    {
+        PlacementManager manager = WiredPlacement();
+        stockpile.Add(MaterialType.Glimmerstone, 5);
+        Assert.IsTrue(manager.TryPlace(PlaceableType.LairCot, MaterialType.Glimmerstone, new Vector2Int(22, 14), new Vector2Int(24, 16), out Placeable cot));
+        Assert.AreEqual(MaterialType.Glimmerstone, cot.OrderedMaterial);
+        Assert.AreEqual(3, cot.RequiredAmount);
+        Assert.IsTrue(cot.IsFunded, "5 glimmerstone covers 3");
+        Assert.AreEqual(2, Count(MaterialType.Glimmerstone), "Paid from glimmerstone: 5 - 3");
+        Assert.AreEqual(10, Count(MaterialType.Stone), "Stone untouched");
+
+        StepUntil(() => cot.IsBuilt, 10f, "the imp to build the glimmerstone cot");
+        Assert.AreEqual(MaterialType.Glimmerstone, cot.OrderedMaterial, "Made of glimmerstone once built");
+    }
+
+    [Test]
+    public void AGlimmerstoneOrder_WaitsOnGlimmerstone_NotStone_BehindALavenderGhost()
+    {
+        PlacementManager manager = WiredPlacement();
+        Assert.IsFalse(manager.WouldFundNow(PlaceableType.LairCot, MaterialType.Glimmerstone), "0 glimmerstone, though stone is 10");
+        Assert.IsTrue(manager.WouldFundNow(PlaceableType.LairCot, MaterialType.Stone));
+        Assert.IsTrue(manager.TryPlace(PlaceableType.LairCot, MaterialType.Glimmerstone, new Vector2Int(22, 14), new Vector2Int(24, 16), out Placeable cot));
+        Assert.IsFalse(cot.IsFunded, "Stone can't pay for a glimmerstone order");
+        Assert.AreEqual(10, Count(MaterialType.Stone));
+        Assert.AreEqual(new Color(0.72f, 0.62f, 0.95f, 1f), cot.OrderGhostTint, "The ghost wears glimmerstone's lavender");
+
+        stockpile.Add(MaterialType.Glimmerstone, 3); // E.g. three band digs
+        Assert.AreEqual(1, manager.RunFundingPass());
+        Assert.IsTrue(cot.IsFunded);
         Assert.AreEqual(0, Count(MaterialType.Glimmerstone));
         Assert.AreEqual(10, Count(MaterialType.Stone));
     }

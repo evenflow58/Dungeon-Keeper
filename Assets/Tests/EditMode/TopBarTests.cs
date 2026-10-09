@@ -266,15 +266,19 @@ public class TopBarTests
     public void Materials_ShowTheStockpilesStone_FromTheFirstRefresh()
     {
         bar.Refresh();
-        Assert.AreEqual("Stone: 10", bar.MaterialText, "A fresh game starts with 10 stone");
+        Assert.AreEqual("Stone: 10 · Glimmerstone: 0", bar.MaterialText, "A fresh game: 10 stone, no glimmerstone (#114), in catalog order");
 
         stockpile.Add(MaterialType.Stone, 5);
         bar.Refresh();
-        Assert.AreEqual("Stone: 15", bar.MaterialText, "Polled on refresh");
+        Assert.AreEqual("Stone: 15 · Glimmerstone: 0", bar.MaterialText, "Polled on refresh");
 
         Assert.IsTrue(stockpile.TrySpend(MaterialType.Stone, 15));
         bar.Refresh();
-        Assert.AreEqual("Stone: 0", bar.MaterialText);
+        Assert.AreEqual("Stone: 0 · Glimmerstone: 0", bar.MaterialText);
+
+        stockpile.Add(MaterialType.Glimmerstone, 4);
+        bar.Refresh();
+        Assert.AreEqual("Stone: 0 · Glimmerstone: 4", bar.MaterialText, "Both materials, each its own count");
     }
 
     [Test]

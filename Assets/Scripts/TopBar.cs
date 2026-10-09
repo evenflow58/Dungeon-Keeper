@@ -25,7 +25,8 @@ public class TopBar : MonoBehaviour
     [Header("Appearance")]
     [SerializeField] private int fontSize = 20;                                    // Persistent HUD: larger than the build bar's 14
     [SerializeField] private float barHeight = 36f;
-    [SerializeField] private float sidePadding = 16f;
+    [SerializeField] private float sidePadding = 16f; // At the bar's outer edges
+    [SerializeField] private float slotGap = 4f;      // Between readouts (#114)
     [SerializeField] private Color panelColor = new Color(0f, 0f, 0f, 0.6f);      // Matches the build bar
 
     [Header("Refresh")]
@@ -169,15 +170,18 @@ public class TopBar : MonoBehaviour
         barRect.sizeDelta = new Vector2(0f, barHeight);
 
         Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        // Outer thirds as before (the next-hero text runs long); the middle third holds food and stone side by side.
-        goblinLabel = CreateLabel(barGo.transform, "GoblinReadout", font, 0f, 1f / 3f, TextAnchor.MiddleLeft);
-        foodLabel = CreateLabel(barGo.transform, "FoodReadout", font, 1f / 3f, 1f / 6f, TextAnchor.MiddleCenter);
-        materialLabel = CreateLabel(barGo.transform, "MaterialReadout", font, 1f / 2f, 1f / 6f, TextAnchor.MiddleCenter);
-        nextHeroLabel = CreateLabel(barGo.transform, "NextHeroReadout", font, 2f / 3f, 1f / 3f, TextAnchor.MiddleRight);
+        // Slots sized to their longest content at fontSize 20 (#114: two materials made the readout ~275 px): goblins
+        // ~101, food ~79, materials ~275 ("Stone: 123 · Glimmerstone: 45"), next hero ~222 ("…needs a route").
+        // Full padding at the bar's outer edges only, a small gap between slots, so all four fit even a 732 px view.
+        goblinLabel = CreateLabel(barGo.transform, "GoblinReadout", font, 0f, 0.15f, TextAnchor.MiddleLeft, sidePadding, slotGap);
+        foodLabel = CreateLabel(barGo.transform, "FoodReadout", font, 0.15f, 0.12f, TextAnchor.MiddleCenter, slotGap, slotGap);
+        materialLabel = CreateLabel(barGo.transform, "MaterialReadout", font, 0.27f, 0.40f, TextAnchor.MiddleCenter, slotGap, slotGap);
+        nextHeroLabel = CreateLabel(barGo.transform, "NextHeroReadout", font, 0.67f, 0.33f, TextAnchor.MiddleRight, slotGap, sidePadding);
     }
 
-    // A label filling width (a fraction of the bar) from xMin, padded at its edges.
-    private Text CreateLabel(Transform parent, string name, Font font, float xMin, float width, TextAnchor alignment)
+    // A label filling width (a fraction of the bar) from xMin, inset by leftPad / rightPad.
+    private Text CreateLabel(Transform parent, string name, Font font, float xMin, float width, TextAnchor alignment,
+        float leftPad, float rightPad)
     {
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
@@ -192,8 +196,8 @@ public class TopBar : MonoBehaviour
         var rect = go.GetComponent<RectTransform>();
         rect.anchorMin = new Vector2(xMin, 0f);
         rect.anchorMax = new Vector2(xMin + width, 1f);
-        rect.offsetMin = new Vector2(sidePadding, 0f);
-        rect.offsetMax = new Vector2(-sidePadding, 0f);
+        rect.offsetMin = new Vector2(leftPad, 0f);
+        rect.offsetMax = new Vector2(-rightPad, 0f);
         return text;
     }
 }

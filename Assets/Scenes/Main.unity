@@ -237,6 +237,7 @@ MonoBehaviour:
   stockpile: {fileID: 565044532}
   digSecondsPerTile: 2.5
   stoneYieldPerTile: 1
+  glimmerstoneBandRows: 6
   idleRecheckSeconds: 0.25
   rearmSecondsPerTrap: 8
 --- !u!1 &330585543
@@ -707,6 +708,15 @@ MonoBehaviour:
   - type: 2
     material: 0
     amount: 2
+  - type: 0
+    material: 1
+    amount: 3
+  - type: 1
+    material: 1
+    amount: 4
+  - type: 2
+    material: 1
+    amount: 2
 --- !u!114 &565044526
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -774,6 +784,7 @@ MonoBehaviour:
   fontSize: 20
   barHeight: 36
   sidePadding: 16
+  slotGap: 4
   panelColor: {r: 0, g: 0, b: 0, a: 0.6}
   pollIntervalSeconds: 0.25
 --- !u!114 &565044529
@@ -851,6 +862,9 @@ MonoBehaviour:
   - type: 0
     displayName: Stone
     color: {r: 0.62, g: 0.62, b: 0.66, a: 1}
+  - type: 1
+    displayName: Glimmerstone
+    color: {r: 0.72, g: 0.62, b: 0.95, a: 1}
   startingAmounts:
   - type: 0
     amount: 10

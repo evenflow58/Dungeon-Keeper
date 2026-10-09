@@ -41,13 +41,16 @@ public class PlacementManager : MonoBehaviour
     [SerializeField] private float spikeTrapBuildSeconds = 5f;
 
     // What an order costs (#104), per type AND material (#109): a type is orderable in a material exactly when a row
-    // exists. Ships with every type in Stone; later materials add rows, not fields.
+    // exists. Ships with every type in Stone and in Glimmerstone (#114); later materials add rows, not fields.
     [Header("Build Costs")]
     [SerializeField] private List<PlaceableCost> costs = new List<PlaceableCost>
     {
         new PlaceableCost(PlaceableType.LairCot, MaterialType.Stone, 3),
         new PlaceableCost(PlaceableType.MushroomPlot, MaterialType.Stone, 4),
         new PlaceableCost(PlaceableType.SpikeTrap, MaterialType.Stone, 2),
+        new PlaceableCost(PlaceableType.LairCot, MaterialType.Glimmerstone, 3),      // #114: at Stone's amounts
+        new PlaceableCost(PlaceableType.MushroomPlot, MaterialType.Glimmerstone, 4),
+        new PlaceableCost(PlaceableType.SpikeTrap, MaterialType.Glimmerstone, 2),
     };
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }

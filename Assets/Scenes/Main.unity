@@ -237,6 +237,7 @@ MonoBehaviour:
   stockpile: {fileID: 565044532}
   digSecondsPerTile: 2.5
   stoneYieldPerTile: 1
+  glimmerstoneBandRows: 6
   idleRecheckSeconds: 0.25
   rearmSecondsPerTrap: 8
 --- !u!1 &330585543
@@ -843,6 +844,9 @@ MonoBehaviour:
   - type: 0
     displayName: Stone
     color: {r: 0.62, g: 0.62, b: 0.66, a: 1}
+  - type: 1
+    displayName: Glimmerstone
+    color: {r: 0.72, g: 0.62, b: 0.95, a: 1}
   startingAmounts:
   - type: 0
     amount: 10

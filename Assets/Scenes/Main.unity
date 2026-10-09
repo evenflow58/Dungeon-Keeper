@@ -784,6 +784,7 @@ MonoBehaviour:
   fontSize: 20
   barHeight: 36
   sidePadding: 16
+  slotGap: 4
   panelColor: {r: 0, g: 0, b: 0, a: 0.6}
   pollIntervalSeconds: 0.25
 --- !u!114 &565044529

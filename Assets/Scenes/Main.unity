@@ -671,6 +671,7 @@ MonoBehaviour:
   unaffordablePreviewColor: {r: 0.95, g: 0.45, b: 0.2, a: 0.35}
   unaffordableCostColor: {r: 1, g: 0.38, b: 0.38, a: 1}
   costRefreshSeconds: 0.25
+  materialButtonWidth: 110
   feedbackFlashSeconds: 0.25
 --- !u!114 &565044525
 MonoBehaviour:
@@ -697,9 +698,16 @@ MonoBehaviour:
   lairCotBuildSeconds: 4
   mushroomPlotBuildSeconds: 6
   spikeTrapBuildSeconds: 5
-  lairCotStoneCost: 3
-  mushroomPlotStoneCost: 4
-  spikeTrapStoneCost: 2
+  costs:
+  - type: 0
+    material: 0
+    amount: 3
+  - type: 1
+    material: 0
+    amount: 4
+  - type: 2
+    material: 0
+    amount: 2
 --- !u!114 &565044526
 MonoBehaviour:
   m_ObjectHideFlags: 0

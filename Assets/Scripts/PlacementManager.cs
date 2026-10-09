@@ -6,8 +6,8 @@ using UnityEngine;
 /// a target must be Floor, unoccupied, and reachable by the imp. TileState is never changed.
 /// Placing creates a construction site (#91) that occupies its tile at once but does nothing until built;
 /// consumers read the built-only queries (GetBuilt…, CountBuilt, TotalFood).
-/// Orders cost materials (#104): each site records CostFor(type) and waits unfunded until the funding pass pays for
-/// it from the Stockpile — strictly in placement order (a later, cheaper order never jumps an earlier one), deducted
+/// Orders cost materials (#104): each site records its cost row (#109: the type in the material the player chose,
+/// TryGetCost) and waits unfunded until the funding pass pays for it from the Stockpile — strictly in placement order (a later, cheaper order never jumps an earlier one), deducted
 /// at funding. The pass runs at placement and every frame while anything waits, so an affordable order funds at once
 /// and a waiting one funds the frame the stockpile covers it. Only funded sites are build jobs. With no Stockpile
 /// wired, every order funds at once (an unwired system degrades, never blocks). Placing is never blocked by cost.
@@ -40,11 +40,15 @@ public class PlacementManager : MonoBehaviour
     [SerializeField] private float mushroomPlotBuildSeconds = 6f;
     [SerializeField] private float spikeTrapBuildSeconds = 5f;
 
-    // What an order costs (#104): stone for every type in this epic (CostFor answers a material + amount pair).
+    // What an order costs (#104), per type AND material (#109): a type is orderable in a material exactly when a row
+    // exists. Ships with every type in Stone; later materials add rows, not fields.
     [Header("Build Costs")]
-    [SerializeField] private int lairCotStoneCost = 3;
-    [SerializeField] private int mushroomPlotStoneCost = 4;
-    [SerializeField] private int spikeTrapStoneCost = 2;
+    [SerializeField] private List<PlaceableCost> costs = new List<PlaceableCost>
+    {
+        new PlaceableCost(PlaceableType.LairCot, MaterialType.Stone, 3),
+        new PlaceableCost(PlaceableType.MushroomPlot, MaterialType.Stone, 4),
+        new PlaceableCost(PlaceableType.SpikeTrap, MaterialType.Stone, 2),
+    };
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
@@ -55,31 +59,58 @@ public class PlacementManager : MonoBehaviour
     public float MushroomPlotBuildSeconds { get => mushroomPlotBuildSeconds; set => mushroomPlotBuildSeconds = value; }
     public float SpikeTrapBuildSeconds { get => spikeTrapBuildSeconds; set => spikeTrapBuildSeconds = value; }
     public Stockpile Stockpile { get => stockpile; set => stockpile = value; }
-    public int LairCotStoneCost { get => lairCotStoneCost; set => lairCotStoneCost = value; }
-    public int MushroomPlotStoneCost { get => mushroomPlotStoneCost; set => mushroomPlotStoneCost = value; }
-    public int SpikeTrapStoneCost { get => spikeTrapStoneCost; set => spikeTrapStoneCost = value; }
+    /// <summary>The cost rows, in table order (replaceable in code, e.g. by tests).</summary>
+    public List<PlaceableCost> Costs { get => costs; set => costs = value ?? new List<PlaceableCost>(); }
 
-    /// <summary>What an order of this type costs: a material and an amount (stone for every type in this epic).</summary>
-    public MaterialAmount CostFor(PlaceableType type)
+    /// <summary>
+    /// What an order of this type in this material costs (#109): the row's (material, amount). False when no row
+    /// exists — the type isn't orderable in that material. Never throws.
+    /// </summary>
+    public bool TryGetCost(PlaceableType type, MaterialType material, out MaterialAmount cost)
     {
-        switch (type)
+        if (costs != null)
         {
-            case PlaceableType.LairCot: return new MaterialAmount(MaterialType.Stone, lairCotStoneCost);
-            case PlaceableType.MushroomPlot: return new MaterialAmount(MaterialType.Stone, mushroomPlotStoneCost);
-            case PlaceableType.SpikeTrap: return new MaterialAmount(MaterialType.Stone, spikeTrapStoneCost);
-            default: return new MaterialAmount(MaterialType.Stone, 0);
+            foreach (PlaceableCost row in costs)
+            {
+                if (row != null && row.type == type && row.material == material)
+                {
+                    cost = new MaterialAmount(row.material, row.amount);
+                    return true;
+                }
+            }
         }
+        cost = null;
+        return false;
+    }
+
+    /// <summary>The materials a type can be ordered in: its rows' materials, in table order, without repeats.</summary>
+    public List<MaterialType> MaterialsFor(PlaceableType type)
+    {
+        var materials = new List<MaterialType>();
+        if (costs == null) return materials;
+        foreach (PlaceableCost row in costs)
+            if (row != null && row.type == type && !materials.Contains(row.material)) materials.Add(row.material);
+        return materials;
+    }
+
+    /// <summary>A type's default material: its first row's (Stone today). False when the type has no rows at all.</summary>
+    public bool TryGetDefaultMaterial(PlaceableType type, out MaterialType material)
+    {
+        List<MaterialType> materials = MaterialsFor(type);
+        material = materials.Count > 0 ? materials[0] : default;
+        return materials.Count > 0;
     }
 
     /// <summary>
-    /// True when an order of this type placed now would fund on the spot: no stockpile (orders fund at once), or
-    /// nothing already waiting (strict FIFO: a new order queues behind them) and the stock covers the cost. The build
-    /// bar shows the cost red when this is false; placing is never blocked by it.
+    /// True when an order of this type in this material placed now would fund on the spot: no stockpile (orders fund
+    /// at once), or nothing already waiting (strict global FIFO across materials: a new order queues behind them) and
+    /// the stock of THAT material covers the cost. False for an unorderable pair. The build bar shows the cost red when
+    /// this is false; placing is never blocked by it.
     /// </summary>
-    public bool WouldFundNow(PlaceableType type)
+    public bool WouldFundNow(PlaceableType type, MaterialType material)
     {
+        if (!TryGetCost(type, material, out MaterialAmount cost)) return false;
         if (stockpile == null) return true; // Unity null check: unwired means free
-        MaterialAmount cost = CostFor(type);
         return awaitingFunding.Count == 0 && stockpile.Count(cost.type) >= cost.amount;
     }
 
@@ -148,7 +179,7 @@ public class PlacementManager : MonoBehaviour
                 awaitingFunding.RemoveAt(0);
                 continue;
             }
-            if (stockpile != null && !stockpile.TrySpend(head.RequiredMaterial, head.RequiredAmount)) break; // Head-of-line wait
+            if (stockpile != null && !stockpile.TrySpend(head.OrderedMaterial, head.RequiredAmount)) break; // Head-of-line wait
             awaitingFunding.RemoveAt(0);
             head.MarkFunded();
             funded++;
@@ -244,9 +275,21 @@ public class PlacementManager : MonoBehaviour
         return Pathfinder.FindPath(dungeonBoard, fromTile, tile).Count > 0;
     }
 
+    /// <summary>Places an order of this type in its default material (its first cost row: Stone today).</summary>
     public bool TryPlace(PlaceableType type, Vector2Int tile, Vector2Int fromTile, out Placeable placeable)
     {
         placeable = null;
+        return TryGetDefaultMaterial(type, out MaterialType material) && TryPlace(type, material, tile, fromTile, out placeable);
+    }
+
+    /// <summary>
+    /// Places an order of this type in the chosen material (#109). False when the tile isn't placeable, or when the type
+    /// isn't orderable in that material (no cost row) — cost itself never blocks: an unaffordable order waits.
+    /// </summary>
+    public bool TryPlace(PlaceableType type, MaterialType material, Vector2Int tile, Vector2Int fromTile, out Placeable placeable)
+    {
+        placeable = null;
+        if (!TryGetCost(type, material, out MaterialAmount cost)) return false;
         if (!CanPlace(tile, fromTile)) return false;
 
         var go = new GameObject($"{type} ({tile.x}, {tile.y})");
@@ -262,8 +305,8 @@ public class PlacementManager : MonoBehaviour
         placed[tile] = placeable;
 
         // The order (#104): stamp its place in line and cost, then fund it now if it can be (it waits otherwise).
-        MaterialAmount cost = CostFor(type);
         placeable.SetOrder(nextOrderIndex++, cost.type, cost.amount);
+        placeable.TintOrderMarker(Placeable.MarkerTintFor(stockpile, cost.type, placeable.OrderMarkerFallbackTint)); // #109
         if (stockpile == null) placeable.MarkFunded(); // Unwired: no waiting, exactly as before #104
         else
         {
@@ -276,14 +319,18 @@ public class PlacementManager : MonoBehaviour
     /// <summary>
     /// Places on every valid tile in the rect (invalid tiles are skipped). Returns how many were placed.
     /// </summary>
-    public int ApplyRect(PlaceableType type, RectInt rect, Vector2Int fromTile)
+    public int ApplyRect(PlaceableType type, RectInt rect, Vector2Int fromTile) =>
+        TryGetDefaultMaterial(type, out MaterialType material) ? ApplyRect(type, material, rect, fromTile) : 0;
+
+    /// <summary>Places orders in the chosen material on every valid tile in the rect (#109). Returns how many were placed.</summary>
+    public int ApplyRect(PlaceableType type, MaterialType material, RectInt rect, Vector2Int fromTile)
     {
         int count = 0;
         for (int x = rect.x; x < rect.xMax; x++)
         {
             for (int y = rect.y; y < rect.yMax; y++)
             {
-                if (TryPlace(type, new Vector2Int(x, y), fromTile, out _)) count++;
+                if (TryPlace(type, material, new Vector2Int(x, y), fromTile, out _)) count++;
             }
         }
         return count;
@@ -327,5 +374,21 @@ public class PlacementManager : MonoBehaviour
     {
         if (boardRenderer != null) return boardRenderer.GetTileCenterWorldPosition(tile.x, tile.y);
         return BoardRenderer.UnanchoredTileCenter(tile);
+    }
+}
+
+/// <summary>One build-cost row (#109): an order of this type in this material costs this much of it.</summary>
+[System.Serializable]
+public class PlaceableCost
+{
+    public PlaceableType type;
+    public MaterialType material;
+    public int amount;
+
+    public PlaceableCost(PlaceableType type, MaterialType material, int amount)
+    {
+        this.type = type;
+        this.material = material;
+        this.amount = amount;
     }
 }

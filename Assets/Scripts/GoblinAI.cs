@@ -299,6 +299,13 @@ public class GoblinAI : MonoBehaviour
         EndGoal(); // Ate (one food per trip), or the last food went to another goblin: re-decide either way
     }
 
+    // The cot's material sets how fast it rests (#110): its property row's multiplier, or 1 when there is no row
+    // (or no manager) — a miss is the pre-#110 rate exactly.
+    private float RestRateOf(Placeable cot) =>
+        placementManager != null && placementManager.TryGetProperties(cot.Type, cot.OrderedMaterial, out PlaceableProperty row)
+            ? row.restRateMultiplier
+            : 1f;
+
     private void TickSleep(float deltaTime)
     {
         if (ClaimedCot == null)
@@ -319,7 +326,7 @@ public class GoblinAI : MonoBehaviour
             decisionTimer = 0f;
         }
 
-        goblin.Energy += Goblin.MaxNeed / sleepSecondsToFull * deltaTime;
+        goblin.Energy += Goblin.MaxNeed / sleepSecondsToFull * RestRateOf(ClaimedCot) * deltaTime;
         if (goblin.Energy >= Goblin.MaxNeed)
         {
             EndGoal(); // Rested: wake and release

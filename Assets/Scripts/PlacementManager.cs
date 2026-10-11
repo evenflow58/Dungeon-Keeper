@@ -53,6 +53,16 @@ public class PlacementManager : MonoBehaviour
         new PlaceableCost(PlaceableType.SpikeTrap, MaterialType.Glimmerstone, 2),
     };
 
+    // What a material makes a building DO (#110), per type AND material: numeric modifiers plus capability flags.
+    // A missing row is never an error — consumers read it as all-defaults. Rows ship only where an axis is real
+    // (cots rest); later materials and axes add rows, not fields per combination.
+    [Header("Material Properties")]
+    [SerializeField] private List<PlaceableProperty> properties = new List<PlaceableProperty>
+    {
+        new PlaceableProperty(PlaceableType.LairCot, MaterialType.Stone, 1f, 1f, false),          // The explicit baseline
+        new PlaceableProperty(PlaceableType.LairCot, MaterialType.Glimmerstone, 1.25f, 1f, true), // Faint magic: the rest material
+    };
+
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
     public float MushroomGrowthSecondsPerFood { get => mushroomGrowthSecondsPerFood; set => mushroomGrowthSecondsPerFood = value; }
@@ -64,6 +74,8 @@ public class PlacementManager : MonoBehaviour
     public Stockpile Stockpile { get => stockpile; set => stockpile = value; }
     /// <summary>The cost rows, in table order (replaceable in code, e.g. by tests).</summary>
     public List<PlaceableCost> Costs { get => costs; set => costs = value ?? new List<PlaceableCost>(); }
+    /// <summary>The material-property rows, in table order (replaceable in code, e.g. by tests).</summary>
+    public List<PlaceableProperty> Properties { get => properties; set => properties = value ?? new List<PlaceableProperty>(); }
 
     /// <summary>
     /// What an order of this type in this material costs (#109): the row's (material, amount). False when no row
@@ -83,6 +95,27 @@ public class PlacementManager : MonoBehaviour
             }
         }
         cost = null;
+        return false;
+    }
+
+    /// <summary>
+    /// What this type does when made of this material (#110): the row's modifiers and capability flags. False + null
+    /// when no row exists — never an error: consumers treat a miss as all-defaults (e.g. rest rate 1.0). Never throws.
+    /// </summary>
+    public bool TryGetProperties(PlaceableType type, MaterialType material, out PlaceableProperty property)
+    {
+        if (properties != null)
+        {
+            foreach (PlaceableProperty row in properties)
+            {
+                if (row != null && row.type == type && row.material == material)
+                {
+                    property = row;
+                    return true;
+                }
+            }
+        }
+        property = null;
         return false;
     }
 
@@ -393,5 +426,29 @@ public class PlaceableCost
         this.type = type;
         this.material = material;
         this.amount = amount;
+    }
+}
+
+/// <summary>
+/// One material-property row (#110): what this type does when made of this material — numeric modifiers plus
+/// capability flags. Read through PlacementManager.TryGetProperties; a missing row means all-defaults.
+/// </summary>
+[System.Serializable]
+public class PlaceableProperty
+{
+    public PlaceableType type;
+    public MaterialType material;
+    public float restRateMultiplier = 1f; // Energy restored per second while sleeping, × this (GoblinAI's sleep)
+    public float restQuality = 1f;        // Data only for now: no consumer yet
+    public bool restsMagicalCreatures;    // Capability flag, data only: no magical creatures exist yet
+
+    public PlaceableProperty(PlaceableType type, MaterialType material, float restRateMultiplier = 1f, float restQuality = 1f,
+        bool restsMagicalCreatures = false)
+    {
+        this.type = type;
+        this.material = material;
+        this.restRateMultiplier = restRateMultiplier;
+        this.restQuality = restQuality;
+        this.restsMagicalCreatures = restsMagicalCreatures;
     }
 }

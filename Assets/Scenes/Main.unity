@@ -717,6 +717,17 @@ MonoBehaviour:
   - type: 2
     material: 1
     amount: 2
+  properties:
+  - type: 0
+    material: 0
+    restRateMultiplier: 1
+    restQuality: 1
+    restsMagicalCreatures: 0
+  - type: 0
+    material: 1
+    restRateMultiplier: 1.25
+    restQuality: 1
+    restsMagicalCreatures: 1
 --- !u!114 &565044526
 MonoBehaviour:
   m_ObjectHideFlags: 0

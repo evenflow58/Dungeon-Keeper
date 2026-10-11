@@ -2,10 +2,14 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>A building material. Stone only for now (the materials epic adds more).</summary>
+/// <summary>
+/// A building material. Append only: scenes serialize these by value (Stone is 0), so reordering would silently
+/// rewrite every saved definition and amount.
+/// </summary>
 public enum MaterialType
 {
-    Stone
+    Stone,
+    Glimmerstone // #114: common stone shot through with faint magic, dug from the shallow band
 }
 
 /// <summary>How a material reads to the player: its display name and color.</summary>
@@ -52,6 +56,7 @@ public class Stockpile : MonoBehaviour
     [SerializeField] private List<MaterialDefinition> definitions = new List<MaterialDefinition>
     {
         new MaterialDefinition(MaterialType.Stone, "Stone", new Color(0.62f, 0.62f, 0.66f, 1f)), // Cool gray
+        new MaterialDefinition(MaterialType.Glimmerstone, "Glimmerstone", new Color(0.72f, 0.62f, 0.95f, 1f)), // Pale lavender-violet: faint magic
     };
 
     [Header("Starting Stock")]

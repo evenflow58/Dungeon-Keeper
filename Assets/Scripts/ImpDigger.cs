@@ -21,7 +21,8 @@ public class ImpDigger : MonoBehaviour
 
     [Header("Digging")]
     [SerializeField] private float digSecondsPerTile = 2.5f;
-    [SerializeField] private int stoneYieldPerTile = 1;         // Stone paid into the stockpile per completed dig (#103)
+    [SerializeField] private int stoneYieldPerTile = 1;         // Material paid per completed dig (#103), whichever material the tile is (#114)
+    [SerializeField] private int glimmerstoneBandRows = 6;      // #114: rows nearest the entrance (depth < this) are glimmerstone
     [SerializeField] private float idleRecheckSeconds = 0.25f; // How often an idle imp rescans for work
 
     [Header("Rearming")]
@@ -33,6 +34,7 @@ public class ImpDigger : MonoBehaviour
     public float DigSecondsPerTile { get => digSecondsPerTile; set => digSecondsPerTile = value; }
     public Stockpile Stockpile { get => stockpile; set => stockpile = value; }
     public int StoneYieldPerTile { get => stoneYieldPerTile; set => stoneYieldPerTile = value; }
+    public int GlimmerstoneBandRows { get => glimmerstoneBandRows; set => glimmerstoneBandRows = value; }
     public float IdleRecheckSeconds { get => idleRecheckSeconds; set => idleRecheckSeconds = value; }
     public float RearmSecondsPerTrap { get => rearmSecondsPerTrap; set => rearmSecondsPerTrap = value; }
 
@@ -172,15 +174,32 @@ public class ImpDigger : MonoBehaviour
     }
 
     /// <summary>
-    /// What digging out this tile yields (#103): the one seam the dig pipeline asks at conversion. Every rock tile
-    /// is stone today, stoneYieldPerTile of it; a future epic that gives tiles their own materials (veins) answers
-    /// here instead of touching the digger. False when the tile yields nothing.
+    /// What digging out this tile yields (#103): the one seam the dig pipeline asks at conversion. The material is
+    /// the tile's band by depth (#114: glimmerstone near the entrance, stone elsewhere); the amount is
+    /// stoneYieldPerTile of whichever material it is. False when the tile yields nothing.
     /// </summary>
     public bool TryGetTileYield(Vector2Int tile, out MaterialType material, out int amount)
     {
-        material = MaterialType.Stone;
+        material = dungeonBoard != null ? MaterialAtDepth(DepthOf(dungeonBoard, tile), glimmerstoneBandRows) : MaterialType.Stone;
         amount = stoneYieldPerTile;
         return amount > 0;
+    }
+
+    /// <summary>
+    /// A tile's depth on the entrance axis (#114): 0 on the door's row (the board's south edge, y = height − 1),
+    /// growing toward y = 0.
+    /// </summary>
+    public static int DepthOf(DungeonBoard board, Vector2Int tile) => board.Height - 1 - tile.y;
+
+    /// <summary>
+    /// The material a tile at this depth is made of (#114): the bands along the entrance axis, first match wins, else
+    /// stone. Today one band: glimmerstone for depth &lt; glimmerstoneBandRows. A deep band (#111's deepstone) slots
+    /// in here as another check against the far end of the same axis.
+    /// </summary>
+    public static MaterialType MaterialAtDepth(int depth, int glimmerstoneBandRows)
+    {
+        if (depth >= 0 && depth < glimmerstoneBandRows) return MaterialType.Glimmerstone;
+        return MaterialType.Stone;
     }
 
     private void TickBuilding(float deltaTime)

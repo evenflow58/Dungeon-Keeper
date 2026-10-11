@@ -97,7 +97,7 @@ public class Placeable : MonoBehaviour
     /// </summary>
     public bool IsFunded { get; private set; }
 
-    /// <summary>Placement order (#104): the funding pass serves waiting orders strictly in this order.</summary>
+    /// <summary>Placement order (#104): the funding pass serves each material's waiting orders strictly in this order (#120).</summary>
     public long OrderIndex { get; private set; }
 
     /// <summary>How many of the finished model's parts (recipe order) the assembly currently shows.</summary>

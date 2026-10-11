@@ -7,8 +7,9 @@ using UnityEngine;
 /// Placing creates a construction site (#91) that occupies its tile at once but does nothing until built;
 /// consumers read the built-only queries (GetBuilt…, CountBuilt, TotalFood).
 /// Orders cost materials (#104): each site records its cost row (#109: the type in the material the player chose,
-/// TryGetCost) and waits unfunded until the funding pass pays for it from the Stockpile — strictly in placement order (a later, cheaper order never jumps an earlier one), deducted
-/// at funding. The pass runs at placement and every frame while anything waits, so an affordable order funds at once
+/// TryGetCost) and waits unfunded until the funding pass pays for it from the Stockpile, deducted at funding. Each
+/// material has its own line (#120): strictly in placement order within a material (a later, cheaper order never jumps
+/// an earlier one of the same material), while a waiting order never holds up orders in other materials. The pass runs at placement and every frame while anything waits, so an affordable order funds at once
 /// and a waiting one funds the frame the stockpile covers it. Only funded sites are build jobs. With no Stockpile
 /// wired, every order funds at once (an unwired system degrades, never blocks). Placing is never blocked by cost.
 /// </summary>
@@ -143,15 +144,23 @@ public class PlacementManager : MonoBehaviour
 
     /// <summary>
     /// True when an order of this type in this material placed now would fund on the spot: no stockpile (orders fund
-    /// at once), or nothing already waiting (strict global FIFO across materials: a new order queues behind them) and
-    /// the stock of THAT material covers the cost. False for an unorderable pair. The build bar shows the cost red when
-    /// this is false; placing is never blocked by it.
+    /// at once), or nothing already waiting for THAT material (#120: a new order queues behind its own material's
+    /// line only) and the stock of that material covers the cost. False for an unorderable pair. The build bar shows
+    /// the cost red when this is false; placing is never blocked by it.
     /// </summary>
     public bool WouldFundNow(PlaceableType type, MaterialType material)
     {
         if (!TryGetCost(type, material, out MaterialAmount cost)) return false;
         if (stockpile == null) return true; // Unity null check: unwired means free
-        return awaitingFunding.Count == 0 && stockpile.Count(cost.type) >= cost.amount;
+        return !AnyAwaiting(cost.type) && stockpile.Count(cost.type) >= cost.amount;
+    }
+
+    // True while an order in this material waits for funding: its line is non-empty.
+    private bool AnyAwaiting(MaterialType material)
+    {
+        foreach (Placeable p in awaitingFunding)
+            if (p != null && !p.IsBuilt && !p.IsFunded && p.OrderedMaterial == material) return true;
+        return false;
     }
 
     /// <summary>Orders waiting for materials, in placement (funding) order.</summary>
@@ -193,7 +202,8 @@ public class PlacementManager : MonoBehaviour
     }
 
     private readonly Dictionary<Vector2Int, Placeable> placed = new Dictionary<Vector2Int, Placeable>();
-    private readonly List<Placeable> awaitingFunding = new List<Placeable>(); // Placement order: the FIFO line
+    private readonly List<Placeable> awaitingFunding = new List<Placeable>(); // Placement order; each material's orders are its line (#120)
+    private readonly HashSet<MaterialType> blockedMaterials = new HashSet<MaterialType>(); // Scratch for the funding pass
     private long nextOrderIndex;
     private Transform holder;
 
@@ -203,25 +213,37 @@ public class PlacementManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Funds waiting orders strictly in placement order: the head order is paid in full via Stockpile.TrySpend (all or
-    /// nothing) and released to the build queue; the pass stops at the first order the stock can't cover, so nothing
-    /// behind it jumps the line. Built or removed orders leave the line unpaid. Returns how many it funded.
-    /// Runs at placement and from Update while anything waits; public so tests can drive it.
+    /// Funds waiting orders, one line per material (#120): walking the orders in placement order, each is paid in full
+    /// via Stockpile.TrySpend (all or nothing) and released to the build queue, until its material's stock can't cover
+    /// one — that order then blocks every later order in the SAME material (nothing behind it jumps the line), and
+    /// only those: other materials' lines carry on. Built or removed orders leave the line unpaid. Returns how many it
+    /// funded. Runs at placement and from Update while anything waits; public so tests can drive it.
     /// </summary>
     public int RunFundingPass()
     {
         int funded = 0;
-        while (awaitingFunding.Count > 0)
+        blockedMaterials.Clear();
+        for (int i = 0; i < awaitingFunding.Count;)
         {
-            Placeable head = awaitingFunding[0];
-            if (head == null || head.IsBuilt || head.IsFunded) // Gone, staged complete, or already funded: no charge
+            Placeable order = awaitingFunding[i];
+            if (order == null || order.IsBuilt || order.IsFunded) // Gone, staged complete, or already funded: no charge
             {
-                awaitingFunding.RemoveAt(0);
+                awaitingFunding.RemoveAt(i);
                 continue;
             }
-            if (stockpile != null && !stockpile.TrySpend(head.OrderedMaterial, head.RequiredAmount)) break; // Head-of-line wait
-            awaitingFunding.RemoveAt(0);
-            head.MarkFunded();
+            if (blockedMaterials.Contains(order.OrderedMaterial)) // Behind its material's waiting head
+            {
+                i++;
+                continue;
+            }
+            if (stockpile != null && !stockpile.TrySpend(order.OrderedMaterial, order.RequiredAmount))
+            {
+                blockedMaterials.Add(order.OrderedMaterial); // Head-of-line wait, for this material only
+                i++;
+                continue;
+            }
+            awaitingFunding.RemoveAt(i);
+            order.MarkFunded();
             funded++;
         }
         return funded;

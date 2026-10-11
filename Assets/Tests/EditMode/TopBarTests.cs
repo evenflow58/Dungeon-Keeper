@@ -318,4 +318,28 @@ public class TopBarTests
             Object.DestroyImmediate(fresh.gameObject);
         }
     }
+
+    // --- Fitting a narrow view (#111) ---
+
+    [Test]
+    public void FitFontSize_KeepsTheFullSize_WhenItFits()
+    {
+        Assert.AreEqual(20, TopBar.FitFontSize(20, 12, size => true));
+        Assert.AreEqual(20, TopBar.FitFontSize(20, 12, null), "Nothing to measure: the full size");
+    }
+
+    [Test]
+    public void FitFontSize_ShrinksToTheLargestSizeThatFits()
+    {
+        Assert.AreEqual(16, TopBar.FitFontSize(20, 12, size => size <= 16));
+        Assert.AreEqual(13, TopBar.FitFontSize(20, 12, size => size <= 13));
+    }
+
+    [Test]
+    public void FitFontSize_NeverGoesBelowTheMinimum_NorAboveTheFullSize()
+    {
+        Assert.AreEqual(12, TopBar.FitFontSize(20, 12, size => false), "Nothing fits: the floor, not smaller");
+        Assert.AreEqual(12, TopBar.FitFontSize(20, 12, size => size <= 5));
+        Assert.AreEqual(20, TopBar.FitFontSize(20, 30, size => false), "A floor above the full size is the full size");
+    }
 }

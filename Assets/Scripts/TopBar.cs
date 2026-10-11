@@ -24,6 +24,7 @@ public class TopBar : MonoBehaviour
 
     [Header("Appearance")]
     [SerializeField] private int fontSize = 20;                                    // Persistent HUD: larger than the build bar's 14
+    [SerializeField] private int minFontSize = 12;                                 // #111: the readouts shrink together to fit a narrow view, never below this
     [SerializeField] private float barHeight = 36f;
     [SerializeField] private float sidePadding = 16f; // At the bar's outer edges
     [SerializeField] private float slotGap = 4f;      // Between readouts (#114)
@@ -37,6 +38,9 @@ public class TopBar : MonoBehaviour
     public GameManager GameManager { get => gameManager; set => gameManager = value; }
     public Stockpile Stockpile { get => stockpile; set => stockpile = value; }
     public int FontSize { get => fontSize; set => fontSize = value; }
+    public int MinFontSize { get => minFontSize; set => minFontSize = value; }
+    /// <summary>The font size the readouts currently show at (#111): fontSize, or smaller when the view is too narrow.</summary>
+    public int FittedFontSize { get; private set; }
     public float PollIntervalSeconds { get => pollIntervalSeconds; set => pollIntervalSeconds = value; }
 
     /// <summary>The readouts as of the last Refresh (also what the labels show).</summary>
@@ -83,6 +87,45 @@ public class TopBar : MonoBehaviour
         if (foodLabel != null) foodLabel.text = FoodText;
         if (materialLabel != null) materialLabel.text = MaterialText;
         if (nextHeroLabel != null) nextHeroLabel.text = NextHeroText;
+        FitLabels();
+    }
+
+    /// <summary>
+    /// The largest font size from fontSize down to minFontSize at which fitsAt answers true (#111); minFontSize when
+    /// none does. Three materials made the readouts wider than a narrow view (~871 px at size 20), so they shrink
+    /// together rather than overlap.
+    /// </summary>
+    public static int FitFontSize(int fontSize, int minFontSize, System.Func<int, bool> fitsAt)
+    {
+        int floor = Mathf.Min(minFontSize, fontSize);
+        for (int size = fontSize; size > floor; size--)
+            if (fitsAt == null || fitsAt(size)) return size;
+        return floor;
+    }
+
+    // Layout only: one shared size for all four readouts, so the bar stays even. Re-fitted on each refresh, which
+    // also follows a resized view.
+    private void FitLabels()
+    {
+        if (goblinLabel == null) return;
+        Text[] labels = { goblinLabel, foodLabel, materialLabel, nextHeroLabel };
+        FittedFontSize = FitFontSize(fontSize, minFontSize, size =>
+        {
+            foreach (Text label in labels)
+            {
+                float available = label.rectTransform.rect.width;
+                if (available > 0f && PreferredWidth(label, size) > available) return false; // No width yet: nothing to fit
+            }
+            return true;
+        });
+        foreach (Text label in labels) label.fontSize = FittedFontSize;
+    }
+
+    private static float PreferredWidth(Text label, int size)
+    {
+        TextGenerationSettings settings = label.GetGenerationSettings(Vector2.zero);
+        settings.fontSize = size;
+        return label.cachedTextGeneratorForLayout.GetPreferredWidth(label.text, settings) / label.pixelsPerUnit;
     }
 
     /// <summary>One material's readout segment: "Stone: 10".</summary>
@@ -170,13 +213,14 @@ public class TopBar : MonoBehaviour
         barRect.sizeDelta = new Vector2(0f, barHeight);
 
         Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        // Slots sized to their longest content at fontSize 20 (#114: two materials made the readout ~275 px): goblins
-        // ~101, food ~79, materials ~275 ("Stone: 123 · Glimmerstone: 45"), next hero ~222 ("…needs a route").
-        // Full padding at the bar's outer edges only, a small gap between slots, so all four fit even a 732 px view.
-        goblinLabel = CreateLabel(barGo.transform, "GoblinReadout", font, 0f, 0.15f, TextAnchor.MiddleLeft, sidePadding, slotGap);
-        foodLabel = CreateLabel(barGo.transform, "FoodReadout", font, 0.15f, 0.12f, TextAnchor.MiddleCenter, slotGap, slotGap);
-        materialLabel = CreateLabel(barGo.transform, "MaterialReadout", font, 0.27f, 0.40f, TextAnchor.MiddleCenter, slotGap, slotGap);
-        nextHeroLabel = CreateLabel(barGo.transform, "NextHeroReadout", font, 0.67f, 0.33f, TextAnchor.MiddleRight, slotGap, sidePadding);
+        // Slots in proportion to their longest content at fontSize 20, padding included (#111: three materials made the
+        // readout ~413 px): goblins ~101, food ~79, materials ~413 ("Stone: 123 · Glimmerstone: 45 · Deepstone: 6"),
+        // next hero ~222 ("…needs a route"). Full padding at the bar's outer edges only, a small gap between slots.
+        // That is ~871 px in all, so below that width FitLabels shrinks the four together (size 16-17 at a 732 px view).
+        goblinLabel = CreateLabel(barGo.transform, "GoblinReadout", font, 0f, 0.139f, TextAnchor.MiddleLeft, sidePadding, slotGap);
+        foodLabel = CreateLabel(barGo.transform, "FoodReadout", font, 0.139f, 0.10f, TextAnchor.MiddleCenter, slotGap, slotGap);
+        materialLabel = CreateLabel(barGo.transform, "MaterialReadout", font, 0.239f, 0.483f, TextAnchor.MiddleCenter, slotGap, slotGap);
+        nextHeroLabel = CreateLabel(barGo.transform, "NextHeroReadout", font, 0.722f, 0.278f, TextAnchor.MiddleRight, slotGap, sidePadding);
     }
 
     // A label filling width (a fraction of the bar) from xMin, inset by leftPad / rightPad.

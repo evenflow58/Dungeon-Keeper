@@ -808,6 +808,7 @@ MonoBehaviour:
   gameManager: {fileID: 565044526}
   stockpile: {fileID: 565044532}
   fontSize: 20
+  minFontSize: 12
   barHeight: 36
   sidePadding: 16
   slotGap: 4

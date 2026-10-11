@@ -47,13 +47,13 @@ public class MaterialChoiceTests
     [Test]
     public void ShippedRows_EveryTypeInStone_AtTheCurrentCosts()
     {
-        Assert.AreEqual(6, manager.Costs.Count, "Every type in Stone, and (#114) in Glimmerstone");
+        Assert.AreEqual(9, manager.Costs.Count, "Every type in Stone, (#114) Glimmerstone and (#111) Deepstone");
         foreach (var (type, amount) in new[] { (PlaceableType.LairCot, 3), (PlaceableType.MushroomPlot, 4), (PlaceableType.SpikeTrap, 2) })
         {
             Assert.IsTrue(manager.TryGetCost(type, MaterialType.Stone, out MaterialAmount cost), $"{type}");
             Assert.AreEqual(MaterialType.Stone, cost.type);
             Assert.AreEqual(amount, cost.amount);
-            CollectionAssert.AreEqual(new[] { MaterialType.Stone, MaterialType.Glimmerstone }, manager.MaterialsFor(type),
+            CollectionAssert.AreEqual(new[] { MaterialType.Stone, MaterialType.Glimmerstone, MaterialType.Deepstone }, manager.MaterialsFor(type),
                 $"{type}: orderable in exactly its row materials, in table order");
             Assert.IsTrue(manager.TryGetDefaultMaterial(type, out MaterialType def));
             Assert.AreEqual(MaterialType.Stone, def, "The first row: Stone stays the default");
@@ -124,6 +124,8 @@ public class MaterialChoiceTests
 
         c.CycleMaterial(); // #114: a second material to cycle to
         Assert.AreEqual(MaterialType.Glimmerstone, c.SelectedMaterial);
+        c.CycleMaterial(); // #111: and a third
+        Assert.AreEqual(MaterialType.Deepstone, c.SelectedMaterial);
         c.CycleMaterial(); // Wraps back
         Assert.AreEqual(MaterialType.Stone, c.SelectedMaterial);
         Assert.IsTrue(c.SelectMaterial(MaterialType.Stone));

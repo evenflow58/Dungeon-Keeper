@@ -63,9 +63,10 @@ public class MaterialPropertiesTests
     // --- The seam ---
 
     [Test]
-    public void TheTable_ShipsTheTwoCotRows_StoneBaseline_GlimmerstoneRests()
+    public void TheTable_ShipsCotRowsOnly_StoneBaseline_GlimmerstoneRests()
     {
-        Assert.AreEqual(2, manager.Properties.Count, "Cot rows only: plots and traps have no rest axis");
+        Assert.AreEqual(3, manager.Properties.Count, "Cot rows only (one per material, #111 added deepstone's): plots and traps have no rest axis");
+        foreach (PlaceableProperty row in manager.Properties) Assert.AreEqual(PlaceableType.LairCot, row.type);
 
         PlaceableProperty stone = Row(PlaceableType.LairCot, MaterialType.Stone);
         Assert.AreEqual(1f, stone.restRateMultiplier, "Stone is the baseline");
@@ -128,8 +129,9 @@ public class MaterialPropertiesTests
     [Test]
     public void ThePropertiesTable_LeavesTheCostTableAlone()
     {
+        int costRows = manager.Costs.Count;
         manager.Properties.Clear();
-        Assert.AreEqual(6, manager.Costs.Count);
+        Assert.AreEqual(costRows, manager.Costs.Count);
         Assert.IsTrue(manager.TryGetCost(PlaceableType.LairCot, MaterialType.Glimmerstone, out _), "Orderable without a property row");
     }
 

@@ -9,7 +9,8 @@ using UnityEngine;
 public enum MaterialType
 {
     Stone,
-    Glimmerstone // #114: common stone shot through with faint magic, dug from the shallow band
+    Glimmerstone, // #114: common stone shot through with faint magic, dug from the shallow band
+    Deepstone     // #111: hard stone from far underground, dug from the deep band
 }
 
 /// <summary>How a material reads to the player: its display name and color.</summary>
@@ -57,6 +58,7 @@ public class Stockpile : MonoBehaviour
     {
         new MaterialDefinition(MaterialType.Stone, "Stone", new Color(0.62f, 0.62f, 0.66f, 1f)), // Cool gray
         new MaterialDefinition(MaterialType.Glimmerstone, "Glimmerstone", new Color(0.72f, 0.62f, 0.95f, 1f)), // Pale lavender-violet: faint magic
+        new MaterialDefinition(MaterialType.Deepstone, "Deepstone", new Color(0.30f, 0.36f, 0.50f, 1f)), // Deep slate blue: darker than stone
     };
 
     [Header("Starting Stock")]

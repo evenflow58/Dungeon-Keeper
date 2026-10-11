@@ -122,7 +122,7 @@ public class GlimmerstoneTests
         Assert.AreEqual(MaterialType.Glimmerstone, YieldAt(23, 26), "Depth 5: the last band row");
         Assert.AreEqual(MaterialType.Stone, YieldAt(23, 25), "Depth 6: the first mid row");
         Assert.AreEqual(MaterialType.Stone, YieldAt(27, 16), "Mid-board, around the cavern");
-        Assert.AreEqual(MaterialType.Stone, YieldAt(10, 0), "The far edge: no deep band yet");
+        Assert.AreEqual(MaterialType.Stone, YieldAt(10, 12), "Depth 19: the last mid row before the deep band (#111)");
     }
 
     [Test]
@@ -140,10 +140,10 @@ public class GlimmerstoneTests
     [Test]
     public void MaterialAtDepth_IsTheBandRule()
     {
-        Assert.AreEqual(MaterialType.Glimmerstone, ImpDigger.MaterialAtDepth(0, 6));
-        Assert.AreEqual(MaterialType.Glimmerstone, ImpDigger.MaterialAtDepth(5, 6));
-        Assert.AreEqual(MaterialType.Stone, ImpDigger.MaterialAtDepth(6, 6));
-        Assert.AreEqual(MaterialType.Stone, ImpDigger.MaterialAtDepth(-1, 6), "Off the board: not the band");
+        Assert.AreEqual(MaterialType.Glimmerstone, ImpDigger.MaterialAtDepth(0, 6, 20));
+        Assert.AreEqual(MaterialType.Glimmerstone, ImpDigger.MaterialAtDepth(5, 6, 20));
+        Assert.AreEqual(MaterialType.Stone, ImpDigger.MaterialAtDepth(6, 6, 20));
+        Assert.AreEqual(MaterialType.Stone, ImpDigger.MaterialAtDepth(-1, 6, 20), "Off the board: not the band");
     }
 
     // --- Digging it ---

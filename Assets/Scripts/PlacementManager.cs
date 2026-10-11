@@ -41,7 +41,7 @@ public class PlacementManager : MonoBehaviour
     [SerializeField] private float spikeTrapBuildSeconds = 5f;
 
     // What an order costs (#104), per type AND material (#109): a type is orderable in a material exactly when a row
-    // exists. Ships with every type in Stone and in Glimmerstone (#114); later materials add rows, not fields.
+    // exists. Ships with every type in Stone, Glimmerstone (#114) and Deepstone (#111); later materials add rows, not fields.
     [Header("Build Costs")]
     [SerializeField] private List<PlaceableCost> costs = new List<PlaceableCost>
     {
@@ -51,6 +51,9 @@ public class PlacementManager : MonoBehaviour
         new PlaceableCost(PlaceableType.LairCot, MaterialType.Glimmerstone, 3),      // #114: at Stone's amounts
         new PlaceableCost(PlaceableType.MushroomPlot, MaterialType.Glimmerstone, 4),
         new PlaceableCost(PlaceableType.SpikeTrap, MaterialType.Glimmerstone, 2),
+        new PlaceableCost(PlaceableType.LairCot, MaterialType.Deepstone, 3),         // #111: at Stone's amounts
+        new PlaceableCost(PlaceableType.MushroomPlot, MaterialType.Deepstone, 4),
+        new PlaceableCost(PlaceableType.SpikeTrap, MaterialType.Deepstone, 2),
     };
 
     // What a material makes a building DO (#110), per type AND material: numeric modifiers plus capability flags.
@@ -61,6 +64,7 @@ public class PlacementManager : MonoBehaviour
     {
         new PlaceableProperty(PlaceableType.LairCot, MaterialType.Stone, 1f, 1f, false),          // The explicit baseline
         new PlaceableProperty(PlaceableType.LairCot, MaterialType.Glimmerstone, 1.25f, 1f, true), // Faint magic: the rest material
+        new PlaceableProperty(PlaceableType.LairCot, MaterialType.Deepstone, 1.5f, 1f, false),    // #111: the best rest in the game
     };
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }

@@ -238,6 +238,7 @@ MonoBehaviour:
   digSecondsPerTile: 2.5
   stoneYieldPerTile: 1
   glimmerstoneBandRows: 6
+  deepstoneDepthThreshold: 20
   idleRecheckSeconds: 0.25
   rearmSecondsPerTrap: 8
 --- !u!1 &330585543
@@ -717,6 +718,15 @@ MonoBehaviour:
   - type: 2
     material: 1
     amount: 2
+  - type: 0
+    material: 2
+    amount: 3
+  - type: 1
+    material: 2
+    amount: 4
+  - type: 2
+    material: 2
+    amount: 2
   properties:
   - type: 0
     material: 0
@@ -728,6 +738,11 @@ MonoBehaviour:
     restRateMultiplier: 1.25
     restQuality: 1
     restsMagicalCreatures: 1
+  - type: 0
+    material: 2
+    restRateMultiplier: 1.5
+    restQuality: 1
+    restsMagicalCreatures: 0
 --- !u!114 &565044526
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -793,6 +808,7 @@ MonoBehaviour:
   gameManager: {fileID: 565044526}
   stockpile: {fileID: 565044532}
   fontSize: 20
+  minFontSize: 12
   barHeight: 36
   sidePadding: 16
   slotGap: 4
@@ -876,6 +892,9 @@ MonoBehaviour:
   - type: 1
     displayName: Glimmerstone
     color: {r: 0.72, g: 0.62, b: 0.95, a: 1}
+  - type: 2
+    displayName: Deepstone
+    color: {r: 0.3, g: 0.36, b: 0.5, a: 1}
   startingAmounts:
   - type: 0
     amount: 10

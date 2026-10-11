@@ -50,16 +50,11 @@ jobs:
         with:
           lfs: true
 
-      # Cache the Library folder so Unity does not reimport every asset on
-      # every run. Key on packages-lock.json — any package change invalidates
-      # the cache, which is the correct trade-off.
-      - name: Cache Library
-        uses: actions/cache@v4
-        with:
-          path: Library
-          key: Library-v3-${{ hashFiles('Packages/packages-lock.json') }}
-          restore-keys: |
-            Library-v3-
+      # No Library cache, on purpose (#116). Restoring a cached Library makes
+      # Unity hang at startup and get killed (exit 137, no test output) in most
+      # runs - even when the cache was built from byte-identical code - while a
+      # cold import (~8 min) has never failed. A warm run only saved ~2 min.
+      # Do not re-add a Library cache without first reproducing and fixing that.
 
       - name: Runner memory diagnostics
         run: |

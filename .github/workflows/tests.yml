@@ -51,15 +51,16 @@ jobs:
           lfs: true
 
       # Cache the Library folder so Unity does not reimport every asset on
-      # every run. Key on packages-lock.json — any package change invalidates
-      # the cache, which is the correct trade-off.
+      # every run. The key hashes the packages AND the code (scripts + asmdefs):
+      # a cache is only ever restored onto the exact code it was built from.
+      # Restoring one built from different code intermittently kills Unity at
+      # startup (#116). No restore-keys: a prefix fallback would restore a
+      # code-mismatched cache, which is the failure being fixed.
       - name: Cache Library
         uses: actions/cache@v4
         with:
           path: Library
-          key: Library-v3-${{ hashFiles('Packages/packages-lock.json') }}
-          restore-keys: |
-            Library-v3-
+          key: Library-v4-${{ hashFiles('Packages/packages-lock.json') }}-${{ hashFiles('Assets/**/*.cs', 'Assets/**/*.asmdef') }}
 
       - name: Runner memory diagnostics
         run: |

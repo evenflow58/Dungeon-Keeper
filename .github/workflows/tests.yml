@@ -56,6 +56,7 @@ jobs:
       # Restoring one built from different code intermittently kills Unity at
       # startup (#116). No restore-keys: a prefix fallback would restore a
       # code-mismatched cache, which is the failure being fixed.
+      # Cost: any script change means a cold import (~8 min) on the next run.
       - name: Cache Library
         uses: actions/cache@v4
         with:

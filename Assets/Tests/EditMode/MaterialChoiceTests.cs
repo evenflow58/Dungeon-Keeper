@@ -180,12 +180,13 @@ public class MaterialChoiceTests
     // --- The TopBar reads the catalog ---
 
     [Test]
-    public void MaterialsReadout_OneMaterialAsBefore_TwoInCatalogOrder()
+    public void MaterialsSummary_OneKindOrSeveral_OneSegmentEitherWay()
     {
-        Assert.AreEqual("Stone: 10", TopBar.MaterialsReadout(new List<(string, int)> { ("Stone", 10) }));
-        Assert.AreEqual("Stone: 10 · Deepstone: 3", TopBar.MaterialsReadout(new List<(string, int)> { ("Stone", 10), ("Deepstone", 3) }),
-            "Staged second segment (a name and a count, no fake material)");
-        Assert.AreEqual("Stone: 0", TopBar.MaterialsReadout(new List<(string, int)>()), "Nothing: degrades as before");
-        Assert.AreEqual("Stone: 0", TopBar.MaterialsReadout(null));
+        // #124: the per-material segments this pinned are gone; the catalog now reads as kinds and a total.
+        Assert.AreEqual("Materials: 1 kind · 10 total", TopBar.MaterialsSummary(new List<(string, int)> { ("Stone", 10) }));
+        Assert.AreEqual("Materials: 2 kinds · 13 total", TopBar.MaterialsSummary(new List<(string, int)> { ("Stone", 10), ("Deepstone", 3) }),
+            "Staged second kind (a name and a count, no fake material)");
+        Assert.AreEqual("Materials: 0 kinds · 0 total", TopBar.MaterialsSummary(new List<(string, int)>()), "Nothing: degrades to zeros");
+        Assert.AreEqual("Materials: 0 kinds · 0 total", TopBar.MaterialsSummary(null));
     }
 }

@@ -258,39 +258,61 @@ public class TopBarTests
 
         Assert.DoesNotThrow(() => bar.Refresh());
         Assert.AreEqual("Food: 0", bar.FoodText);
-        Assert.AreEqual("Stone: 0", bar.MaterialText);
+        Assert.AreEqual("Materials: 0 kinds · 0 total", bar.MaterialText);
         Assert.AreEqual($"Next hero: {TopBar.Dash}", bar.NextHeroText);
     }
 
     [Test]
-    public void Materials_ShowTheStockpilesStone_FromTheFirstRefresh()
+    public void Materials_ShowTheCatalogsKindsAndTheTotal_FromTheFirstRefresh()
     {
         bar.Refresh();
-        Assert.AreEqual("Stone: 10 · Glimmerstone: 0 · Deepstone: 0", bar.MaterialText, "A fresh game: 10 stone, no glimmerstone (#114) or deepstone (#111), in catalog order");
+        Assert.AreEqual("Materials: 3 kinds · 10 total", bar.MaterialText, "A fresh game: stone, glimmerstone (#114) and deepstone (#111) in the catalog, 10 stone");
 
         stockpile.Add(MaterialType.Stone, 5);
         bar.Refresh();
-        Assert.AreEqual("Stone: 15 · Glimmerstone: 0 · Deepstone: 0", bar.MaterialText, "Polled on refresh");
+        Assert.AreEqual("Materials: 3 kinds · 15 total", bar.MaterialText, "Polled on refresh");
 
         Assert.IsTrue(stockpile.TrySpend(MaterialType.Stone, 15));
         bar.Refresh();
-        Assert.AreEqual("Stone: 0 · Glimmerstone: 0 · Deepstone: 0", bar.MaterialText);
+        Assert.AreEqual("Materials: 3 kinds · 0 total", bar.MaterialText, "Kinds is the catalog's, not what's in stock");
 
         stockpile.Add(MaterialType.Glimmerstone, 4);
         bar.Refresh();
-        Assert.AreEqual("Stone: 0 · Glimmerstone: 4 · Deepstone: 0", bar.MaterialText, "Each material its own count");
+        Assert.AreEqual("Materials: 3 kinds · 4 total", bar.MaterialText);
 
         stockpile.Add(MaterialType.Deepstone, 6);
+        stockpile.Add(MaterialType.Stone, 63);
         bar.Refresh();
-        Assert.AreEqual("Stone: 0 · Glimmerstone: 4 · Deepstone: 6", bar.MaterialText);
+        Assert.AreEqual("Materials: 3 kinds · 73 total", bar.MaterialText, "The total sums every material");
     }
 
     [Test]
-    public void MaterialReadout_FormatsNameAndCount()
+    public void Materials_AddingAKindToTheCatalog_ChangesTheNumberNotTheShape()
     {
-        Assert.AreEqual("Stone: 10", TopBar.MaterialReadout("Stone", 10));
-        Assert.AreEqual("Stone: 0", TopBar.MaterialReadout("Stone", 0));
-        Assert.AreEqual("Stone: 1234", TopBar.MaterialReadout("Stone", 1234));
+        var definitions = new List<MaterialDefinition>(stockpile.Definitions);
+        definitions.RemoveAt(definitions.Count - 1);
+        stockpile.Definitions = definitions;
+        bar.Refresh();
+        Assert.AreEqual("Materials: 2 kinds · 10 total", bar.MaterialText);
+    }
+
+    [Test]
+    public void MaterialsSummary_CountsKindsAndSumsCounts()
+    {
+        Assert.AreEqual("Materials: 3 kinds · 73 total",
+            TopBar.MaterialsSummary(new List<(string, int)> { ("Stone", 63), ("Glimmerstone", 4), ("Deepstone", 6) }));
+        Assert.AreEqual("Materials: 2 kinds · 0 total", TopBar.MaterialsSummary(new List<(string, int)> { ("Stone", 0), ("Deepstone", 0) }));
+        Assert.AreEqual("Materials: 4 kinds · 1234 total",
+            TopBar.MaterialsSummary(new List<(string, int)> { ("A", 1000), ("B", 200), ("C", 30), ("D", 4) }), "A longer catalog is the same one segment");
+    }
+
+    [Test]
+    public void MaterialsSummary_OneKindIsSingular_AndNothingIsZeroKinds()
+    {
+        Assert.AreEqual("Materials: 1 kind · 10 total", TopBar.MaterialsSummary(new List<(string, int)> { ("Stone", 10) }));
+        Assert.AreEqual("Materials: 1 kind · 1 total", TopBar.MaterialsSummary(new List<(string, int)> { ("Stone", 1) }), "\"total\" never changes");
+        Assert.AreEqual("Materials: 0 kinds · 0 total", TopBar.MaterialsSummary(new List<(string, int)>()));
+        Assert.AreEqual("Materials: 0 kinds · 0 total", TopBar.MaterialsSummary(null));
     }
 
     [Test]
@@ -312,6 +334,13 @@ public class TopBarTests
         {
             Assert.AreEqual(20, fresh.FontSize);
             Assert.AreEqual(0.25f, fresh.PollIntervalSeconds);
+
+            // #124: the bar and the speed buttons that sit in it are two components whose defaults must agree.
+            var speed = fresh.gameObject.AddComponent<GameSpeed>();
+            Assert.AreEqual(fresh.BarHeight, speed.StripHeight, "The buttons center in the bar's strip");
+            Assert.AreEqual(fresh.SidePadding, speed.BarInset, "Inset from the right edge like the readouts from the left");
+            Assert.AreEqual(216f, speed.PanelWidth, "3 buttons of 64 and 4 paddings of 6");
+            Assert.GreaterOrEqual(fresh.RightReserve, speed.BarInset + speed.PanelWidth, "The readouts stop short of the buttons");
         }
         finally
         {

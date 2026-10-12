@@ -54,7 +54,7 @@ public static class BuildPresentation
     private static readonly Entry[] Entries =
     {
         new Entry(PlaceableType.LairCot, BuildCategory.Living, "Lair Cot",
-            "A bed of piled material. Goblins sleep here to restore energy.", new Color(0.78f, 0.62f, 0.42f, 1f)),
+            "A bed of piled material. Goblins sleep here to restore energy.", new Color(0.55f, 0.72f, 0.92f, 1f)),
         new Entry(PlaceableType.MushroomPlot, BuildCategory.Farming, "Mushroom Plot",
             "Grows food over time, up to 5. Goblins eat from a stocked plot.", new Color(0.50f, 0.78f, 0.45f, 1f)),
         new Entry(PlaceableType.SpikeTrap, BuildCategory.Defense, "Spike Trap",
@@ -63,7 +63,7 @@ public static class BuildPresentation
 
     public const string DigLabel = "DIG";
     public const BuildIconShape DigShape = BuildIconShape.Triangle;
-    public static readonly Color DigAccent = new Color(0.80f, 0.74f, 0.62f, 1f);
+    public static readonly Color DigAccent = new Color(0.90f, 0.90f, 0.92f, 1f);
 
     public static bool TryGet(PlaceableType type, out Entry entry)
     {
@@ -137,7 +137,7 @@ public static class BuildPresentation
     {
         switch (category)
         {
-            case BuildCategory.Living: return new Color(0.78f, 0.62f, 0.42f, 1f);
+            case BuildCategory.Living: return new Color(0.55f, 0.72f, 0.92f, 1f);
             case BuildCategory.Farming: return new Color(0.50f, 0.78f, 0.45f, 1f);
             case BuildCategory.Defense: return new Color(0.85f, 0.45f, 0.40f, 1f);
             default: return new Color(0.62f, 0.50f, 0.88f, 1f);

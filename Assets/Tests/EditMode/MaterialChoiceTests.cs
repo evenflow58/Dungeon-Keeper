@@ -190,4 +190,3 @@ public class MaterialChoiceTests
         Assert.AreEqual("Materials: 0 kinds · 0 total", TopBar.MaterialsSummary(null));
     }
 }
-}

@@ -33,15 +33,16 @@ public class TopBar : MonoBehaviour
 
     [Header("Layout (#124)")]
     // Kept free at the bar's right end, inside sidePadding, for GameSpeed's buttons: its panel (GameSpeed.PanelWidth,
-    // 216) plus a gap to the next-hero readout.
-    [SerializeField] private float speedClusterWidth = 224f;
-    // Each readout's share of the width left of that reserve, in proportion to its longest content at fontSize 20:
-    // goblins ~101 ("Goblins: 10"), food ~79 ("Food: 15"), materials ~271 ("Materials: 3 kinds · 123 total"),
-    // next hero ~222 ("Next hero: needs a route").
-    [SerializeField] private float goblinShare = 0.15f;
-    [SerializeField] private float foodShare = 0.12f;
-    [SerializeField] private float materialShare = 0.40f;
-    [SerializeField] private float heroShare = 0.33f;
+    // 216) plus a slotGap to the next-hero readout.
+    [SerializeField] private float speedClusterWidth = 220f;
+    // Each readout's share of the width left of that reserve. At a 732 px view that is 496 px, where these shares fit
+    // the longest contents ("Goblins: 10", "Food: 15", "Materials: 3 kinds · 123 total", "Hero in the dungeon") at
+    // size 14: 72 + 57 + 179 + 130 px of text plus 40 px of padding. "Next hero: needs a route" (158 px at 14) fits at
+    // 13 there. From about 1000 px wide everything fits at the full size 20.
+    [SerializeField] private float goblinShare = 0.1885f;
+    [SerializeField] private float foodShare = 0.133f;
+    [SerializeField] private float materialShare = 0.38f;
+    [SerializeField] private float heroShare = 0.2985f;
 
     [Header("Refresh")]
     [SerializeField] private float pollIntervalSeconds = 0.25f;

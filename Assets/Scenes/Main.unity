@@ -807,6 +807,11 @@ MonoBehaviour:
   sidePadding: 16
   slotGap: 4
   panelColor: {r: 0, g: 0, b: 0, a: 0.6}
+  speedClusterWidth: 220
+  goblinShare: 0.1885
+  foodShare: 0.133
+  materialShare: 0.38
+  heroShare: 0.2985
   pollIntervalSeconds: 0.25
 --- !u!114 &565044529
 MonoBehaviour:
@@ -820,9 +825,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 86a568c0c0b66c64b8038591015477fe, type: 3}
   m_Name: 
   m_EditorClassIdentifier: DungeonKeeper::GameSpeed
-  buttonSize: {x: 140, y: 36}
-  barPadding: 8
-  rowAboveBuildBar: 68
+  buttonSize: {x: 64, y: 28}
+  barPadding: 6
+  barInset: 16
+  stripHeight: 36
+  sortingOrder: 1
+  panelColor: {r: 0, g: 0, b: 0, a: 0}
   buttonNormalColor: {r: 0.25, g: 0.25, b: 0.3, a: 1}
   buttonSelectedColor: {r: 0.85, g: 0.65, b: 0.15, a: 1}
 --- !u!114 &565044530

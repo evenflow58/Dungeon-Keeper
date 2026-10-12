@@ -39,12 +39,32 @@ public class InputConfigTests
         CollectionAssert.AreEqual(new[] { "<Mouse>/leftButton" }, InputConfig.EffectivePaths(a.Designate));
         CollectionAssert.AreEqual(new[] { "<Mouse>/rightButton" }, InputConfig.EffectivePaths(a.ClearOrAbort));
         CollectionAssert.AreEqual(new[] { "<Keyboard>/escape" }, InputConfig.EffectivePaths(a.Abort));
+        CollectionAssert.AreEqual(new[] { "<Keyboard>/space" }, InputConfig.EffectivePaths(a.TogglePause)); // #124
         for (int i = 0; i < 6; i++) // #123: the build rail's digits
             CollectionAssert.AreEqual(new[] { $"<Keyboard>/{i + 1}" }, InputConfig.EffectivePaths(RailActions(a)[i]), $"Rail{i + 1}");
     }
 
     private static UnityEngine.InputSystem.InputAction[] RailActions(InputConfig.Actions a) =>
         new[] { a.Rail1, a.Rail2, a.Rail3, a.Rail4, a.Rail5, a.Rail6 };
+
+    [Test]
+    public void TogglePause_ExistsByName_DefaultsToSpace_WithAStableId()
+    {
+        Assert.AreEqual("TogglePause", InputConfig.TogglePause);
+        using (var a = InputConfig.CreateActions())
+        using (var b = InputConfig.CreateActions())
+        {
+            Assert.AreSame(a.Map[InputConfig.TogglePause], a.TogglePause);
+            Assert.AreEqual(UnityEngine.InputSystem.InputActionType.Button, a.TogglePause.type);
+            CollectionAssert.AreEqual(new[] { "<Keyboard>/space" }, InputConfig.EffectivePaths(a.TogglePause));
+            Assert.AreEqual(a.TogglePause.bindings[0].id, b.TogglePause.bindings[0].id, "Same id in both builds");
+            Assert.AreNotEqual(a.TogglePause.bindings[0].id, a.Abort.bindings[0].id);
+        }
+
+        InputConfig.SetOverride(InputConfig.TogglePause, "<Keyboard>/p");
+        using (var a = InputConfig.CreateActions())
+            CollectionAssert.AreEqual(new[] { "<Keyboard>/p" }, InputConfig.EffectivePaths(a.TogglePause));
+    }
 
     [Test]
     public void RailDigits_ExistByName_WithStableDistinctIds_AndRebindLikeAnyOther()

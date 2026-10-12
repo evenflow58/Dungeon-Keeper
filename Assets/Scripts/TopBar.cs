@@ -3,10 +3,11 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// The top bar (DESIGN §A.7): living goblins, food stock, the stockpile's stone (#102), and the next-hero state,
-/// polled every pollIntervalSeconds. Built in code like the build bar (own overlay Canvas, no scene-authored UI) and
-/// display-only: no raycaster and raycastTarget off on everything, so it never blocks board input — the
-/// player digs right under it (the door column).
+/// The top bar (DESIGN §A.7): living goblins, food stock, a materials summary (#124: kinds and total, so the bar no
+/// longer grows with the catalog), and the next-hero state, polled every pollIntervalSeconds. Built in code like the
+/// rest of the chrome (own overlay Canvas, no scene-authored UI) and display-only: no raycaster and raycastTarget off
+/// on everything, so it never blocks board input — the player digs right under it (the door column). The speed
+/// buttons at its right end are GameSpeed's, on GameSpeed's canvas; the readouts leave that width free.
 /// Updates after the simulation each frame (execution order), so a poll never catches a half-updated frame,
 /// e.g. the route opening before the spawner has spawned the hero it unlocks.
 /// </summary>
@@ -20,15 +21,27 @@ public class TopBar : MonoBehaviour
     [SerializeField] private PlacementManager placementManager;
     [SerializeField] private HeroSpawner heroSpawner;
     [SerializeField] private GameManager gameManager; // Optional: once the game has ended, the hero readout shows a dash
-    [SerializeField] private Stockpile stockpile;     // The materials readout's source (#102)
+    [SerializeField] private Stockpile stockpile;     // The materials summary's source (#102)
 
     [Header("Appearance")]
-    [SerializeField] private int fontSize = 20;                                    // Persistent HUD: larger than the build bar's 14
+    [SerializeField] private int fontSize = 20;                                    // Persistent HUD: larger than the build chrome's
     [SerializeField] private int minFontSize = 12;                                 // #111: the readouts shrink together to fit a narrow view, never below this
-    [SerializeField] private float barHeight = 36f;
-    [SerializeField] private float sidePadding = 16f; // At the bar's outer edges
+    [SerializeField] private float barHeight = 36f;   // GameSpeed.stripHeight and BuildRail.topOffset agree with this
+    [SerializeField] private float sidePadding = 16f; // At the bar's outer edges; GameSpeed.barInset agrees with this
     [SerializeField] private float slotGap = 4f;      // Between readouts (#114)
-    [SerializeField] private Color panelColor = new Color(0f, 0f, 0f, 0.6f);      // Matches the build bar
+    [SerializeField] private Color panelColor = new Color(0f, 0f, 0f, 0.6f);      // Matches the build rail
+
+    [Header("Layout (#124)")]
+    // Kept free at the bar's right end, inside sidePadding, for GameSpeed's buttons: its panel (GameSpeed.PanelWidth,
+    // 216) plus a gap to the next-hero readout.
+    [SerializeField] private float speedClusterWidth = 224f;
+    // Each readout's share of the width left of that reserve, in proportion to its longest content at fontSize 20:
+    // goblins ~101 ("Goblins: 10"), food ~79 ("Food: 15"), materials ~271 ("Materials: 3 kinds · 123 total"),
+    // next hero ~222 ("Next hero: needs a route").
+    [SerializeField] private float goblinShare = 0.15f;
+    [SerializeField] private float foodShare = 0.12f;
+    [SerializeField] private float materialShare = 0.40f;
+    [SerializeField] private float heroShare = 0.33f;
 
     [Header("Refresh")]
     [SerializeField] private float pollIntervalSeconds = 0.25f;
@@ -39,6 +52,10 @@ public class TopBar : MonoBehaviour
     public Stockpile Stockpile { get => stockpile; set => stockpile = value; }
     public int FontSize { get => fontSize; set => fontSize = value; }
     public int MinFontSize { get => minFontSize; set => minFontSize = value; }
+    public float BarHeight => barHeight;
+    public float SidePadding => sidePadding;
+    /// <summary>The width kept free at the bar's right end for the speed buttons, sidePadding included.</summary>
+    public float RightReserve => sidePadding + speedClusterWidth;
     /// <summary>The font size the readouts currently show at (#111): fontSize, or smaller when the view is too narrow.</summary>
     public int FittedFontSize { get; private set; }
     public float PollIntervalSeconds { get => pollIntervalSeconds; set => pollIntervalSeconds = value; }
@@ -79,8 +96,8 @@ public class TopBar : MonoBehaviour
     {
         GoblinText = $"Goblins: {CountLivingGoblins()}";
         FoodText = $"Food: {(placementManager != null ? placementManager.TotalFood : 0)}";
-        // Unity null check, not ?.: an unwired bar degrades to "Stone: 0" like the food readout.
-        MaterialText = MaterialsReadout(CatalogCounts(stockpile));
+        // Unity null check, not ?.: an unwired bar degrades to "0 kinds · 0 total" like the food readout.
+        MaterialText = MaterialsSummary(CatalogCounts(stockpile));
         NextHeroText = NextHeroReadout(heroSpawner, gameManager);
 
         if (goblinLabel != null) goblinLabel.text = GoblinText;
@@ -92,7 +109,7 @@ public class TopBar : MonoBehaviour
 
     /// <summary>
     /// The largest font size from fontSize down to minFontSize at which fitsAt answers true (#111); minFontSize when
-    /// none does. Three materials made the readouts wider than a narrow view (~871 px at size 20), so they shrink
+    /// none does. The readouts and the speed buttons together are wider than a narrow view, so the readouts shrink
     /// together rather than overlap.
     /// </summary>
     public static int FitFontSize(int fontSize, int minFontSize, System.Func<int, bool> fitsAt)
@@ -128,20 +145,20 @@ public class TopBar : MonoBehaviour
         return label.cachedTextGeneratorForLayout.GetPreferredWidth(label.text, settings) / label.pixelsPerUnit;
     }
 
-    /// <summary>One material's readout segment: "Stone: 10".</summary>
-    public static string MaterialReadout(string displayName, int count) => $"{displayName}: {count}";
-
-    /// <summary>The materials readout (#109): every catalog material's segment, in catalog order, joined by " · ".</summary>
-    public static string MaterialsReadout(IList<(string name, int count)> materials)
+    /// <summary>
+    /// The materials summary (#124): "Materials: 3 kinds · 73 total" for the catalog's kinds and the sum of their
+    /// counts ("1 kind" for exactly one). Nothing to count reads "Materials: 0 kinds · 0 total".
+    /// </summary>
+    public static string MaterialsSummary(IList<(string name, int count)> materials)
     {
-        if (materials == null || materials.Count == 0) return MaterialReadout(MaterialType.Stone.ToString(), 0);
-        var segments = new string[materials.Count];
-        for (int i = 0; i < materials.Count; i++) segments[i] = MaterialReadout(materials[i].name, materials[i].count);
-        return string.Join(" · ", segments);
+        int kinds = materials?.Count ?? 0;
+        int total = 0;
+        for (int i = 0; i < kinds; i++) total += materials[i].count;
+        return $"Materials: {kinds} {(kinds == 1 ? "kind" : "kinds")} · {total} total";
     }
 
-    // Each catalog material's name and count, in catalog order. Unwired (Unity null check) or an empty catalog
-    // degrades to stone at 0 / stone's count, as before #109.
+    // Each catalog material's name and count, in catalog order. Unwired (Unity null check) is no kinds at all; an
+    // empty catalog degrades to stone alone, as before #109.
     private static List<(string name, int count)> CatalogCounts(Stockpile stockpile)
     {
         var list = new List<(string name, int count)>();
@@ -212,18 +229,28 @@ public class TopBar : MonoBehaviour
         barRect.anchoredPosition = Vector2.zero;
         barRect.sizeDelta = new Vector2(0f, barHeight);
 
+        // The readouts share the bar left of the reserve: full padding at the bar's left edge, a small gap between slots,
+        // and none at the right, where the reserve already holds the gap to the speed buttons.
+        var readoutsGo = new GameObject("Readouts", typeof(RectTransform));
+        readoutsGo.transform.SetParent(barGo.transform, false);
+        var readoutsRect = (RectTransform)readoutsGo.transform;
+        readoutsRect.anchorMin = Vector2.zero;
+        readoutsRect.anchorMax = Vector2.one;
+        readoutsRect.offsetMin = Vector2.zero;
+        readoutsRect.offsetMax = new Vector2(-RightReserve, 0f);
+
         Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        // Slots in proportion to their longest content at fontSize 20, padding included (#111: three materials made the
-        // readout ~413 px): goblins ~101, food ~79, materials ~413 ("Stone: 123 · Glimmerstone: 45 · Deepstone: 6"),
-        // next hero ~222 ("…needs a route"). Full padding at the bar's outer edges only, a small gap between slots.
-        // That is ~871 px in all, so below that width FitLabels shrinks the four together (size 16-17 at a 732 px view).
-        goblinLabel = CreateLabel(barGo.transform, "GoblinReadout", font, 0f, 0.139f, TextAnchor.MiddleLeft, sidePadding, slotGap);
-        foodLabel = CreateLabel(barGo.transform, "FoodReadout", font, 0.139f, 0.10f, TextAnchor.MiddleCenter, slotGap, slotGap);
-        materialLabel = CreateLabel(barGo.transform, "MaterialReadout", font, 0.239f, 0.483f, TextAnchor.MiddleCenter, slotGap, slotGap);
-        nextHeroLabel = CreateLabel(barGo.transform, "NextHeroReadout", font, 0.722f, 0.278f, TextAnchor.MiddleRight, slotGap, sidePadding);
+        float x = 0f;
+        goblinLabel = CreateLabel(readoutsRect, "GoblinReadout", font, x, goblinShare, TextAnchor.MiddleLeft, sidePadding, slotGap);
+        x += goblinShare;
+        foodLabel = CreateLabel(readoutsRect, "FoodReadout", font, x, foodShare, TextAnchor.MiddleCenter, slotGap, slotGap);
+        x += foodShare;
+        materialLabel = CreateLabel(readoutsRect, "MaterialReadout", font, x, materialShare, TextAnchor.MiddleCenter, slotGap, slotGap);
+        x += materialShare;
+        nextHeroLabel = CreateLabel(readoutsRect, "NextHeroReadout", font, x, heroShare, TextAnchor.MiddleRight, slotGap, 0f);
     }
 
-    // A label filling width (a fraction of the bar) from xMin, inset by leftPad / rightPad.
+    // A label filling width (a fraction of the readout area) from xMin, inset by leftPad / rightPad.
     private Text CreateLabel(Transform parent, string name, Font font, float xMin, float width, TextAnchor alignment,
         float leftPad, float rightPad)
     {

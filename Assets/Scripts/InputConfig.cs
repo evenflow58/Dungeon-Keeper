@@ -7,7 +7,7 @@ using UnityEngine.InputSystem;
 
 /// <summary>
 /// The one place player-facing bindings are defined (ticket #30). Consumers (CameraController, TileHover,
-/// DigDesignator, PlacementController) call CreateActions() for their own set — created per consumer so each
+/// DigDesignator, PlacementController, BuildRail) call CreateActions() for their own set — created per consumer so each
 /// keeps its own enable/disable lifecycle — and never hardcode a binding path or read a device directly.
 ///
 /// Overrides use the Input System's own format (SaveBindingOverridesAsJson / LoadBindingOverridesFromJson),
@@ -27,6 +27,12 @@ public static class InputConfig
     public const string Designate = "Designate";
     public const string ClearOrAbort = "ClearOrAbort";
     public const string Abort = "Abort";
+    public const string Rail1 = "Rail1";
+    public const string Rail2 = "Rail2";
+    public const string Rail3 = "Rail3";
+    public const string Rail4 = "Rail4";
+    public const string Rail5 = "Rail5";
+    public const string Rail6 = "Rail6";
 
     private const string MapName = "Player";
 
@@ -44,6 +50,12 @@ public static class InputConfig
         public InputAction Designate => Map[InputConfig.Designate];             // Button: left mouse
         public InputAction ClearOrAbort => Map[InputConfig.ClearOrAbort];       // Button: right mouse
         public InputAction Abort => Map[InputConfig.Abort];                     // Button: Esc
+        public InputAction Rail1 => Map[InputConfig.Rail1];                     // Button: 1 (build rail entry 1, #123)
+        public InputAction Rail2 => Map[InputConfig.Rail2];                     // Button: 2 (build rail entry 2, #123)
+        public InputAction Rail3 => Map[InputConfig.Rail3];                     // Button: 3 (build rail entry 3, #123)
+        public InputAction Rail4 => Map[InputConfig.Rail4];                     // Button: 4 (build rail entry 4, #123)
+        public InputAction Rail5 => Map[InputConfig.Rail5];                     // Button: 5 (build rail entry 5, #123)
+        public InputAction Rail6 => Map[InputConfig.Rail6];                     // Button: 6 (build rail entry 6, #123)
 
         internal Actions(InputActionMap map) { Map = map; }
 
@@ -109,6 +121,12 @@ public static class InputConfig
         AddSingle(map.AddAction(Designate, InputActionType.Button), "<Mouse>/leftButton");
         AddSingle(map.AddAction(ClearOrAbort, InputActionType.Button), "<Mouse>/rightButton");
         AddSingle(map.AddAction(Abort, InputActionType.Button), "<Keyboard>/escape");
+        AddSingle(map.AddAction(Rail1, InputActionType.Button), "<Keyboard>/1");
+        AddSingle(map.AddAction(Rail2, InputActionType.Button), "<Keyboard>/2");
+        AddSingle(map.AddAction(Rail3, InputActionType.Button), "<Keyboard>/3");
+        AddSingle(map.AddAction(Rail4, InputActionType.Button), "<Keyboard>/4");
+        AddSingle(map.AddAction(Rail5, InputActionType.Button), "<Keyboard>/5");
+        AddSingle(map.AddAction(Rail6, InputActionType.Button), "<Keyboard>/6");
 
         return map;
     }

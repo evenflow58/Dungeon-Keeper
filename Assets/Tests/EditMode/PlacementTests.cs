@@ -210,11 +210,12 @@ public class PlacementTests
     // --- Mode arbitration ---
 
     [Test]
-    public void Select_DisablesDigDesignator_ClearSelectionRestoresIt()
+    public void Select_DisablesDigDesignator_ClearSelectionLeavesItDisabled()
     {
         var dig = managerGo.AddComponent<DigDesignator>();
         var controller = managerGo.AddComponent<PlacementController>();
         controller.DigDesignator = dig;
+        controller.SelectDig(); // #123: dig is a selected tool, so arming has something to disable
 
         Assert.IsFalse(controller.IsPlacing);
         Assert.IsTrue(dig.enabled);
@@ -227,7 +228,8 @@ public class PlacementTests
         controller.ClearSelection();
         Assert.IsNull(controller.SelectedType);
         Assert.IsFalse(controller.IsPlacing);
-        Assert.IsTrue(dig.enabled);
+        Assert.IsFalse(dig.enabled, "#123: clearing exits to Neutral, not back to dig");
+        Assert.IsFalse(controller.IsDigging);
     }
 
     [Test]
@@ -244,6 +246,6 @@ public class PlacementTests
 
         controller.Select(PlaceableType.SpikeTrap);
         Assert.IsNull(controller.SelectedType, "Re-selecting the same type exits placement mode");
-        Assert.IsTrue(dig.enabled);
+        Assert.IsFalse(dig.enabled, "#123: to Neutral, with dig still off");
     }
 }

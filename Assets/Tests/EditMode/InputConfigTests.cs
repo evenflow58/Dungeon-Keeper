@@ -39,6 +39,38 @@ public class InputConfigTests
         CollectionAssert.AreEqual(new[] { "<Mouse>/leftButton" }, InputConfig.EffectivePaths(a.Designate));
         CollectionAssert.AreEqual(new[] { "<Mouse>/rightButton" }, InputConfig.EffectivePaths(a.ClearOrAbort));
         CollectionAssert.AreEqual(new[] { "<Keyboard>/escape" }, InputConfig.EffectivePaths(a.Abort));
+        for (int i = 0; i < 6; i++) // #123: the build rail's digits
+            CollectionAssert.AreEqual(new[] { $"<Keyboard>/{i + 1}" }, InputConfig.EffectivePaths(RailActions(a)[i]), $"Rail{i + 1}");
+    }
+
+    private static UnityEngine.InputSystem.InputAction[] RailActions(InputConfig.Actions a) =>
+        new[] { a.Rail1, a.Rail2, a.Rail3, a.Rail4, a.Rail5, a.Rail6 };
+
+    [Test]
+    public void RailDigits_ExistByName_WithStableDistinctIds_AndRebindLikeAnyOther()
+    {
+        string[] names = { InputConfig.Rail1, InputConfig.Rail2, InputConfig.Rail3, InputConfig.Rail4, InputConfig.Rail5, InputConfig.Rail6 };
+        using (var a = InputConfig.CreateActions())
+        using (var b = InputConfig.CreateActions())
+        {
+            var ids = new System.Collections.Generic.HashSet<Guid>();
+            for (int i = 0; i < 6; i++)
+            {
+                Assert.AreEqual($"Rail{i + 1}", names[i]);
+                Assert.AreSame(a.Map[names[i]], RailActions(a)[i]);
+                Assert.AreEqual(UnityEngine.InputSystem.InputActionType.Button, RailActions(a)[i].type);
+                Assert.AreEqual(RailActions(a)[i].bindings[0].id, RailActions(b)[i].bindings[0].id, $"Rail{i + 1}: same id in both builds");
+                Assert.IsTrue(ids.Add(RailActions(a)[i].bindings[0].id), "Distinct per digit");
+            }
+            Assert.IsFalse(ids.Contains(a.Abort.bindings[0].id));
+        }
+
+        InputConfig.SetOverride(InputConfig.Rail2, "<Keyboard>/b");
+        using (var a = InputConfig.CreateActions())
+        {
+            CollectionAssert.AreEqual(new[] { "<Keyboard>/b" }, InputConfig.EffectivePaths(a.Rail2));
+            CollectionAssert.AreEqual(new[] { "<Keyboard>/1" }, InputConfig.EffectivePaths(a.Rail1), "The others keep their digits");
+        }
     }
 
     [Test]

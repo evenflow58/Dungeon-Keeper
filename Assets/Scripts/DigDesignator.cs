@@ -19,6 +19,9 @@ public class DigDesignator : MonoBehaviour
 
     public enum DesignateMode { Designate, Clear }
 
+    /// <summary>True while a designate or clear drag is live (#123: the mode owner tells a dig drag from idle dig).</summary>
+    public bool IsDragging => isDragging;
+
     // ---- input ----
     private InputConfig.Actions input; // Bindings come from InputConfig (rebindable); enabled with this component
 

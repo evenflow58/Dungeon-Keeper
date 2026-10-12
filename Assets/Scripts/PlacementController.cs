@@ -3,15 +3,15 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
-using UnityEngine.UI;
 
 /// <summary>
-/// Build bar UI + placement mode. Selecting a placeable type enters placement mode (dig designation
-/// is disabled); left-click/drag places on every valid tile in the rect; Esc or right-click exits.
-/// Each button shows its type's cost (#104), red while an order wouldn't fund right now; the drag preview takes the
-/// unaffordable tint then too. Placing is never blocked by cost: the order waits for materials.
-/// A material selector (#109) at the bar's end reads the current material and cycles through the materials the
-/// selected type can be ordered in; orders are placed in it, and the cost labels follow it.
+/// The tool-mode owner (#123) and placement input. Three modes: Neutral (nothing selected; board clicks are inert),
+/// Dig (DigDesignator enabled) and Armed (a placeable type selected; left-click/drag places on every valid tile in the
+/// rect). The game starts in Neutral. Esc unwinds one level per press: a live drag aborts first, then the tool exits to
+/// Neutral; right-click on the board exits Armed too (in Dig it is dig's own Clear verb). BuildRail is the view: it
+/// calls this API and paints from it, and this class keeps no display data (BuildPresentation holds that).
+/// Placing is never blocked by cost (#104): the order waits for materials, and the drag preview takes the
+/// unaffordable tint then. Orders are placed in the selected material (#109).
 /// </summary>
 [DisallowMultipleComponent]
 public class PlacementController : MonoBehaviour
@@ -24,21 +24,11 @@ public class PlacementController : MonoBehaviour
     [SerializeField] private PlacementManager placementManager;
     [SerializeField] private Camera mainCamera;
 
-    [Header("Build Bar")]
-    [SerializeField] private Color buttonNormalColor = new Color(0.25f, 0.25f, 0.30f, 1f);
-    [SerializeField] private Color buttonSelectedColor = new Color(0.85f, 0.65f, 0.15f, 1f);
-    [SerializeField] private Vector2 buttonSize = new Vector2(140f, 36f);
-    [SerializeField] private float barPadding = 8f;
-
     [Header("Drag Preview")]
     [SerializeField] private Color validPreviewColor = new Color(0.4f, 0.9f, 0.4f, 0.35f);
     [SerializeField] private Color invalidPreviewColor = new Color(0.9f, 0.3f, 0.3f, 0.35f);
     [SerializeField] private Color unaffordablePreviewColor = new Color(0.95f, 0.45f, 0.2f, 0.35f); // Placeable, but it will wait (#104)
 
-    [Header("Costs (#104)")]
-    [SerializeField] private Color unaffordableCostColor = new Color(1f, 0.38f, 0.38f, 1f);
-    [SerializeField] private float costRefreshSeconds = 0.25f; // How often the bar re-checks affordability (unscaled)
-    [SerializeField] private float materialButtonWidth = 110f;  // The material selector at the bar's end (#109)
     [SerializeField] private float feedbackFlashSeconds = 0.25f;
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
@@ -51,21 +41,33 @@ public class PlacementController : MonoBehaviour
     public PlaceableType? SelectedType { get; private set; }
 
     /// <summary>
-    /// The bar's current material (#109): what an order of the selected type is placed in. Stone by default; selecting a
+    /// The current material (#109): what an order of the selected type is placed in. Stone by default; selecting a
     /// type that can't be ordered in it falls back to that type's first cost row.
     /// </summary>
     public MaterialType SelectedMaterial { get; private set; } = MaterialType.Stone;
     public bool IsPlacing => SelectedType != null;
     public bool IsDragging => isDragging;
 
+    public enum ToolMode { Neutral, Dig, Armed }
+
+    /// <summary>True in Dig mode (#123): the dig tool is selected and DigDesignator is enabled.</summary>
+    public bool IsDigging { get; private set; }
+    public ToolMode Mode => IsPlacing ? ToolMode.Armed : IsDigging ? ToolMode.Dig : ToolMode.Neutral;
+
+    /// <summary>Raised whenever the mode, the armed type or the selected material changes, so the rail repaints at once.</summary>
+    public event System.Action ModeChanged;
+
+    /// <summary>
+    /// True on the frame a board Esc / right-click exited a tool here. BuildRail checks it so the same press can't also
+    /// close its flyout, whichever of the two updates first.
+    /// </summary>
+    public bool ExitedToolThisFrame => toolExitFrame == Time.frameCount;
+
     /// <summary>How many placeables the last drag-release placed (0 = rejected).</summary>
     public int LastApplyCount { get; private set; }
 
     /// <summary>True while the red rejection preview is being shown after a 0-tile release.</summary>
     public bool IsShowingRejection => feedbackTimer > 0f;
-
-    private static readonly PlaceableType[] BarTypes = { PlaceableType.LairCot, PlaceableType.MushroomPlot, PlaceableType.SpikeTrap };
-    private static readonly string[] BarLabels = { "Lair Cot", "Mushroom Plot", "Spike Trap" };
 
     // ---- input ----
     private InputConfig.Actions input; // Bindings come from InputConfig (rebindable); enabled with this component
@@ -77,17 +79,12 @@ public class PlacementController : MonoBehaviour
     private Vector2Int dragCurrent;
     private float feedbackTimer;
 
-    // Exiting via right-click re-enables DigDesignator a frame later, so the same press
-    // can't also start a dig-clear drag.
-    private int digReenableFrame = -1;
+    // ---- mode state ----
+    private int toolExitFrame = -1;
+    private bool digWasDragging; // DigDesignator's drag state as of our last Update: an Esc that aborted a dig drag is not ours
 
     // ---- visuals ----
     private SpriteRenderer previewSprite;
-    private Canvas barCanvas;
-    private Image[] buttonImages;
-    private Text[] buttonLabels;
-    private Text materialLabel;
-    private float costRefreshTimer;
 
     // ---- lifecycle ----
 
@@ -110,7 +107,6 @@ public class PlacementController : MonoBehaviour
     {
         input?.Dispose();
         if (previewSprite != null) Destroy(previewSprite.gameObject);
-        if (barCanvas != null) Destroy(barCanvas.gameObject);
     }
 
     private void Start()
@@ -124,12 +120,12 @@ public class PlacementController : MonoBehaviour
 
         CreatePreview();
         EnsureEventSystem();
-        CreateBuildBar();
+        ApplyMode(); // The mode decides DigDesignator's enablement, whatever the scene checkbox says: Neutral at start
     }
 
     // ---- mode API ----
 
-    /// <summary>Enters placement mode for the type; selecting the current type again exits.</summary>
+    /// <summary>Arms the type (Armed mode); selecting the armed type again exits to Neutral.</summary>
     public void Select(PlaceableType type)
     {
         if (SelectedType == type)
@@ -141,26 +137,33 @@ public class PlacementController : MonoBehaviour
         CancelDrag();
         SelectedType = type;
         SelectedMaterial = MaterialFor(type);
-        digReenableFrame = -1;
-        if (digDesignator != null) digDesignator.enabled = false;
-        RefreshButtons();
-        RefreshCostLabels();
+        IsDigging = false;
+        ApplyMode();
+    }
+
+    /// <summary>Selects the dig tool (Dig mode): disarms any type and enables dig designation.</summary>
+    public void SelectDig()
+    {
+        CancelDrag();
+        SelectedType = null;
+        IsDigging = true;
+        ApplyMode();
     }
 
     /// <summary>The materials the selected type can be ordered in (#109): its cost rows'; empty with no type selected.</summary>
     public List<MaterialType> AvailableMaterials =>
         SelectedType != null && placementManager != null ? placementManager.MaterialsFor(SelectedType.Value) : new List<MaterialType>();
 
-    /// <summary>Sets the bar's material (#109), if the selected type (or, with none, any) can be ordered in it.</summary>
+    /// <summary>Sets the current material (#109), if the selected type (or, with none, any) can be ordered in it.</summary>
     public bool SelectMaterial(MaterialType material)
     {
         if (SelectedType != null && !AvailableMaterials.Contains(material)) return false;
         SelectedMaterial = material;
-        RefreshCostLabels();
+        ModeChanged?.Invoke();
         return true;
     }
 
-    /// <summary>The selector's click (#109): the next material the selected type can be ordered in, wrapping.</summary>
+    /// <summary>The material row's click (#109): the next material the selected type can be ordered in, wrapping.</summary>
     public void CycleMaterial()
     {
         List<MaterialType> available = AvailableMaterials;
@@ -169,49 +172,58 @@ public class PlacementController : MonoBehaviour
         SelectMaterial(available[(i + 1) % available.Count]);
     }
 
-    // The material an order of this type would use: the bar's current material if the type has a row for it, else the
-    // type's default (first row).
-    private MaterialType MaterialFor(PlaceableType type)
+    /// <summary>
+    /// The material an order of this type would use: the current material if the type has a row for it, else the
+    /// type's default (first row).
+    /// </summary>
+    public MaterialType MaterialFor(PlaceableType type)
     {
         if (placementManager == null) return SelectedMaterial;
         if (placementManager.TryGetCost(type, SelectedMaterial, out _)) return SelectedMaterial;
         return placementManager.TryGetDefaultMaterial(type, out MaterialType fallback) ? fallback : SelectedMaterial;
     }
 
-    /// <summary>Exits placement mode and restores dig designation immediately.</summary>
+    /// <summary>Exits the current tool, armed or dig, to Neutral: nothing selected, dig designation off.</summary>
     public void ClearSelection()
     {
         CancelDrag();
         SelectedType = null;
-        digReenableFrame = -1;
-        if (digDesignator != null) digDesignator.enabled = true;
-        RefreshButtons();
+        IsDigging = false;
+        ApplyMode();
     }
 
+    /// <summary>
+    /// Esc in Dig: exits to Neutral unless a dig drag is live, or was when this component last updated (DigDesignator
+    /// aborts its own drag on that press, and may have done so already this frame). False when the press isn't ours.
+    /// </summary>
+    public bool TryExitDigOnAbort()
+    {
+        if (!IsDigging) return false;
+        if (digWasDragging || (digDesignator != null && digDesignator.IsDragging)) return false;
+        ExitFromBoardInput();
+        return true;
+    }
+
+    // A board Esc / right-click exit. DigDesignator stays disabled in Neutral, so the press can't reach it.
     private void ExitFromBoardInput()
     {
-        CancelDrag();
-        SelectedType = null;
-        digReenableFrame = Time.frameCount + 1;
-        RefreshButtons();
+        toolExitFrame = Time.frameCount;
+        ClearSelection();
+    }
+
+    /// <summary>Enforces the mode on DigDesignator: enabled in Dig and at no other time. Start calls this too.</summary>
+    public void ApplyMode()
+    {
+        if (digDesignator != null) digDesignator.enabled = IsDigging;
+        ModeChanged?.Invoke();
     }
 
     // ---- update ----
 
     private void Update()
     {
-        if (digReenableFrame >= 0 && Time.frameCount >= digReenableFrame)
-        {
-            digReenableFrame = -1;
-            if (!IsPlacing && digDesignator != null) digDesignator.enabled = true;
-        }
-
-        costRefreshTimer += Time.unscaledDeltaTime; // Prices track the stockpile even while paused
-        if (costRefreshTimer >= costRefreshSeconds)
-        {
-            costRefreshTimer = 0f;
-            RefreshCostLabels();
-        }
+        if (IsDigging && (input?.Abort.WasPressedThisFrame() ?? false)) TryExitDigOnAbort();
+        digWasDragging = IsDigging && digDesignator != null && digDesignator.IsDragging;
 
         if (feedbackTimer > 0f)
         {
@@ -244,7 +256,7 @@ public class PlacementController : MonoBehaviour
             return;
         }
 
-        // Presses that start on the build bar (or any UI) never reach the board.
+        // Presses that start on the build rail (or any UI) never reach the board.
         if (leftPressed && hitGround && !IsPointerOverUI()) StartDrag(worldPos);
     }
 
@@ -266,7 +278,7 @@ public class PlacementController : MonoBehaviour
         bool esc = input?.Abort.WasPressedThisFrame() ?? false;
         bool rightPressed = input?.ClearOrAbort.WasPressedThisFrame() ?? false;
 
-        // During a drag, Esc / right-click abort the drag only (placement mode stays active).
+        // During a drag, Esc / right-click abort the drag only (the type stays armed).
         if (esc || rightPressed)
         {
             CancelDrag();
@@ -396,140 +408,11 @@ public class PlacementController : MonoBehaviour
         module.AssignDefaultActions();
     }
 
-    private void CreateBuildBar()
-    {
-        var canvasGo = new GameObject("BuildBarCanvas");
-        barCanvas = canvasGo.AddComponent<Canvas>();
-        barCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvasGo.AddComponent<CanvasScaler>();
-        canvasGo.AddComponent<GraphicRaycaster>(); // Buttons need a raycaster to receive clicks
-
-        var barGo = new GameObject("BuildBar");
-        barGo.transform.SetParent(canvasGo.transform, false);
-        var barImage = barGo.AddComponent<Image>();
-        barImage.color = new Color(0f, 0f, 0f, 0.6f);
-        var barRect = barGo.GetComponent<RectTransform>();
-        barRect.anchorMin = barRect.anchorMax = new Vector2(0.5f, 0f);
-        barRect.pivot = new Vector2(0.5f, 0f);
-        barRect.anchoredPosition = new Vector2(0f, barPadding);
-        barRect.sizeDelta = new Vector2(
-            BarTypes.Length * buttonSize.x + (BarTypes.Length + 1) * barPadding + materialButtonWidth + barPadding,
-            buttonSize.y + 2f * barPadding);
-
-        Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        buttonImages = new Image[BarTypes.Length];
-        buttonLabels = new Text[BarTypes.Length];
-
-        for (int i = 0; i < BarTypes.Length; i++)
-        {
-            PlaceableType type = BarTypes[i];
-
-            var buttonGo = new GameObject(BarLabels[i] + "Button");
-            buttonGo.transform.SetParent(barGo.transform, false);
-            var image = buttonGo.AddComponent<Image>();
-            image.color = buttonNormalColor;
-            var button = buttonGo.AddComponent<Button>();
-            button.targetGraphic = image;
-            button.onClick.AddListener(() => Select(type));
-
-            var rect = buttonGo.GetComponent<RectTransform>();
-            rect.anchorMin = rect.anchorMax = new Vector2(0f, 0.5f);
-            rect.pivot = new Vector2(0f, 0.5f);
-            rect.anchoredPosition = new Vector2(barPadding + i * (buttonSize.x + barPadding), 0f);
-            rect.sizeDelta = buttonSize;
-
-            var textGo = new GameObject("Label");
-            textGo.transform.SetParent(buttonGo.transform, false);
-            var text = textGo.AddComponent<Text>();
-            text.font = font;
-            text.fontSize = 14;
-            text.color = Color.white;
-            text.alignment = TextAnchor.MiddleCenter;
-            text.text = BarLabels[i];
-            text.supportRichText = true; // The cost is colored on its own
-            text.raycastTarget = false;
-            var textRect = textGo.GetComponent<RectTransform>();
-            textRect.anchorMin = Vector2.zero;
-            textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = textRect.offsetMax = Vector2.zero;
-
-            buttonImages[i] = image;
-            buttonLabels[i] = text;
-        }
-
-        CreateMaterialSelector(barGo.transform, font);
-
-        RefreshButtons();
-        RefreshCostLabels();
-    }
-
-    // The selector (#109): one button at the bar's end, reading the current material; a click cycles it.
-    private void CreateMaterialSelector(Transform bar, Font font)
-    {
-        var go = new GameObject("MaterialSelector");
-        go.transform.SetParent(bar, false);
-        var image = go.AddComponent<Image>();
-        image.color = buttonNormalColor;
-        var button = go.AddComponent<Button>();
-        button.targetGraphic = image;
-        button.onClick.AddListener(CycleMaterial);
-        var rect = go.GetComponent<RectTransform>();
-        rect.anchorMin = rect.anchorMax = new Vector2(0f, 0.5f);
-        rect.pivot = new Vector2(0f, 0.5f);
-        rect.anchoredPosition = new Vector2(barPadding + BarTypes.Length * (buttonSize.x + barPadding), 0f);
-        rect.sizeDelta = new Vector2(materialButtonWidth, buttonSize.y);
-
-        var textGo = new GameObject("Label");
-        textGo.transform.SetParent(go.transform, false);
-        materialLabel = textGo.AddComponent<Text>();
-        materialLabel.font = font;
-        materialLabel.fontSize = 14;
-        materialLabel.color = Color.white;
-        materialLabel.alignment = TextAnchor.MiddleCenter;
-        materialLabel.raycastTarget = false;
-        var textRect = textGo.GetComponent<RectTransform>();
-        textRect.anchorMin = Vector2.zero;
-        textRect.anchorMax = Vector2.one;
-        textRect.offsetMin = textRect.offsetMax = Vector2.zero;
-    }
-
-    /// <summary>
-    /// Re-labels each button with its cost in the material an order of that type would use (#109), red where it
-    /// wouldn't fund right now, and the selector with the current material's name.
-    /// </summary>
-    private void RefreshCostLabels()
-    {
-        if (placementManager == null) return;
-        if (buttonLabels != null)
-        {
-            for (int i = 0; i < BarTypes.Length; i++)
-            {
-                if (buttonLabels[i] == null) continue;
-                MaterialType material = MaterialFor(BarTypes[i]);
-                buttonLabels[i].text = placementManager.TryGetCost(BarTypes[i], material, out MaterialAmount cost)
-                    ? CostLabel(BarLabels[i], cost.amount, placementManager.WouldFundNow(BarTypes[i], material), unaffordableCostColor)
-                    : BarLabels[i];
-            }
-        }
-        if (materialLabel != null)
-        {
-            Stockpile stockpile = placementManager.Stockpile;
-            materialLabel.text = stockpile != null ? stockpile.DisplayName(SelectedMaterial) : SelectedMaterial.ToString();
-        }
-    }
-
-    /// <summary>A build button's label (#104): "Lair Cot · 3", the cost in rich-text red when it wouldn't fund now.</summary>
+    /// <summary>A cost-carrying label (#104): "Lair Cot · 3", the cost in rich-text red when it wouldn't fund now.</summary>
     public static string CostLabel(string name, int cost, bool affordable, Color unaffordableColor) =>
-        affordable ? $"{name} · {cost}" : $"{name} · <color=#{ColorUtility.ToHtmlStringRGB(unaffordableColor)}>{cost}</color>";
+        $"{name} · {CostText(cost, affordable, unaffordableColor)}";
 
-    private void RefreshButtons()
-    {
-        if (buttonImages == null) return; // Start() hasn't run (EditMode tests)
-
-        for (int i = 0; i < BarTypes.Length; i++)
-        {
-            if (buttonImages[i] != null)
-                buttonImages[i].color = SelectedType == BarTypes[i] ? buttonSelectedColor : buttonNormalColor;
-        }
-    }
+    /// <summary>The cost number on its own, in rich-text red when it wouldn't fund now.</summary>
+    public static string CostText(int cost, bool affordable, Color unaffordableColor) =>
+        affordable ? cost.ToString() : $"<color=#{ColorUtility.ToHtmlStringRGB(unaffordableColor)}>{cost}</color>";
 }

@@ -549,6 +549,7 @@ GameObject:
   - component: {fileID: 565044530}
   - component: {fileID: 565044531}
   - component: {fileID: 565044532}
+  - component: {fileID: 565044533}
   m_Layer: 0
   m_Name: DungeonManager
   m_TagString: Untagged
@@ -663,16 +664,9 @@ MonoBehaviour:
   digDesignator: {fileID: 565044523}
   placementManager: {fileID: 565044525}
   mainCamera: {fileID: 330585545}
-  buttonNormalColor: {r: 0.25, g: 0.25, b: 0.3, a: 1}
-  buttonSelectedColor: {r: 0.85, g: 0.65, b: 0.15, a: 1}
-  buttonSize: {x: 140, y: 36}
-  barPadding: 8
   validPreviewColor: {r: 0.4, g: 0.9, b: 0.4, a: 0.35}
   invalidPreviewColor: {r: 0.9, g: 0.3, b: 0.3, a: 0.35}
   unaffordablePreviewColor: {r: 0.95, g: 0.45, b: 0.2, a: 0.35}
-  unaffordableCostColor: {r: 1, g: 0.38, b: 0.38, a: 1}
-  costRefreshSeconds: 0.25
-  materialButtonWidth: 110
   feedbackFlashSeconds: 0.25
 --- !u!114 &565044525
 MonoBehaviour:
@@ -898,6 +892,36 @@ MonoBehaviour:
   startingAmounts:
   - type: 0
     amount: 10
+--- !u!114 &565044533
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7cc7aa4ea50695342bd3b26470a3d6e7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::BuildRail
+  placementController: {fileID: 565044524}
+  placementManager: {fileID: 565044525}
+  railWidth: 54
+  flyoutWidth: 200
+  topOffset: 36
+  entryHeight: 52
+  tileHeight: 46
+  titleHeight: 24
+  materialRowHeight: 28
+  padding: 4
+  iconSize: 20
+  iconInset: 8
+  refreshSeconds: 0.25
+  panelColor: {r: 0, g: 0, b: 0, a: 0.6}
+  buttonNormalColor: {r: 0.25, g: 0.25, b: 0.3, a: 1}
+  buttonSelectedColor: {r: 0.85, g: 0.65, b: 0.15, a: 1}
+  unaffordableCostColor: {r: 1, g: 0.38, b: 0.38, a: 1}
+  secondaryTextColor: {r: 0.82, g: 0.82, b: 0.82, a: 1}
 --- !u!1 &708604853
 GameObject:
   m_ObjectHideFlags: 0

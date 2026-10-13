@@ -9,7 +9,8 @@ using UnityEngine.InputSystem.UI;
 /// Dig (DigDesignator enabled) and Armed (a placeable type selected; left-click/drag places on every valid tile in the
 /// rect). The game starts in Neutral. Esc unwinds one level per press: a live drag aborts first, then the tool exits to
 /// Neutral; right-click on the board exits Armed too (in Dig it is dig's own Clear verb). BuildRail is the view: it
-/// calls this API and paints from it, and this class keeps no display data (BuildPresentation holds that).
+/// calls this API and paints from it, as DetailCard does for the material; this class keeps no display data
+/// (BuildPresentation holds that).
 /// Placing is never blocked by cost (#104): the order waits for materials, and the drag preview takes the
 /// unaffordable tint then. Orders are placed in the selected material (#109).
 /// </summary>
@@ -54,7 +55,7 @@ public class PlacementController : MonoBehaviour
     public bool IsDigging { get; private set; }
     public ToolMode Mode => IsPlacing ? ToolMode.Armed : IsDigging ? ToolMode.Dig : ToolMode.Neutral;
 
-    /// <summary>Raised whenever the mode, the armed type or the selected material changes, so the rail repaints at once.</summary>
+    /// <summary>Raised whenever the mode, the armed type or the selected material changes, so the chrome repaints at once.</summary>
     public event System.Action ModeChanged;
 
     /// <summary>
@@ -163,7 +164,7 @@ public class PlacementController : MonoBehaviour
         return true;
     }
 
-    /// <summary>The material row's click (#109): the next material the selected type can be ordered in, wrapping.</summary>
+    /// <summary>The next material the selected type can be ordered in, wrapping (#109). The detail card's chips select directly.</summary>
     public void CycleMaterial()
     {
         List<MaterialType> available = AvailableMaterials;

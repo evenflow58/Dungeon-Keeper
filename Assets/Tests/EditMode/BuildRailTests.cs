@@ -7,7 +7,7 @@ using UnityEngine.UI;
 /// <summary>
 /// The build rail and the tool model (#123): PlacementController's three modes (Neutral / Dig / Armed) and what they do
 /// to DigDesignator, the presentation table, the rail's entries and digits, the flyout's open/close/arm state machine
-/// with its Esc partition, the tiles' cheapest-row cost line, and the interim material row. Board presses themselves
+/// with its Esc partition, and the tiles' cheapest-row cost line. Board presses themselves
 /// (a drag that designates nothing in Neutral) are Play checks: EditMode runs no Update and no input.
 /// </summary>
 public class BuildRailTests
@@ -370,46 +370,6 @@ public class BuildRailTests
         Assert.AreEqual("from 2 Stone", rail.TileCostLine(PlaceableType.SpikeTrap), "2 covers the trap");
     }
 
-    // --- The interim material row ---
-
-    [Test]
-    public void TheMaterialRow_ShowsOnlyWhileATypeIsArmed_InItsOwnCategorysFlyout()
-    {
-        Assert.IsFalse(rail.MaterialRowVisible, "Collapsed");
-        Assert.AreEqual("", rail.MaterialRowLabel);
-
-        rail.ToggleCategory(BuildCategory.Living);
-        Assert.IsFalse(rail.MaterialRowVisible, "Open, nothing armed");
-
-        rail.SelectTile(PlaceableType.LairCot);
-        Assert.IsTrue(rail.MaterialRowVisible);
-
-        controller.Select(PlaceableType.SpikeTrap); // Armed outside the rail, from another category
-        Assert.IsFalse(rail.MaterialRowVisible, "Not this flyout's type");
-    }
-
-    [Test]
-    public void TheMaterialRow_ReadsTheResolvedMaterialAndCost_RedExactlyWhenItWouldNotFundNow()
-    {
-        string red = ColorUtility.ToHtmlStringRGB(rail.UnaffordableCostColor);
-        rail.ToggleCategory(BuildCategory.Living);
-        rail.SelectTile(PlaceableType.LairCot);
-
-        Assert.AreEqual("Material: Stone · 3", rail.MaterialRowLabel);
-        Assert.IsTrue(rail.MaterialRowAffordable);
-        Assert.AreEqual(manager.WouldFundNow(PlaceableType.LairCot, MaterialType.Stone), rail.MaterialRowAffordable);
-
-        controller.CycleMaterial(); // The row's click
-        Assert.AreEqual(MaterialType.Glimmerstone, controller.SelectedMaterial);
-        Assert.AreEqual($"Material: Glimmerstone · <color=#{red}>3</color>", rail.MaterialRowLabel, "No glimmerstone in stock");
-        Assert.IsFalse(rail.MaterialRowAffordable);
-        Assert.AreEqual(manager.WouldFundNow(PlaceableType.LairCot, MaterialType.Glimmerstone), rail.MaterialRowAffordable);
-
-        SetStock(10, 3);
-        Assert.AreEqual("Material: Glimmerstone · 3", rail.MaterialRowLabel, "Follows the stockpile");
-        Assert.IsTrue(rail.MaterialRowAffordable);
-    }
-
     // --- The painted chrome ---
 
     // Transform.Find, not GameObject.Find: the latter can return an inactive object when given a full path.
@@ -458,17 +418,14 @@ public class BuildRailTests
         Assert.AreEqual("from 3 Stone", FindText("BuildRailCanvas/Flyout/LairCotTile/Cost").text);
         Assert.AreEqual(rail.ButtonNormalColor, ColorOf("BuildRailCanvas/Flyout/LairCotTile"));
         Assert.IsFalse(IsShown("Flyout/MushroomPlotTile"), "Another category's tile is hidden");
-        Assert.IsFalse(IsShown("Flyout/MaterialRow"), "Nothing armed");
 
         rail.SelectTile(PlaceableType.LairCot);
         Assert.AreEqual(rail.ButtonSelectedColor, ColorOf("BuildRailCanvas/Flyout/LairCotTile"));
-        Assert.IsTrue(IsShown("Flyout/MaterialRow"));
-        Assert.AreEqual("Material: Stone · 3", FindText("BuildRailCanvas/Flyout/MaterialRow/Label").text);
+        Assert.IsNull(GameObject.Find("BuildRailCanvas").transform.Find("Flyout/MaterialRow"), "The material choice is the detail card's (#125)");
 
         controller.ClearSelection(); // Not through the rail: a repaint is what the mode event (or the timer) triggers
         rail.Repaint();
         Assert.AreEqual(rail.ButtonNormalColor, ColorOf("BuildRailCanvas/Flyout/LairCotTile"));
-        Assert.IsFalse(IsShown("Flyout/MaterialRow"));
 
         rail.DestroyChrome();
         Assert.IsNull(GameObject.Find("BuildRailCanvas"));

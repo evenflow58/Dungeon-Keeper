@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 [DisallowMultipleComponent]
@@ -108,6 +109,14 @@ public class TileHover : MonoBehaviour
             return;
         }
 
+        // Over the chrome (rail, flyout, detail card, top bar) the pointer is not on a tile: a click there never
+        // reaches the board, so neither the highlight nor the tooltip shows (#125).
+        if (IsPointerOverUI())
+        {
+            SetHoverActive(false);
+            return;
+        }
+
         Vector2 mouseScreen = input?.PointerPosition.ReadValue<Vector2>() ?? Vector2.zero;
 
         Ray ray = mainCamera.ScreenPointToRay(mouseScreen);
@@ -142,6 +151,10 @@ public class TileHover : MonoBehaviour
         if (highlightSprite != null) highlightSprite.enabled = active;
         tooltipCanvas?.gameObject.SetActive(active);
     }
+
+    // The tooltip's own canvas has no raycaster, so it never counts as UI under the pointer.
+    private static bool IsPointerOverUI() =>
+        EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
 
     private void PositionTooltip(Vector2 mouseScreen)
     {

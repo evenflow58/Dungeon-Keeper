@@ -7,7 +7,8 @@ using UnityEngine.UI;
 /// The build chrome (#123): a slim icon rail at the left edge (DIG, then one entry per non-empty build category) and a
 /// flyout of item tiles beside it. It is the tool mode's view: every behavior stays in PlacementController (the mode
 /// owner) and PlacementManager (costs, funding); this class only tracks which category's flyout is open, calls their
-/// API and paints from it. Presentation data comes from BuildPresentation. Built in code like the rest of the chrome
+/// API and paints from it. Presentation data comes from BuildPresentation. The armed type's description and its
+/// material choice are DetailCard's (#125). Built in code like the rest of the chrome
 /// (own overlay Canvas, no scene-authored UI). Digits 1-6 activate the rail's visible entries in order.
 /// Esc closes the flyout only from Neutral: while a tool is selected the controller owns the press, so one press
 /// unwinds one level.
@@ -26,7 +27,6 @@ public class BuildRail : MonoBehaviour
     [SerializeField] private float entryHeight = 52f;
     [SerializeField] private float tileHeight = 46f;
     [SerializeField] private float titleHeight = 24f;
-    [SerializeField] private float materialRowHeight = 28f;
     [SerializeField] private float padding = 4f;
     [SerializeField] private float iconSize = 20f;
     [SerializeField] private float iconInset = 8f;           // Icon to its entry's top edge / its tile's left edge, and on to the tile text
@@ -272,69 +272,6 @@ public class BuildRail : MonoBehaviour
         return stockpile != null ? stockpile.DisplayName(material) : material.ToString();
     }
 
-    // ---- interim material row (#123 only: #125's detail-card chips replace all of this region) ----
-
-    private GameObject materialRow;
-    private Text materialRowLabel;
-
-    /// <summary>The row shows at the foot of the armed type's own flyout, and only while a type is armed.</summary>
-    public bool MaterialRowVisible => OpenCategory != null && IsArmedIn(OpenCategory.Value);
-
-    /// <summary>True when an order of the armed type in the resolved material would fund now (the row's cost is red when not).</summary>
-    public bool MaterialRowAffordable
-    {
-        get
-        {
-            if (placementController == null || placementController.SelectedType == null || placementManager == null) return true;
-            PlaceableType type = placementController.SelectedType.Value;
-            return placementManager.WouldFundNow(type, placementController.MaterialFor(type));
-        }
-    }
-
-    /// <summary>"Material: Stone · 3" for the armed type in the material its order would use. Empty with nothing armed.</summary>
-    public string MaterialRowLabel
-    {
-        get
-        {
-            if (placementController == null || placementController.SelectedType == null) return "";
-            PlaceableType type = placementController.SelectedType.Value;
-            MaterialType material = placementController.MaterialFor(type);
-            string name = $"Material: {MaterialName(material)}";
-            return placementManager != null && placementManager.TryGetCost(type, material, out MaterialAmount cost)
-                ? PlacementController.CostLabel(name, cost.amount, MaterialRowAffordable, unaffordableCostColor)
-                : name;
-        }
-    }
-
-    private void CycleMaterial()
-    {
-        if (placementController != null) placementController.CycleMaterial();
-        Repaint();
-    }
-
-    private void CreateMaterialRow(Transform parent, Font font)
-    {
-        materialRow = CreateButton(parent, "MaterialRow", CycleMaterial, out _);
-        materialRowLabel = CreateText(materialRow.transform, "Label", font, 12, Color.white, TextAnchor.MiddleCenter);
-        materialRowLabel.supportRichText = true; // The cost is colored on its own
-        Stretch(materialRowLabel.rectTransform, 0f, 0f, 0f, 0f);
-        materialRow.SetActive(false);
-    }
-
-    // Lays the row under the last tile and returns the height it takes (0 while hidden).
-    private float RefreshMaterialRow(float y)
-    {
-        if (materialRow == null) return 0f;
-
-        bool visible = MaterialRowVisible;
-        materialRow.SetActive(visible);
-        if (!visible) return 0f;
-
-        PlaceTopLeft((RectTransform)materialRow.transform, padding, y, flyoutWidth - 2f * padding, materialRowHeight);
-        if (materialRowLabel != null) materialRowLabel.text = MaterialRowLabel;
-        return materialRowHeight + padding;
-    }
-
     // ---- chrome ----
 
     /// <summary>Builds the rail and the (hidden) flyout. Start calls this; public so tests can paint without Play.</summary>
@@ -371,8 +308,6 @@ public class BuildRail : MonoBehaviour
         tileRects = null;
         tileImages = null;
         tileCostLabels = null;
-        materialRow = null;
-        materialRowLabel = null;
     }
 
     private static void DestroyChromeObject(Object target)
@@ -477,13 +412,12 @@ public class BuildRail : MonoBehaviour
             tileCostLabels[i] = cost;
         }
 
-        CreateMaterialRow(flyoutGo.transform, font);
         flyoutGo.SetActive(false);
     }
 
     /// <summary>
     /// Repaints from the mode and the stockpile: the rail's selected tints (DIG while digging, a category while its
-    /// flyout is open), the open category's tiles with their cost lines and armed tint, and the material row.
+    /// flyout is open), and the open category's tiles with their cost lines and armed tint.
     /// </summary>
     public void Repaint()
     {
@@ -530,7 +464,6 @@ public class BuildRail : MonoBehaviour
             }
         }
 
-        y += RefreshMaterialRow(y);
         flyoutRect.sizeDelta = new Vector2(flyoutWidth, y);
     }
 

@@ -550,6 +550,7 @@ GameObject:
   - component: {fileID: 565044531}
   - component: {fileID: 565044532}
   - component: {fileID: 565044533}
+  - component: {fileID: 565044534}
   m_Layer: 0
   m_Name: DungeonManager
   m_TagString: Untagged
@@ -920,7 +921,6 @@ MonoBehaviour:
   entryHeight: 52
   tileHeight: 46
   titleHeight: 24
-  materialRowHeight: 28
   padding: 4
   iconSize: 20
   iconInset: 8
@@ -928,6 +928,46 @@ MonoBehaviour:
   panelColor: {r: 0, g: 0, b: 0, a: 0.6}
   buttonNormalColor: {r: 0.25, g: 0.25, b: 0.3, a: 1}
   buttonSelectedColor: {r: 0.85, g: 0.65, b: 0.15, a: 1}
+  unaffordableCostColor: {r: 1, g: 0.38, b: 0.38, a: 1}
+  secondaryTextColor: {r: 0.82, g: 0.82, b: 0.82, a: 1}
+--- !u!114 &565044534
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 87e6aaddeb8f6ab498c6678f8e03c482, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::DetailCard
+  placementController: {fileID: 565044524}
+  placementManager: {fileID: 565044525}
+  cardWidth: 350
+  leftOffset: 62
+  bottomOffset: 8
+  padding: 8
+  sectionGap: 6
+  headerHeight: 22
+  descriptionHeight: 32
+  statLineHeight: 16
+  chipHeight: 40
+  chipGap: 6
+  chipBorder: 2
+  swatchSize: 10
+  hintHeight: 16
+  titleFontSize: 15
+  tagFontSize: 11
+  descriptionFontSize: 12
+  statFontSize: 12
+  chipNameFontSize: 12
+  chipCostFontSize: 10
+  hintFontSize: 10
+  refreshSeconds: 0.25
+  panelColor: {r: 0, g: 0, b: 0, a: 0.6}
+  chipColor: {r: 0.25, g: 0.25, b: 0.3, a: 1}
+  chipSelectedColor: {r: 0.85, g: 0.65, b: 0.15, a: 1}
   unaffordableCostColor: {r: 1, g: 0.38, b: 0.38, a: 1}
   secondaryTextColor: {r: 0.82, g: 0.82, b: 0.82, a: 1}
 --- !u!1 &708604853

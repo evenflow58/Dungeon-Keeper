@@ -33,7 +33,7 @@ public class DetailCard : MonoBehaviour
     [SerializeField] private float chipGap = 6f;
     [SerializeField] private float chipBorder = 2f;          // The selected chip's outline
     [SerializeField] private float swatchSize = 10f;         // The material's color, on its chip
-    [SerializeField] private float hintHeight = 26f;         // Room for the hint to wrap onto a second line
+    [SerializeField] private float hintHeight = 16f;         // One line at hintFontSize
     [SerializeField] private int titleFontSize = 15;
     [SerializeField] private int tagFontSize = 11;
     [SerializeField] private int descriptionFontSize = 12;

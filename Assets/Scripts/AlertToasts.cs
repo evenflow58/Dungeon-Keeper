@@ -29,7 +29,7 @@ public class AlertToasts : MonoBehaviour
     [Header("Toasts")]
     [SerializeField] private float toastVisibleSeconds = 4f;
     [SerializeField] private int maxVisibleToasts = 3;
-    [SerializeField] private int fontSize = 18;                      // Between the build bar (14) and the top bar (20)
+    [SerializeField] private int fontSize = 18;                      // Above the build chrome's text (at most 15), below the top bar (20)
     [SerializeField] private Vector2 toastSize = new Vector2(240f, 30f);
     [SerializeField] private float gapBelowTopBar = 44f;             // Top bar is 36 tall, plus an 8 px gap
     [SerializeField] private float spacing = 6f;

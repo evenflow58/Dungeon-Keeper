@@ -145,8 +145,8 @@ public class PlacementManager : MonoBehaviour
     /// <summary>
     /// True when an order of this type in this material placed now would fund on the spot: no stockpile (orders fund
     /// at once), or nothing already waiting for THAT material (#120: a new order queues behind its own material's
-    /// line only) and the stock of that material covers the cost. False for an unorderable pair. The build bar shows
-    /// the cost red when this is false; placing is never blocked by it.
+    /// line only) and the stock of that material covers the cost. False for an unorderable pair. The build rail's
+    /// tiles and the detail card's chips show the cost red when this is false; placing is never blocked by it.
     /// </summary>
     public bool WouldFundNow(PlaceableType type, MaterialType material)
     {

@@ -523,7 +523,7 @@ The Director's objective function is **drama, not slaughter**. It composes raids
 
 ### A.7 UI (minimal)
 
-- Build bar (bottom), top bar (goblin count, food stock, next-hero timer), speed controls (pause / 1× / 2×).
+- Build rail (left: DIG, the build categories' flyouts, STOCK), a detail card (bottom left) for the armed buildable or the selected material, top bar (goblin count, food stock, materials summary, next-hero timer) with the speed controls (pause / 1× / 2×) at its right end. The rail replaced the original bottom build bar (#123).
 - Alert toasts: "Goblin starving!", "Hero approaching!", "Trap needs rearming."
 - No overlays in the slice — those are beta.
 
@@ -546,7 +546,7 @@ Materials from digging, water/miasma/heat, loyalty/faith/pay, research, theming 
 3. Placement + Lair/Farm/Spike blueprints.
 4. Goblin needs + eat/sleep + melee combat. (It's alive.)
 5. Hero spawn/path/AI + Heart + win/loss. (It's a game.)
-6. UI shell: build bar, top bar, speed controls, alerts, victory/defeat screens.
+6. UI shell: build bar (since replaced by the build rail, #123), top bar, speed controls, alerts, victory/defeat screens.
 7. Juice pass: dig particles, hover states, hit flashes, placeholder audio.
 
 Each step is playable and testable before the next begins. If step N isn't fun, stop — don't build step N+1.

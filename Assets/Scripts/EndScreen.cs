@@ -23,8 +23,8 @@ public class EndScreen : MonoBehaviour
     [Header("Appearance (Placeholder Art)")]
     [SerializeField] private Color backdropColor = new Color(0f, 0f, 0f, 0.75f);
     [SerializeField] private int headlineFontSize = 36;
-    [SerializeField] private Vector2 buttonSize = new Vector2(140f, 36f);                    // As the build bar's
-    [SerializeField] private Color buttonNormalColor = new Color(0.25f, 0.25f, 0.30f, 1f);   // As the build bar's
+    [SerializeField] private Vector2 buttonSize = new Vector2(140f, 36f);                    // As the old build bar's (retired in #123)
+    [SerializeField] private Color buttonNormalColor = new Color(0.25f, 0.25f, 0.30f, 1f);   // As the build rail's and the speed buttons'
     [SerializeField] private int sortingOrder = 100;                                         // Above every other canvas
 
     public GameManager GameManager { get => gameManager; set => gameManager = value; }

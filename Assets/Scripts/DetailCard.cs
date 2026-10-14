@@ -86,8 +86,12 @@ public class DetailCard : MonoBehaviour
 
     private float refreshTimer;
 
-    // ---- chrome (code-built; none of it survives a recompile, so every reader guards for null and length, #83) ----
+    // ---- chrome (code-built; a recompile can null or empty any of it, so every reader guards for null and length, #83) ----
     private Canvas canvas;
+    // #137: true once Build has wired this chrome in the current domain. NonSerialized, so a domain reload resets it
+    // while the canvas reference survives: that pair is how OnEnable tells a reload (chip listeners and the
+    // ModeChanged subscription lost) from an ordinary re-enable.
+    [System.NonSerialized] private bool chromeWired;
     private RectTransform cardRect;
     private Text titleText;
     private Text tagText;
@@ -120,7 +124,25 @@ public class DetailCard : MonoBehaviour
 
         PlacementController.EnsureEventSystem();
         Build();
-        if (placementController != null) placementController.ModeChanged += Repaint; // The card follows the mode and the material at once
+        SubscribeToMode();
+    }
+
+    // #137: a domain reload mid-Play (Recompile And Continue Playing) re-runs OnEnable but not Start, so chrome that
+    // outlived the reload is rebuilt with its wiring here.
+    private void OnEnable()
+    {
+        if (canvas == null || chromeWired) return;
+        DestroyChrome();
+        Build();
+        SubscribeToMode();
+    }
+
+    // Idempotent: Start and a reload both come through here, and the card must hear each mode change once.
+    private void SubscribeToMode()
+    {
+        if (placementController == null) return;
+        placementController.ModeChanged -= Repaint;
+        placementController.ModeChanged += Repaint; // The card follows the mode and the material at once
     }
 
     private void OnDestroy()
@@ -367,6 +389,7 @@ public class DetailCard : MonoBehaviour
         hintText.text = HintText;
         waitingText = CreateText(cardGo.transform, "Waiting", statFontSize, Color.white, TextAnchor.UpperLeft);
 
+        chromeWired = true; // Chips are built (and wired) later, by Repaint, under this same flag
         Repaint();
     }
 
@@ -376,6 +399,7 @@ public class DetailCard : MonoBehaviour
         if (canvas != null) DestroyChromeObject(canvas.gameObject);
 
         canvas = null;
+        chromeWired = false;
         cardRect = null;
         titleText = null;
         tagText = null;

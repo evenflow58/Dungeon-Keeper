@@ -38,6 +38,10 @@ public class EndScreen : MonoBehaviour
 
     private GameObject overlay;
     private Text headline;
+    private Button playAgainButton;
+    // #137: true once Play Again's click listener is wired in the current domain. NonSerialized, so a domain reload
+    // resets it while the button reference survives (the listener, added in code, doesn't).
+    [System.NonSerialized] private bool playAgainWired;
     private float pollTimer;
 
     private void Start()
@@ -47,6 +51,21 @@ public class EndScreen : MonoBehaviour
         PlacementController.EnsureEventSystem();
         CreateOverlay();
         Refresh();
+    }
+
+    // #137: a domain reload mid-Play (Recompile And Continue Playing) re-runs OnEnable but not Start, so a button
+    // that outlived the reload gets its listener back here.
+    private void OnEnable()
+    {
+        if (playAgainButton != null && !playAgainWired) WirePlayAgain();
+    }
+
+    // Clears first, so it wires exactly once whether CreateOverlay or a reload calls it.
+    private void WirePlayAgain()
+    {
+        playAgainButton.onClick.RemoveAllListeners();
+        playAgainButton.onClick.AddListener(PlayAgain);
+        playAgainWired = true;
     }
 
     private void Update()
@@ -130,9 +149,9 @@ public class EndScreen : MonoBehaviour
         buttonGo.transform.SetParent(overlay.transform, false);
         var image = buttonGo.AddComponent<Image>();
         image.color = buttonNormalColor;
-        var button = buttonGo.AddComponent<Button>();
-        button.targetGraphic = image;
-        button.onClick.AddListener(PlayAgain);
+        playAgainButton = buttonGo.AddComponent<Button>();
+        playAgainButton.targetGraphic = image;
+        WirePlayAgain();
         var buttonRect = (RectTransform)buttonGo.transform;
         buttonRect.anchorMin = buttonRect.anchorMax = new Vector2(0.5f, 0.5f);
         buttonRect.anchoredPosition = new Vector2(0f, -buttonSize.y);

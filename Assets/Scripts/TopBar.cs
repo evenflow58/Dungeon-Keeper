@@ -147,8 +147,8 @@ public class TopBar : MonoBehaviour
     }
 
     /// <summary>
-    /// The materials summary (#124): "Materials: 3 kinds · 73 total" for the catalog's kinds and the sum of their
-    /// counts ("1 kind" for exactly one). Nothing to count reads "Materials: 0 kinds · 0 total".
+    /// The materials summary (#124): "Materials: 3 kinds · 73 total" for the given kinds (the discovered ones, #126) and
+    /// the sum of their counts ("1 kind" for exactly one). Nothing to count reads "Materials: 0 kinds · 0 total".
     /// </summary>
     public static string MaterialsSummary(IList<(string name, int count)> materials)
     {
@@ -158,15 +158,23 @@ public class TopBar : MonoBehaviour
         return $"Materials: {kinds} {(kinds == 1 ? "kind" : "kinds")} · {total} total";
     }
 
-    // Each catalog material's name and count, in catalog order. Unwired (Unity null check) is no kinds at all; an
-    // empty catalog degrades to stone alone, as before #109.
-    private static List<(string name, int count)> CatalogCounts(Stockpile stockpile)
+    /// <summary>
+    /// Each discovered catalog material's name and count (#126: undiscovered kinds don't count; their count is 0 anyway,
+    /// since holding one discovers it), in catalog order. Unwired (Unity null check) is no kinds at all; an empty
+    /// catalog degrades to stone alone, as before #109.
+    /// </summary>
+    public static List<(string name, int count)> CatalogCounts(Stockpile stockpile)
     {
         var list = new List<(string name, int count)>();
         if (stockpile == null) return list;
+        bool anyDefinition = false;
         foreach (MaterialDefinition d in stockpile.Definitions)
-            if (d != null) list.Add((stockpile.DisplayName(d.type), stockpile.Count(d.type)));
-        if (list.Count == 0) list.Add((stockpile.DisplayName(MaterialType.Stone), stockpile.Count(MaterialType.Stone)));
+        {
+            if (d == null) continue;
+            anyDefinition = true;
+            if (stockpile.IsDiscovered(d.type)) list.Add((stockpile.DisplayName(d.type), stockpile.Count(d.type)));
+        }
+        if (!anyDefinition) list.Add((stockpile.DisplayName(MaterialType.Stone), stockpile.Count(MaterialType.Stone)));
         return list;
     }
 

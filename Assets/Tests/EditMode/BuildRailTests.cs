@@ -195,15 +195,19 @@ public class BuildRailTests
     // --- The rail's entries and digits ---
 
     [Test]
-    public void VisibleEntries_AreDigThenTheNonEmptyCategories()
+    public void VisibleEntries_AreDigThenTheNonEmptyCategories_ThenStock()
     {
+        // #126 migration: STOCK joins the rail after the categories (it was 4 entries).
         List<BuildRail.RailEntry> entries = BuildRail.VisibleEntries();
-        Assert.AreEqual(4, entries.Count, "DIG, Living, Farming, Defense: no Magic");
+        Assert.AreEqual(5, entries.Count, "DIG, Living, Farming, Defense, STOCK: no Magic");
         Assert.IsTrue(entries[0].isDig);
         Assert.IsFalse(entries[1].isDig);
         Assert.AreEqual(BuildCategory.Living, entries[1].category);
         Assert.AreEqual(BuildCategory.Farming, entries[2].category);
         Assert.AreEqual(BuildCategory.Defense, entries[3].category);
+        Assert.IsTrue(entries[4].isStock);
+        Assert.IsFalse(entries[4].isDig);
+        for (int i = 0; i < 4; i++) Assert.IsFalse(entries[i].isStock, $"Entry {i}");
     }
 
     [Test]
@@ -222,7 +226,8 @@ public class BuildRailTests
 
         rail.ActivateEntry(2);
         controller.Select(PlaceableType.MushroomPlot);
-        foreach (int beyond in new[] { 4, 5, 6, -1 })
+        // #126 migration: index 4 (digit 5) is now STOCK, so "past the end" starts at 5. STOCK's digit is StockPanelTests'.
+        foreach (int beyond in new[] { 5, 6, -1 })
         {
             Assert.IsFalse(rail.ActivateEntry(beyond), $"Index {beyond}");
             Assert.AreEqual(BuildCategory.Farming, rail.OpenCategory, "Nothing changed");
@@ -352,6 +357,7 @@ public class BuildRailTests
             new PlaceableCost(PlaceableType.LairCot, MaterialType.Glimmerstone, 2),
             new PlaceableCost(PlaceableType.LairCot, MaterialType.Deepstone, 2),
         };
+        stockpile.Discover(MaterialType.Glimmerstone, MaterialType.Deepstone); // #126 migration: only discovered rows compete
         Assert.IsTrue(BuildRail.TryGetCheapestCost(manager, PlaceableType.LairCot, out MaterialAmount cost));
         Assert.AreEqual(MaterialType.Glimmerstone, cost.type, "Least amount; the earlier of the two tied rows");
         Assert.AreEqual(2, cost.amount);

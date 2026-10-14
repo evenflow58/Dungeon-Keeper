@@ -265,6 +265,7 @@ public class DeepstoneTests
         {
             var c = go.AddComponent<PlacementController>();
             c.PlacementManager = manager;
+            manager.Stockpile.DiscoverAll(); // #126 migration: the selector lists discovered materials; this pins the rows
             foreach (PlaceableType type in new[] { PlaceableType.LairCot, PlaceableType.MushroomPlot, PlaceableType.SpikeTrap })
             {
                 c.Select(type);

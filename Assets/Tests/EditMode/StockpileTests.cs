@@ -91,6 +91,64 @@ public class StockpileTests
         Assert.AreEqual(0, stockpile.Count(MaterialType.Stone));
     }
 
+    // --- Discovery (#126) ---
+
+    [Test]
+    public void AFreshStockpile_TheShippedStartingStock_DiscoversStoneOnly()
+    {
+        Assert.IsTrue(stockpile.IsDiscovered(MaterialType.Stone), "Held from the start");
+        Assert.IsFalse(stockpile.IsDiscovered(MaterialType.Glimmerstone));
+        Assert.IsFalse(stockpile.IsDiscovered(MaterialType.Deepstone));
+        Assert.AreEqual(1, stockpile.DiscoveredKinds);
+    }
+
+    [Test]
+    public void APositiveAdd_Discovers_AZeroOrNegativeAddDoesNot()
+    {
+        stockpile.Add(MaterialType.Deepstone, 0);
+        stockpile.Add(MaterialType.Deepstone, -4);
+        Assert.IsFalse(stockpile.IsDiscovered(MaterialType.Deepstone));
+        Assert.AreEqual(1, stockpile.DiscoveredKinds);
+
+        stockpile.Add(MaterialType.Glimmerstone, 1);
+        Assert.IsTrue(stockpile.IsDiscovered(MaterialType.Glimmerstone));
+        Assert.AreEqual(2, stockpile.DiscoveredKinds);
+
+        stockpile.Add(MaterialType.Glimmerstone, 5);
+        Assert.AreEqual(2, stockpile.DiscoveredKinds, "Discovered once");
+    }
+
+    [Test]
+    public void SpendingToZero_NeverUndiscovers()
+    {
+        stockpile.Add(MaterialType.Glimmerstone, 3);
+        Assert.IsTrue(stockpile.TrySpend(MaterialType.Glimmerstone, 3));
+        Assert.IsTrue(stockpile.TrySpend(MaterialType.Stone, 10));
+        Assert.AreEqual(0, stockpile.Count(MaterialType.Glimmerstone));
+        Assert.AreEqual(0, stockpile.Count(MaterialType.Stone));
+        Assert.IsTrue(stockpile.IsDiscovered(MaterialType.Glimmerstone));
+        Assert.IsTrue(stockpile.IsDiscovered(MaterialType.Stone));
+        Assert.AreEqual(2, stockpile.DiscoveredKinds);
+
+        Assert.IsFalse(stockpile.TrySpend(MaterialType.Deepstone, 1));
+        Assert.IsFalse(stockpile.IsDiscovered(MaterialType.Deepstone), "A refused spend of a never-held material discovers nothing");
+    }
+
+    [Test]
+    public void ReseedingTheStartingStock_IsAFreshDiscoveryRecord_AndAZeroStartingAmountIsNotHeld()
+    {
+        stockpile.Add(MaterialType.Deepstone, 2);
+        stockpile.StartingAmounts = new List<MaterialAmount>
+        {
+            new MaterialAmount(MaterialType.Glimmerstone, 4),
+            new MaterialAmount(MaterialType.Deepstone, 0),
+        };
+        Assert.IsTrue(stockpile.IsDiscovered(MaterialType.Glimmerstone), "Seeded above zero");
+        Assert.IsFalse(stockpile.IsDiscovered(MaterialType.Deepstone), "Zero starting stock was never held");
+        Assert.IsFalse(stockpile.IsDiscovered(MaterialType.Stone), "Not in this starting stock");
+        Assert.AreEqual(1, stockpile.DiscoveredKinds);
+    }
+
     [Test]
     public void Definitions_StoneResolves_WithANameAndColor()
     {

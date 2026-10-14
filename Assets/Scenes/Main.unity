@@ -551,6 +551,7 @@ GameObject:
   - component: {fileID: 565044532}
   - component: {fileID: 565044533}
   - component: {fileID: 565044534}
+  - component: {fileID: 565044535}
   m_Layer: 0
   m_Name: DungeonManager
   m_TagString: Untagged
@@ -915,10 +916,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: DungeonKeeper::BuildRail
   placementController: {fileID: 565044524}
   placementManager: {fileID: 565044525}
+  stockPanel: {fileID: 565044535}
   railWidth: 54
   flyoutWidth: 200
   topOffset: 36
   entryHeight: 52
+  stockGap: 14
   tileHeight: 46
   titleHeight: 24
   padding: 4
@@ -957,7 +960,10 @@ MonoBehaviour:
   chipBorder: 2
   swatchSize: 10
   hintHeight: 16
+  onHandHeight: 26
+  useChipHeight: 26
   titleFontSize: 15
+  onHandFontSize: 20
   tagFontSize: 11
   descriptionFontSize: 12
   statFontSize: 12
@@ -970,6 +976,45 @@ MonoBehaviour:
   chipSelectedColor: {r: 0.85, g: 0.65, b: 0.15, a: 1}
   unaffordableCostColor: {r: 1, g: 0.38, b: 0.38, a: 1}
   secondaryTextColor: {r: 0.82, g: 0.82, b: 0.82, a: 1}
+--- !u!114 &565044535
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 80d970ebde0cd0643b01ba03b716ba97, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::StockPanel
+  placementController: {fileID: 565044524}
+  placementManager: {fileID: 565044525}
+  stockpile: {fileID: 565044532}
+  detailCard: {fileID: 565044534}
+  buildRail: {fileID: 565044533}
+  leftOffset: 54
+  topOffset: 36
+  panelWidth: 400
+  padding: 6
+  titleHeight: 24
+  filterHeight: 26
+  headerRowHeight: 22
+  rowHeight: 26
+  rowGap: 2
+  swatchSize: 12
+  maxListHeight: 360
+  scrollSensitivity: 24
+  titleFontSize: 13
+  headerFontSize: 11
+  rowFontSize: 13
+  refreshSeconds: 0.25
+  panelColor: {r: 0, g: 0, b: 0, a: 0.6}
+  rowColor: {r: 0.25, g: 0.25, b: 0.3, a: 1}
+  rowSelectedColor: {r: 0.85, g: 0.65, b: 0.15, a: 1}
+  fieldColor: {r: 0.12, g: 0.12, b: 0.15, a: 1}
+  secondaryTextColor: {r: 0.82, g: 0.82, b: 0.82, a: 1}
+  zeroCountColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
 --- !u!1 &708604853
 GameObject:
   m_ObjectHideFlags: 0

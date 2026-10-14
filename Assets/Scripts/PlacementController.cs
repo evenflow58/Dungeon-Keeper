@@ -151,9 +151,27 @@ public class PlacementController : MonoBehaviour
         ApplyMode();
     }
 
-    /// <summary>The materials the selected type can be ordered in (#109): its cost rows'; empty with no type selected.</summary>
+    /// <summary>
+    /// The materials the selected type can be ordered in (#109): its cost rows', limited to discovered materials when a
+    /// stockpile is wired (#126; unwired, every row's, as WouldFundNow degrades). Empty with no type selected.
+    /// </summary>
     public List<MaterialType> AvailableMaterials =>
-        SelectedType != null && placementManager != null ? placementManager.MaterialsFor(SelectedType.Value) : new List<MaterialType>();
+        SelectedType != null ? DiscoveredMaterialsFor(SelectedType.Value) : new List<MaterialType>();
+
+    /// <summary>
+    /// A type's orderable materials under the discovery rule (#126): its row materials in table order, without the ones
+    /// the stockpile has never held. With no manager, none; with no stockpile, every row's.
+    /// </summary>
+    public List<MaterialType> DiscoveredMaterialsFor(PlaceableType type) => DiscoveredMaterialsFor(placementManager, type);
+
+    public static List<MaterialType> DiscoveredMaterialsFor(PlacementManager manager, PlaceableType type)
+    {
+        if (manager == null) return new List<MaterialType>();
+        List<MaterialType> materials = manager.MaterialsFor(type);
+        Stockpile stockpile = manager.Stockpile;
+        if (stockpile != null) materials.RemoveAll(m => !stockpile.IsDiscovered(m)); // Unity null check: unwired keeps all
+        return materials;
+    }
 
     /// <summary>Sets the current material (#109), if the selected type (or, with none, any) can be ordered in it.</summary>
     public bool SelectMaterial(MaterialType material)
@@ -174,13 +192,16 @@ public class PlacementController : MonoBehaviour
     }
 
     /// <summary>
-    /// The material an order of this type would use: the current material if the type has a row for it, else the
-    /// type's default (first row).
+    /// The material an order of this type would use: the current material if the type can be ordered in it (a row, and
+    /// discovered, #126), else the type's first discovered row in table order. Safety net: a type with no discovered row
+    /// falls back to its first row, so no type ever becomes unorderable.
     /// </summary>
     public MaterialType MaterialFor(PlaceableType type)
     {
         if (placementManager == null) return SelectedMaterial;
-        if (placementManager.TryGetCost(type, SelectedMaterial, out _)) return SelectedMaterial;
+        List<MaterialType> orderable = DiscoveredMaterialsFor(type);
+        if (orderable.Contains(SelectedMaterial)) return SelectedMaterial;
+        if (orderable.Count > 0) return orderable[0];
         return placementManager.TryGetDefaultMaterial(type, out MaterialType fallback) ? fallback : SelectedMaterial;
     }
 

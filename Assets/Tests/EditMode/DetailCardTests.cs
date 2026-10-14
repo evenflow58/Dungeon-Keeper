@@ -36,6 +36,9 @@ public class DetailCardTests
         manager.Renderer = boardRenderer;
         stockpile = managerGo.AddComponent<Stockpile>(); // 10 stone
         manager.Stockpile = stockpile;
+        // #126 migration: chips list discovered materials only. These pins are about the chips over a type's materials,
+        // so every material is discovered here (counts unchanged); the gating itself is StockPanelTests'.
+        stockpile.DiscoverAll();
 
         controller = managerGo.AddComponent<PlacementController>();
         controller.DigDesignator = managerGo.AddComponent<DigDesignator>();
@@ -58,12 +61,16 @@ public class DetailCardTests
         if (managerGo != null) Object.DestroyImmediate(managerGo);
     }
 
-    private void SetStock(int stone, int glimmerstone = 0, int deepstone = 0) => stockpile.StartingAmounts = new List<MaterialAmount>
+    private void SetStock(int stone, int glimmerstone = 0, int deepstone = 0)
     {
-        new MaterialAmount(MaterialType.Stone, stone),
-        new MaterialAmount(MaterialType.Glimmerstone, glimmerstone),
-        new MaterialAmount(MaterialType.Deepstone, deepstone),
-    };
+        stockpile.StartingAmounts = new List<MaterialAmount>
+        {
+            new MaterialAmount(MaterialType.Stone, stone),
+            new MaterialAmount(MaterialType.Glimmerstone, glimmerstone),
+            new MaterialAmount(MaterialType.Deepstone, deepstone),
+        };
+        stockpile.DiscoverAll(); // Re-seeding is a fresh stockpile: discovery is staged again (#126 migration)
+    }
 
     private DetailCard.Chip ChipFor(MaterialType material)
     {

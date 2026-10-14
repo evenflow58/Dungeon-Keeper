@@ -16,7 +16,15 @@ public enum BuildIconShape
     Bar,
     Circle,
     Diamond,
-    Cross
+    Cross,
+    Stack // #126: the STOCK entry, three stacked slabs
+}
+
+/// <summary>A material family (#126): the STOCK panel groups its rows under these, in this order.</summary>
+public enum MaterialFamily
+{
+    Stones,
+    Other // Where a material with no declared family falls, so it never vanishes from the panel
 }
 
 /// <summary>A stat line the detail card can show for a type (#125). DetailCard.StatLine reads each from PlacementManager.</summary>
@@ -30,8 +38,10 @@ public enum BuildStat
 
 /// <summary>
 /// The one declared place the build chrome reads its presentation from (#123): the category order, and per
-/// PlaceableType its category, display name, description, accent and the stats its detail card lists (#125).
-/// BuildRail and DetailCard paint from this; nothing else in the project holds build display data. A category with no types never appears on the rail.
+/// PlaceableType its category, display name, description, accent and the stats its detail card lists (#125); and per
+/// material its family, description and source line (#126, the STOCK panel and the detail card's material mode).
+/// BuildRail, StockPanel and DetailCard paint from this; nothing else in the project holds build display data. A category
+/// with no types never appears on the rail.
 /// </summary>
 public static class BuildPresentation
 {
@@ -76,9 +86,66 @@ public static class BuildPresentation
             BuildStat.TrapDamage),
     };
 
+    /// <summary>One material's presentation (#126). Its name and color stay the Stockpile catalog's.</summary>
+    public sealed class MaterialEntry
+    {
+        public readonly MaterialType material;
+        public readonly MaterialFamily family;
+        public readonly string description;
+        public readonly string source; // Where it comes from ("Dug · mid depths")
+
+        public MaterialEntry(MaterialType material, MaterialFamily family, string description, string source)
+        {
+            this.material = material;
+            this.family = family;
+            this.description = description;
+            this.source = source;
+        }
+    }
+
+    /// <summary>The STOCK panel's family order, top to bottom.</summary>
+    public static readonly MaterialFamily[] FamilyOrder = { MaterialFamily.Stones, MaterialFamily.Other };
+
+    // First-pass copy, Evan-retunable.
+    private static readonly MaterialEntry[] MaterialEntries =
+    {
+        new MaterialEntry(MaterialType.Stone, MaterialFamily.Stones,
+            "The dungeon's backbone material, dug from the mid depths.", "Dug · mid depths"),
+        new MaterialEntry(MaterialType.Glimmerstone, MaterialFamily.Stones,
+            "Shallow stone from near the entrance, faintly magical.", "Dug · entrance shallows"),
+        new MaterialEntry(MaterialType.Deepstone, MaterialFamily.Stones,
+            "Hard stone from far underground.", "Dug · deep rows"),
+    };
+
     public const string DigLabel = "DIG";
     public const BuildIconShape DigShape = BuildIconShape.Triangle;
     public static readonly Color DigAccent = new Color(0.90f, 0.90f, 0.92f, 1f);
+
+    public const string StockLabel = "STOCK";
+    public const BuildIconShape StockShape = BuildIconShape.Stack;
+    public static readonly Color StockAccent = new Color(0.78f, 0.70f, 0.55f, 1f); // Warm sandstone: stored goods
+
+    public static bool TryGetMaterial(MaterialType material, out MaterialEntry entry)
+    {
+        foreach (MaterialEntry e in MaterialEntries)
+        {
+            if (e.material != material) continue;
+            entry = e;
+            return true;
+        }
+        entry = null;
+        return false;
+    }
+
+    /// <summary>A material's family; Other for a material with no entry.</summary>
+    public static MaterialFamily FamilyOf(MaterialType material) => TryGetMaterial(material, out MaterialEntry e) ? e.family : MaterialFamily.Other;
+
+    /// <summary>The panel's group header ("Stones").</summary>
+    public static string FamilyName(MaterialFamily family) => family.ToString();
+
+    public static string MaterialDescription(MaterialType material) => TryGetMaterial(material, out MaterialEntry e) ? e.description : "";
+
+    public static string MaterialSource(MaterialType material) => TryGetMaterial(material, out MaterialEntry e) ? e.source : "";
 
     public static bool TryGet(PlaceableType type, out Entry entry)
     {

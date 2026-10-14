@@ -263,22 +263,23 @@ public class TopBarTests
     }
 
     [Test]
-    public void Materials_ShowTheCatalogsKindsAndTheTotal_FromTheFirstRefresh()
+    public void Materials_ShowTheDiscoveredKindsAndTheTotal_FromTheFirstRefresh()
     {
+        // #126 migration: kinds were the catalog's (3 from the start); now they are the discovered kinds.
         bar.Refresh();
-        Assert.AreEqual("Materials: 3 kinds · 10 total", bar.MaterialText, "A fresh game: stone, glimmerstone (#114) and deepstone (#111) in the catalog, 10 stone");
+        Assert.AreEqual("Materials: 1 kind · 10 total", bar.MaterialText, "A fresh game: only stone has been held, 10 of it");
 
         stockpile.Add(MaterialType.Stone, 5);
         bar.Refresh();
-        Assert.AreEqual("Materials: 3 kinds · 15 total", bar.MaterialText, "Polled on refresh");
+        Assert.AreEqual("Materials: 1 kind · 15 total", bar.MaterialText, "Polled on refresh");
 
         Assert.IsTrue(stockpile.TrySpend(MaterialType.Stone, 15));
         bar.Refresh();
-        Assert.AreEqual("Materials: 3 kinds · 0 total", bar.MaterialText, "Kinds is the catalog's, not what's in stock");
+        Assert.AreEqual("Materials: 1 kind · 0 total", bar.MaterialText, "Spent to zero, stone is still a discovered kind");
 
         stockpile.Add(MaterialType.Glimmerstone, 4);
         bar.Refresh();
-        Assert.AreEqual("Materials: 3 kinds · 4 total", bar.MaterialText);
+        Assert.AreEqual("Materials: 2 kinds · 4 total", bar.MaterialText, "Holding glimmerstone discovers it");
 
         stockpile.Add(MaterialType.Deepstone, 6);
         stockpile.Add(MaterialType.Stone, 63);
@@ -289,6 +290,7 @@ public class TopBarTests
     [Test]
     public void Materials_AddingAKindToTheCatalog_ChangesTheNumberNotTheShape()
     {
+        stockpile.DiscoverAll(); // #126 migration: kinds count discovered catalog materials; all three are, here
         var definitions = new List<MaterialDefinition>(stockpile.Definitions);
         definitions.RemoveAt(definitions.Count - 1);
         stockpile.Definitions = definitions;

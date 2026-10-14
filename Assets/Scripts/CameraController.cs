@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 [RequireComponent(typeof(Camera))]
 public class CameraController : MonoBehaviour
@@ -146,7 +147,9 @@ public class CameraController : MonoBehaviour
     {
         Vector2 scroll = input?.Zoom.ReadValue<Vector2>() ?? Vector2.zero;
 
-        if (Mathf.Abs(scroll.y) > 0.01f)
+        // #126: a wheel over the chrome scrolls it (the STOCK list), not the view.
+        bool overUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+        if (Mathf.Abs(scroll.y) > 0.01f && !overUI)
         {
             bool uniform = UnityEngine.InputSystem.InputSystem.settings.scrollDeltaBehavior ==
                            UnityEngine.InputSystem.InputSettings.ScrollDeltaBehavior.UniformAcrossAllPlatforms;
@@ -220,7 +223,7 @@ public class CameraController : MonoBehaviour
 
     private void HandleKeyboardPan()
     {
-        if (isDragging) return;
+        if (isDragging || TextInputFocus.IsTyping) return; // #126: WASD typed into a field doesn't pan
 
         // One Pan action holds both the WASD and arrow-key composites (InputConfig).
         Vector2 moveInput = input?.Pan.ReadValue<Vector2>() ?? Vector2.zero;

@@ -115,6 +115,7 @@ public class MaterialChoiceTests
     public void Selector_ListsExactlyTheSelectedTypesRowMaterials_DefaultStone()
     {
         PlacementController c = Controller();
+        stockpile.DiscoverAll(); // #126 migration: the selector lists discovered row materials; this pins the rows and the cycle
         Assert.AreEqual(MaterialType.Stone, c.SelectedMaterial, "Default");
         CollectionAssert.IsEmpty(c.AvailableMaterials, "No type selected");
 

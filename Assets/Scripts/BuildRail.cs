@@ -8,9 +8,10 @@ using UnityEngine.UI;
 /// flyout of item tiles beside it. It is the tool mode's view: every behavior stays in PlacementController (the mode
 /// owner) and PlacementManager (costs, funding); this class only tracks which category's flyout is open, calls their
 /// API and paints from it. Presentation data comes from BuildPresentation. The armed type's description and its
-/// material choice are DetailCard's (#125). Built in code like the rest of the chrome
-/// (own overlay Canvas, no scene-authored UI). Digits 1-6 activate the rail's visible entries in order.
-/// Esc closes the flyout only from Neutral: while a tool is selected the controller owns the press, so one press
+/// material choice are DetailCard's (#125). Below the categories, set apart, the STOCK entry opens StockPanel (#126);
+/// at most one of {a category's flyout, the STOCK panel} is open. Built in code like the rest of the chrome
+/// (own overlay Canvas, no scene-authored UI). Digits 1-6 activate the rail's visible entries in order, except while the
+/// player types into a field (TextInputFocus). Esc closes the flyout only from Neutral: while a tool is selected the controller owns the press, so one press
 /// unwinds one level.
 /// </summary>
 [DisallowMultipleComponent]
@@ -19,12 +20,14 @@ public class BuildRail : MonoBehaviour
     [Header("References")]
     [SerializeField] private PlacementController placementController;
     [SerializeField] private PlacementManager placementManager;
+    [SerializeField] private StockPanel stockPanel; // #126: what the STOCK entry opens
 
     [Header("Layout")]
     [SerializeField] private float railWidth = 54f;
     [SerializeField] private float flyoutWidth = 200f;
     [SerializeField] private float topOffset = 36f;          // The top bar's height: the chrome starts below it
     [SerializeField] private float entryHeight = 52f;
+    [SerializeField] private float stockGap = 14f;           // Sets the STOCK entry apart from the build categories
     [SerializeField] private float tileHeight = 46f;
     [SerializeField] private float titleHeight = 24f;
     [SerializeField] private float padding = 4f;
@@ -41,6 +44,7 @@ public class BuildRail : MonoBehaviour
 
     public PlacementController PlacementController { get => placementController; set => placementController = value; }
     public PlacementManager PlacementManager { get => placementManager; set => placementManager = value; }
+    public StockPanel StockPanel { get => stockPanel; set => stockPanel = value; }
     public Color ButtonNormalColor => buttonNormalColor;
     public Color ButtonSelectedColor => buttonSelectedColor;
     public Color UnaffordableCostColor => unaffordableCostColor;
@@ -49,16 +53,21 @@ public class BuildRail : MonoBehaviour
     public BuildCategory? OpenCategory { get; private set; }
     public bool IsFlyoutOpen => OpenCategory != null;
 
-    /// <summary>One rail entry: the dig tool, or a build category.</summary>
+    /// <summary>True while the STOCK panel is open (#126).</summary>
+    public bool IsStockOpen => stockPanel != null && stockPanel.IsOpen;
+
+    /// <summary>One rail entry: the dig tool, a build category, or STOCK (#126).</summary>
     public readonly struct RailEntry
     {
         public readonly bool isDig;
-        public readonly BuildCategory category; // Meaningless for the dig entry
+        public readonly BuildCategory category; // Meaningless for the dig and STOCK entries
+        public readonly bool isStock;
 
-        public RailEntry(bool isDig, BuildCategory category)
+        public RailEntry(bool isDig, BuildCategory category, bool isStock = false)
         {
             this.isDig = isDig;
             this.category = category;
+            this.isStock = isStock;
         }
     }
 
@@ -106,6 +115,7 @@ public class BuildRail : MonoBehaviour
     {
         placementController ??= FindAnyObjectByType<PlacementController>();
         placementManager ??= FindAnyObjectByType<PlacementManager>();
+        stockPanel ??= FindAnyObjectByType<StockPanel>();
 
         PlacementController.EnsureEventSystem();
         Build();
@@ -114,11 +124,14 @@ public class BuildRail : MonoBehaviour
 
     private void Update()
     {
-        for (int i = 0; i < RailActionCount; i++)
+        if (!TextInputFocus.IsTyping) // #126: digits and Esc typed into a field are the field's
         {
-            if (RailAction(i)?.WasPressedThisFrame() ?? false) ActivateEntry(i);
+            for (int i = 0; i < RailActionCount; i++)
+            {
+                if (RailAction(i)?.WasPressedThisFrame() ?? false) ActivateEntry(i);
+            }
+            if (input?.Abort.WasPressedThisFrame() ?? false) HandleAbort();
         }
-        if (input?.Abort.WasPressedThisFrame() ?? false) HandleAbort();
 
         refreshTimer += Time.unscaledDeltaTime; // Affordability tracks the stockpile even while paused
         if (refreshTimer >= refreshSeconds)
@@ -147,17 +160,19 @@ public class BuildRail : MonoBehaviour
 
     // ---- rail state (the view's own: which flyout is open) ----
 
-    /// <summary>The rail's entries top to bottom: DIG, then each non-empty category in presentation order.</summary>
+    /// <summary>The rail's entries top to bottom: DIG, each non-empty category in presentation order, then STOCK.</summary>
     public static List<RailEntry> VisibleEntries()
     {
         var entries = new List<RailEntry> { new RailEntry(true, default) };
         foreach (BuildCategory category in BuildPresentation.VisibleCategories()) entries.Add(new RailEntry(false, category));
+        entries.Add(new RailEntry(false, default, isStock: true));
         return entries;
     }
 
     /// <summary>
     /// A click on the index-th visible entry, or its digit (index 0 = digit 1): DIG selects the dig tool, a category
-    /// toggles its flyout. False, and nothing happens, for an index past the visible entries.
+    /// toggles its flyout, STOCK toggles the materials panel. False, and nothing happens, for an index past the visible
+    /// entries.
     /// </summary>
     public bool ActivateEntry(int index)
     {
@@ -165,15 +180,33 @@ public class BuildRail : MonoBehaviour
         if (index < 0 || index >= entries.Count) return false;
 
         if (entries[index].isDig) ActivateDig();
+        else if (entries[index].isStock) ToggleStock();
         else ToggleCategory(entries[index].category);
         return true;
     }
 
-    /// <summary>The DIG entry: closes the flyout and selects the dig tool.</summary>
+    /// <summary>The DIG entry: closes the flyout and the STOCK panel and selects the dig tool.</summary>
     public void ActivateDig()
     {
         CloseFlyout();
+        if (stockPanel != null) stockPanel.Close();
         if (placementController != null) placementController.SelectDig();
+        Repaint();
+    }
+
+    /// <summary>
+    /// The STOCK entry (#126): opens the materials panel (closing any flyout; the panel puts any tool down), or closes it
+    /// if it is open. No panel wired, no effect.
+    /// </summary>
+    public void ToggleStock()
+    {
+        if (stockPanel == null) return;
+        if (stockPanel.IsOpen) stockPanel.Close();
+        else
+        {
+            CloseFlyout();
+            stockPanel.Open();
+        }
         Repaint();
     }
 
@@ -194,6 +227,7 @@ public class BuildRail : MonoBehaviour
         if (BuildPresentation.TypesInCategory(category).Count == 0) return;
 
         CloseFlyout();
+        if (stockPanel != null) stockPanel.Close(); // One open thing: the flyout or the STOCK panel
         if (placementController != null && placementController.IsDigging) placementController.ClearSelection();
         OpenCategory = category;
         Repaint();
@@ -241,14 +275,20 @@ public class BuildRail : MonoBehaviour
 
     // ---- what the tiles read ----
 
-    /// <summary>The type's cheapest cost row: the least amount over its materials, the first such row on a tie.</summary>
+    /// <summary>
+    /// The type's cheapest cost row among the materials it can be ordered in (#126: the discovered ones, as on the detail
+    /// card's chips): the least amount, the first such row on a tie. A type with no discovered row reads all its rows,
+    /// matching the controller's safety-net fallback.
+    /// </summary>
     public static bool TryGetCheapestCost(PlacementManager manager, PlaceableType type, out MaterialAmount cheapest)
     {
         cheapest = default;
         if (manager == null) return false;
 
+        List<MaterialType> materials = PlacementController.DiscoveredMaterialsFor(manager, type);
+        if (materials.Count == 0) materials = manager.MaterialsFor(type);
         bool found = false;
-        foreach (MaterialType material in manager.MaterialsFor(type))
+        foreach (MaterialType material in materials)
         {
             if (!manager.TryGetCost(type, material, out MaterialAmount cost)) continue;
             if (found && cost.amount >= cheapest.amount) continue;
@@ -337,13 +377,17 @@ public class BuildRail : MonoBehaviour
         {
             int index = i;
             RailEntry entry = entries[i];
-            string label = entry.isDig ? BuildPresentation.DigLabel : BuildPresentation.RailLabel(entry.category);
-            BuildIconShape shape = entry.isDig ? BuildPresentation.DigShape : BuildPresentation.Shape(entry.category);
-            Color accent = entry.isDig ? BuildPresentation.DigAccent : BuildPresentation.Accent(entry.category);
+            string label = entry.isDig ? BuildPresentation.DigLabel
+                : entry.isStock ? BuildPresentation.StockLabel : BuildPresentation.RailLabel(entry.category);
+            BuildIconShape shape = entry.isDig ? BuildPresentation.DigShape
+                : entry.isStock ? BuildPresentation.StockShape : BuildPresentation.Shape(entry.category);
+            Color accent = entry.isDig ? BuildPresentation.DigAccent
+                : entry.isStock ? BuildPresentation.StockAccent : BuildPresentation.Accent(entry.category);
+            string name = entry.isDig ? "Dig" : entry.isStock ? "Stock" : entry.category.ToString();
 
-            GameObject entryGo = CreateButton(railGo.transform, (entry.isDig ? "Dig" : entry.category.ToString()) + "Entry",
-                () => ActivateEntry(index), out entryImages[i]);
-            PlaceTopLeft((RectTransform)entryGo.transform, padding, padding + i * (entryHeight + padding),
+            GameObject entryGo = CreateButton(railGo.transform, name + "Entry", () => ActivateEntry(index), out entryImages[i]);
+            float gap = entry.isStock ? stockGap : 0f; // STOCK sits apart, below the build categories
+            PlaceTopLeft((RectTransform)entryGo.transform, padding, padding + i * (entryHeight + padding) + gap,
                 railWidth - 2f * padding, entryHeight);
 
             Image icon = CreateIcon(entryGo.transform, shape, accent);
@@ -417,7 +461,7 @@ public class BuildRail : MonoBehaviour
 
     /// <summary>
     /// Repaints from the mode and the stockpile: the rail's selected tints (DIG while digging, a category while its
-    /// flyout is open), and the open category's tiles with their cost lines and armed tint.
+    /// flyout is open, STOCK while its panel is open), and the open category's tiles with their cost lines and armed tint.
     /// </summary>
     public void Repaint()
     {
@@ -428,8 +472,8 @@ public class BuildRail : MonoBehaviour
             for (int i = 0; i < entryImages.Length && i < builtEntries.Length; i++)
             {
                 if (entryImages[i] == null) continue;
-                bool selected = builtEntries[i].isDig
-                    ? placementController != null && placementController.IsDigging
+                bool selected = builtEntries[i].isDig ? placementController != null && placementController.IsDigging
+                    : builtEntries[i].isStock ? IsStockOpen
                     : OpenCategory == builtEntries[i].category;
                 entryImages[i].color = selected ? buttonSelectedColor : buttonNormalColor;
             }
@@ -570,6 +614,7 @@ public class BuildRail : MonoBehaviour
             case BuildIconShape.Bar: return au <= 0.9f && av <= 0.5f;
             case BuildIconShape.Circle: return u * u + v * v <= 0.81f;
             case BuildIconShape.Diamond: return au + av <= 0.95f;
+            case BuildIconShape.Stack: return au <= 0.85f && (Mathf.Abs(v - 0.55f) <= 0.17f || av <= 0.17f || Mathf.Abs(v + 0.55f) <= 0.17f);
             default: return (au <= 0.3f && av <= 0.9f) || (av <= 0.3f && au <= 0.9f);
         }
     }

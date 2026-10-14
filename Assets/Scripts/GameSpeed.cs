@@ -9,7 +9,8 @@ using UnityEngine.UI;
 /// Time.timeScale by itself. The buttons sit in the top bar's strip at its right end (#124), on this component's own
 /// canvas one sorting order above the bar's; uGUI input ignores timeScale, so they work while paused. Only the three
 /// buttons take pointer input: a press anywhere else on the strip reaches the board. The pause hotkey (TogglePause,
-/// Space by default) comes from InputConfig and returns to the speed held before pausing.
+/// Space by default) comes from InputConfig and returns to the speed held before pausing; it is ignored while the player
+/// types into a field (TextInputFocus, #126).
 /// </summary>
 [DisallowMultipleComponent]
 public class GameSpeed : MonoBehaviour
@@ -78,6 +79,7 @@ public class GameSpeed : MonoBehaviour
 
     private void Update()
     {
+        if (TextInputFocus.IsTyping) return; // #126: Space types into a focused field, it doesn't pause
         if (input?.TogglePause.WasPressedThisFrame() ?? false) TogglePause();
     }
 

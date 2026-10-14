@@ -48,7 +48,9 @@ public class MaterialAmount
 /// serialized definition list: name and color per material) and the per-material counts, seeded from serialized
 /// starting amounts. Digging will earn into it and building will spend from it (later stories); nothing does yet.
 /// Counts are independent of definitions: a material with no definition still counts, and anything never added
-/// reads 0.
+/// reads 0. It also records which materials it has ever held (#126, the discovery rule: a material appears on no menu
+/// until the stockpile has held it): every starting material seeded above zero, and anything a positive Add lands.
+/// Spending to zero never un-discovers. Runtime state only.
 /// </summary>
 [DisallowMultipleComponent]
 public class Stockpile : MonoBehaviour
@@ -69,6 +71,7 @@ public class Stockpile : MonoBehaviour
 
     // Seeded from startingAmounts on first use (lazily, so EditMode tests see it without Awake).
     private Dictionary<MaterialType, int> counts;
+    private HashSet<MaterialType> discovered; // Seeded with the counts; only ever grows
 
     /// <summary>The catalog (replaceable in code, e.g. by tests).</summary>
     public List<MaterialDefinition> Definitions { get => definitions; set => definitions = value ?? new List<MaterialDefinition>(); }
@@ -84,6 +87,7 @@ public class Stockpile : MonoBehaviour
         {
             startingAmounts = value ?? new List<MaterialAmount>();
             counts = null;
+            discovered = null;
         }
     }
 
@@ -105,6 +109,24 @@ public class Stockpile : MonoBehaviour
         if (amount <= 0) return;
         EnsureSeeded();
         counts[type] = Count(type) + amount;
+        discovered.Add(type);
+    }
+
+    /// <summary>Whether the stockpile has ever held this material (#126); a material spent to zero stays discovered.</summary>
+    public bool IsDiscovered(MaterialType type)
+    {
+        EnsureSeeded();
+        return discovered.Contains(type);
+    }
+
+    /// <summary>How many materials have been discovered (#126).</summary>
+    public int DiscoveredKinds
+    {
+        get
+        {
+            EnsureSeeded();
+            return discovered.Count;
+        }
     }
 
     /// <summary>
@@ -152,12 +174,23 @@ public class Stockpile : MonoBehaviour
 
     private void EnsureSeeded()
     {
-        if (counts != null) return;
-        counts = new Dictionary<MaterialType, int>();
-        if (startingAmounts == null) return;
-        foreach (MaterialAmount a in startingAmounts)
+        if (counts == null)
         {
-            if (a != null && a.amount > 0) counts[a.type] = (counts.TryGetValue(a.type, out int n) ? n : 0) + a.amount;
+            counts = new Dictionary<MaterialType, int>();
+            discovered = new HashSet<MaterialType>();
+            foreach (MaterialAmount a in startingAmounts ?? new List<MaterialAmount>())
+            {
+                if (a == null || a.amount <= 0) continue;
+                counts[a.type] = (counts.TryGetValue(a.type, out int n) ? n : 0) + a.amount;
+                discovered.Add(a.type); // Held from the start
+            }
+        }
+        // Lost on its own (it isn't serialized): rebuilt from what is held now rather than re-seeding the counts.
+        if (discovered == null)
+        {
+            discovered = new HashSet<MaterialType>();
+            foreach (KeyValuePair<MaterialType, int> held in counts)
+                if (held.Value > 0) discovered.Add(held.Key);
         }
     }
 }

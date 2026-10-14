@@ -15,4 +15,21 @@ public static class PlacementStaging
         placeable.CompleteConstruction();
         return true;
     }
+
+    /// <summary>
+    /// Stages discovery (#126) the way play earns it: one of each material lands in the stockpile and is spent again, so
+    /// the materials are discovered and every count is left exactly as it was.
+    /// </summary>
+    public static void Discover(this Stockpile stockpile, params MaterialType[] materials)
+    {
+        foreach (MaterialType material in materials)
+        {
+            stockpile.Add(material, 1);
+            stockpile.TrySpend(material, 1);
+        }
+    }
+
+    /// <summary>Discover, for every material in the enum.</summary>
+    public static void DiscoverAll(this Stockpile stockpile) =>
+        stockpile.Discover((MaterialType[])System.Enum.GetValues(typeof(MaterialType)));
 }

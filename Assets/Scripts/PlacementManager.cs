@@ -163,6 +163,18 @@ public class PlacementManager : MonoBehaviour
         return false;
     }
 
+    /// <summary>
+    /// How many orders wait in this material's funding line (#126): placed, not yet funded. Funded, built and other
+    /// materials' orders don't count.
+    /// </summary>
+    public int WaitingOrders(MaterialType material)
+    {
+        int n = 0;
+        foreach (Placeable p in awaitingFunding)
+            if (p != null && !p.IsBuilt && !p.IsFunded && p.OrderedMaterial == material) n++;
+        return n;
+    }
+
     /// <summary>Orders waiting for materials, in placement (funding) order.</summary>
     public List<Placeable> GetAwaitingFunding()
     {

@@ -259,7 +259,7 @@ public class BuildCostTests
         }
     }
 
-    // --- The build bar ---
+    // --- Cost labels ---
 
     [Test]
     public void CostLabel_ShowsTheCost_RedWhenItWouldWait()

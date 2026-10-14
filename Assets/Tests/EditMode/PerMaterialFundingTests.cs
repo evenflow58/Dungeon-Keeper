@@ -262,7 +262,7 @@ public class PerMaterialFundingTests
         AssertFunded(glimmerCot, "Glimmerstone cot");
     }
 
-    // --- WouldFundNow (the build bar's red rule) ---
+    // --- WouldFundNow (the red-cost rule on the rail's tiles and the card's chips) ---
 
     [Test]
     public void WouldFundNow_AnotherMaterialsWaitingLine_DoesNotRedden()

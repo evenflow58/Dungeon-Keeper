@@ -111,7 +111,7 @@ public class DigDesignator : MonoBehaviour
         bool leftPressed  = input?.Designate.WasPressedThisFrame() ?? false;
         bool rightPressed = input?.ClearOrAbort.WasPressedThisFrame() ?? false;
 
-        // Presses that start on UI (e.g. the build bar) never reach the board.
+        // Presses that start on UI (e.g. the build rail) never reach the board.
         if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
 
         if      (leftPressed  && hitGround) TryStartDrag(worldPos, DesignateMode.Designate);

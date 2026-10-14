@@ -4,7 +4,7 @@ using UnityEngine;
 
 /// <summary>
 /// Choosing the material at order time (#109): the type x material cost rows, orders stamped with the chosen material
-/// (kept after construction), the bar's material selector, the material-tinted order marker, and the whole-catalog
+/// (kept after construction), the material selection seam (SelectMaterial, CycleMaterial), the material-tinted order marker, and the whole-catalog
 /// TopBar readout. Only Stone exists until B3, so multi-material behavior is covered at the seams (staged rows and
 /// formatter inputs), not end-to-end — no fake material is invented to force it.
 /// </summary>

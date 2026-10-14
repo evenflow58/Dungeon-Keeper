@@ -395,8 +395,7 @@ public class StockPanel : MonoBehaviour
             y += height + rowGap;
             if (rows[i].isHeader) continue;
 
-            bool zero = rows[i].count == 0;
-            view.name.color = zero ? zeroCountColor : Color.white;
+            bool zero = rows[i].count == 0; // Only the count greys: the name stays legible on the amber selected row
             if (view.count != null)
             {
                 view.count.text = rows[i].count.ToString();

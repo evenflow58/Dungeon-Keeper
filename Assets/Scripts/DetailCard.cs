@@ -395,8 +395,9 @@ public class DetailCard : MonoBehaviour
     }
 
     /// <summary>
-    /// Repaints from the mode and the stockpile: hidden unless a type is armed; otherwise the armed type's texts, its
-    /// stat lines for the selected material, and its chips with live costs, counts and the selected outline.
+    /// Repaints from the mode and the stockpile: hidden unless a type is armed or a material is shown; otherwise the armed
+    /// type's texts, its stat lines for the selected material, and its chips with live costs, counts and the selected
+    /// outline — or, in material mode, the shown material's (#126).
     /// </summary>
     public void Repaint()
     {

@@ -494,6 +494,8 @@ public class StockPanelTests
         Assert.AreEqual(3, Find(content.TrimEnd('/')).childCount, "Rebuilt on discovery");
         Assert.AreEqual("0", TextAt(content + "GlimmerstoneRow/Count").text);
         Assert.AreEqual(panel.ZeroCountColor, TextAt(content + "GlimmerstoneRow/Count").color, "Zero is greyed");
+        Assert.AreEqual(Color.white, TextAt(content + "GlimmerstoneRow/Name").color, "The name stays white");
+        Assert.AreEqual(Color.white, TextAt(content + "StoneRow/Count").color);
 
         Find(content + "GlimmerstoneRow").GetComponent<Button>().onClick.Invoke();
         Assert.AreEqual(MaterialType.Glimmerstone, panel.SelectedMaterial);

@@ -291,6 +291,36 @@ public class FogOfWarTests
         Assert.AreEqual(5, preview.Count, "The 9-tile rect minus 4 cavern Floor tiles");
     }
 
+    [Test]
+    public void OnDisable_AfterTheTileQuadsWereDestroyed_DoesNotThrow()
+    {
+        // Scene teardown order is arbitrary: a Designate drag's pooled quads (scene roots) can be destroyed before
+        // DigDesignator.OnDisable runs. Stage that order directly.
+        var digGo = new GameObject("TestDigDesignator");
+        var quadGo = new GameObject("DigPreviewTile");
+        try
+        {
+            var dig = digGo.AddComponent<DigDesignator>();
+            var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+            var quads = (List<SpriteRenderer>)typeof(DigDesignator).GetField("tilePreviews", flags).GetValue(dig);
+            quads.Add(quadGo.AddComponent<SpriteRenderer>());
+            Object.DestroyImmediate(quadGo);
+
+            Assert.DoesNotThrow(() => MethodInfoInvoke(dig, "OnDisable", flags));
+        }
+        finally
+        {
+            if (quadGo != null) Object.DestroyImmediate(quadGo);
+            Object.DestroyImmediate(digGo);
+        }
+    }
+
+    private static void MethodInfoInvoke(object target, string method, System.Reflection.BindingFlags flags)
+    {
+        try { target.GetType().GetMethod(method, flags).Invoke(target, null); }
+        catch (System.Reflection.TargetInvocationException e) { throw e.InnerException; }
+    }
+
     // ---- 6. Tooltip suppression ----
 
     [Test]

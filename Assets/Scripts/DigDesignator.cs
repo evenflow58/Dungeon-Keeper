@@ -241,10 +241,12 @@ public class DigDesignator : MonoBehaviour
         return quad;
     }
 
+    // The quads are scene roots: on a scene teardown (exiting Play, Play Again's reload) Unity may destroy them
+    // before this component's OnDisable runs, so each is null-checked like previewSprite.
     private void HideTilePreview()
     {
         previewTiles.Clear();
-        foreach (SpriteRenderer quad in tilePreviews) quad.enabled = false;
+        foreach (SpriteRenderer quad in tilePreviews) if (quad != null) quad.enabled = false;
     }
 
     private void HidePreview()

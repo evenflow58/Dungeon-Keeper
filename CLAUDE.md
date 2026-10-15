@@ -58,3 +58,11 @@ source of truth — read the relevant section before implementing a story.
   precisely which object and field to set.
 - When you create new C# files outside the editor, Unity generates matching
   `.meta` files on import — make sure they are committed with the scripts.
+- Script changes during Play (#137): a recompile mid-Play restarts the run
+  (`Assets/Editor/RestartPlayOnScriptReload.cs`), because a domain reload
+  can't keep the simulation's non-serialized state. Unity has no project
+  setting for this; the hook can be turned off locally (Tools > Dungeon
+  Keeper), and then the controls survive the reload but the simulation
+  silently resets — that's the documented behavior of that editor mode.
+  Components that build input or UI wiring must re-establish it in
+  `OnEnable` (a reload re-runs `OnEnable`, not `Awake` or `Start`).

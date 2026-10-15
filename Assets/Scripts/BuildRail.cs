@@ -75,8 +75,12 @@ public class BuildRail : MonoBehaviour
     private InputConfig.Actions input; // Bindings come from InputConfig (rebindable); enabled with this component
     private float refreshTimer;
 
-    // ---- chrome (code-built; none of it survives a recompile, so every reader guards for null and length) ----
+    // ---- chrome (code-built; a recompile can null or empty any of it, so every reader guards for null and length) ----
     private Canvas canvas;
+    // #137: true once Build has wired this chrome in the current domain. NonSerialized, so a domain reload resets it
+    // while the canvas reference survives: that pair is how OnEnable tells a reload (listeners and the ModeChanged
+    // subscription lost) from an ordinary re-enable.
+    [System.NonSerialized] private bool chromeWired;
     private Image[] entryImages;
     private RailEntry[] builtEntries;
     private RectTransform flyoutRect;
@@ -91,12 +95,33 @@ public class BuildRail : MonoBehaviour
 
     private void Awake()
     {
-        input = InputConfig.CreateActions();
+        EnsureInput();
     }
 
+    // #137: a domain reload mid-Play (Recompile And Continue Playing) re-runs OnEnable but not Awake or Start, so the
+    // input is ensured here and chrome that outlived the reload is rebuilt with its wiring.
     private void OnEnable()
     {
-        input?.Enable();
+        EnsureInput();
+        input.Enable();
+        if (canvas != null && !chromeWired) RebuildAfterReload();
+    }
+
+    private void EnsureInput() => input ??= InputConfig.CreateActions();
+
+    private void RebuildAfterReload()
+    {
+        DestroyChrome();
+        Build();
+        SubscribeToMode();
+    }
+
+    // Idempotent: Start and a reload both come through here, and the rail must hear each mode change once.
+    private void SubscribeToMode()
+    {
+        if (placementController == null) return;
+        placementController.ModeChanged -= Repaint;
+        placementController.ModeChanged += Repaint; // Tints follow the mode at once
     }
 
     private void OnDisable()
@@ -119,7 +144,7 @@ public class BuildRail : MonoBehaviour
 
         PlacementController.EnsureEventSystem();
         Build();
-        if (placementController != null) placementController.ModeChanged += Repaint; // Tints follow the mode at once
+        SubscribeToMode();
     }
 
     private void Update()
@@ -328,6 +353,7 @@ public class BuildRail : MonoBehaviour
         Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         CreateRail(canvasGo.transform, font);
         CreateFlyout(canvasGo.transform, font);
+        chromeWired = true;
         Repaint();
     }
 
@@ -340,6 +366,7 @@ public class BuildRail : MonoBehaviour
         generatedAssets.Clear();
 
         canvas = null;
+        chromeWired = false;
         entryImages = null;
         builtEntries = null;
         flyoutRect = null;

@@ -49,17 +49,26 @@ public class GameSpeed : MonoBehaviour
     private InputConfig.Actions input; // Bindings come from InputConfig (rebindable); enabled with this component
     private Canvas canvas;
     private Image[] buttonImages;
+    // #137: true once the buttons' click listeners are wired in the current domain. NonSerialized, so a domain reload
+    // resets it while the canvas and button references survive (the listeners, added in code, don't).
+    [System.NonSerialized] private bool buttonsWired;
 
     private void Awake()
     {
-        input = InputConfig.CreateActions();
+        EnsureInput();
         ResetToNormalSpeed();
     }
 
+    // #137: a domain reload mid-Play (Recompile And Continue Playing) re-runs OnEnable but not Awake or Start, so the
+    // input is ensured here and buttons that outlived the reload get their listeners back.
     private void OnEnable()
     {
-        input?.Enable();
+        EnsureInput();
+        input.Enable();
+        if (canvas != null && !buttonsWired) WireButtons();
     }
+
+    private void EnsureInput() => input ??= InputConfig.CreateActions();
 
     private void OnDisable()
     {
@@ -138,14 +147,11 @@ public class GameSpeed : MonoBehaviour
 
         for (int i = 0; i < Speeds.Length; i++)
         {
-            float speed = Speeds[i];
-
             var buttonGo = new GameObject(Labels[i] + "Button");
             buttonGo.transform.SetParent(panelGo.transform, false);
             var image = buttonGo.AddComponent<Image>();
             var button = buttonGo.AddComponent<Button>();
             button.targetGraphic = image;
-            button.onClick.AddListener(() => SetSpeed(speed));
 
             var rect = buttonGo.GetComponent<RectTransform>();
             rect.anchorMin = rect.anchorMax = new Vector2(0f, 0.5f); // Vertically centered in the strip
@@ -170,7 +176,25 @@ public class GameSpeed : MonoBehaviour
             buttonImages[i] = image;
         }
 
+        WireButtons();
         RefreshButtons();
+    }
+
+    // Each button sets its speed. Clears first, so it wires exactly once whether CreateButtons or a reload calls it.
+    private void WireButtons()
+    {
+        if (!HasButtons) return;
+        for (int i = 0; i < Speeds.Length; i++)
+        {
+            if (buttonImages[i] == null) continue; // Unity null check: a button destroyed out from under us
+            Button button = buttonImages[i].GetComponent<Button>();
+            if (button == null) continue;
+
+            float speed = Speeds[i];
+            button.onClick.RemoveAllListeners();
+            button.onClick.AddListener(() => SetSpeed(speed));
+        }
+        buttonsWired = true;
     }
 
     // Not built yet (Awake, EditMode tests), or an array a recompile emptied (#83: under no-domain-reload a null array

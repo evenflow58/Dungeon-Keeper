@@ -28,9 +28,24 @@ public class TileHover : MonoBehaviour
 
     private void Awake()
     {
-        input = InputConfig.CreateActions();
+        EnsureInput();
+    }
+
+    // #137: a domain reload mid-Play (Recompile And Continue Playing) re-runs OnEnable but not Awake, and the actions
+    // don't survive it, so they're ensured (and enabled) here; disabled again with the component, like the other
+    // InputConfig consumers.
+    private void OnEnable()
+    {
+        EnsureInput();
         input.Enable();
     }
+
+    private void OnDisable()
+    {
+        input?.Disable();
+    }
+
+    private void EnsureInput() => input ??= InputConfig.CreateActions();
 
     private void Start()
     {

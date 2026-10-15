@@ -39,13 +39,18 @@ public class DigDesignator : MonoBehaviour
 
     private void Awake()
     {
-        input = InputConfig.CreateActions();
+        EnsureInput();
     }
 
+    // #137: a domain reload mid-Play (Recompile And Continue Playing) re-runs OnEnable but not Awake, and the actions
+    // don't survive it, so they're ensured here.
     private void OnEnable()
     {
-        input?.Enable();
+        EnsureInput();
+        input.Enable();
     }
+
+    private void EnsureInput() => input ??= InputConfig.CreateActions();
 
     private void OnDisable()
     {

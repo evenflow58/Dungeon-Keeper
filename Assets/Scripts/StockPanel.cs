@@ -105,8 +105,12 @@ public class StockPanel : MonoBehaviour
     private InputConfig.Actions input; // Bindings come from InputConfig (rebindable); enabled with this component
     private float refreshTimer;
 
-    // ---- chrome (code-built; none of it survives a recompile, so every reader guards for null and length, #83) ----
+    // ---- chrome (code-built; a recompile can null or empty any of it, so every reader guards for null and length, #83) ----
     private Canvas canvas;
+    // #137: true once Build has wired this chrome in the current domain. NonSerialized, so a domain reload resets it
+    // while the canvas reference survives: that pair is how OnEnable tells a reload (row and filter listeners and the
+    // ModeChanged subscription lost) from an ordinary re-enable.
+    [System.NonSerialized] private bool chromeWired;
     private RectTransform panelRect;
     private InputField filterField;
     private RectTransform listRect;
@@ -130,12 +134,27 @@ public class StockPanel : MonoBehaviour
 
     private void Awake()
     {
-        input = InputConfig.CreateActions();
+        EnsureInput();
     }
 
+    // #137: a domain reload mid-Play (Recompile And Continue Playing) re-runs OnEnable but not Awake or Start, so the
+    // input is ensured here and chrome that outlived the reload is rebuilt with its wiring.
     private void OnEnable()
     {
-        input?.Enable();
+        EnsureInput();
+        input.Enable();
+        if (canvas != null && !chromeWired) RebuildAfterReload();
+    }
+
+    private void EnsureInput() => input ??= InputConfig.CreateActions();
+
+    private void RebuildAfterReload()
+    {
+        DestroyChrome();
+        Build();
+        if (placementController == null) return;
+        placementController.ModeChanged -= OnModeChanged; // Never twice, whatever survived
+        placementController.ModeChanged += OnModeChanged;
     }
 
     private void OnDisable()
@@ -345,6 +364,7 @@ public class StockPanel : MonoBehaviour
         CreateList(panelGo.transform);
         PlaceTopLeft(listRect, padding, y, inner, 0f);
 
+        chromeWired = true; // Rows are built (and wired) later, by Repaint, under this same flag
         Repaint();
     }
 
@@ -354,6 +374,7 @@ public class StockPanel : MonoBehaviour
         if (canvas != null) DestroyChromeObject(canvas.gameObject);
 
         canvas = null;
+        chromeWired = false;
         panelRect = null;
         filterField = null;
         listRect = null;

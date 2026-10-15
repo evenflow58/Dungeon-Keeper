@@ -9,6 +9,9 @@ using UnityEngine;
 /// the ground, Rock/Designated a raised block, Entrance a slab with a simple box-built door.
 /// Lit (ticket #75): every box is a URP Lit surface, one shared material per color, casting and receiving
 /// shadows, so faces shade from the scene's light instead of baked tints.
+/// Fog of war (#131): with a FogOfWar wired, an unexplored tile renders as a uniform dark block at rock height
+/// whatever its state (no door), so the unexplored region is one dark mass; explored tiles render by state as before.
+/// Without one, every tile is explored.
 /// </summary>
 public class BoardRenderer : MonoBehaviour
 {
@@ -18,6 +21,7 @@ public class BoardRenderer : MonoBehaviour
 
     [Header("References")]
     [SerializeField] private DungeonBoard dungeonBoard;
+    [SerializeField] private FogOfWar fogOfWar; // Optional (#131): unwired, everything renders as explored
 
     [Header("Tile Shapes")]
     [SerializeField] private float rockHeight = 0.6f;     // Rock and designated blocks, in tiles
@@ -31,6 +35,7 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private Color doorPanelColor = new Color(0.72f, 0.46f, 0.22f, 1f);  // Warm wood, lighter than Floor
     [SerializeField] private Color doorFrameColor = new Color(0.16f, 0.09f, 0.04f, 1f);  // Near-black frame and lintel
     [SerializeField] private Color doorIronColor = new Color(0.20f, 0.20f, 0.22f, 1f);   // Bands and handle
+    [SerializeField] private Color fogColor = new Color(0.06f, 0.06f, 0.07f, 1f);        // Unexplored (#131): darker than rock, one tone for every state
 
     [Header("Door (Placeholder Art)")]
     [SerializeField] private float doorHeight = 0.9f;  // Taller than the rock so the entrance reads from afar
@@ -40,6 +45,21 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private float surfaceSmoothness = 0f; // Lit materials: matte rock and earth (no highlights, no reflections)
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
+
+    /// <summary>The fog this view follows (#131). Setting it moves the reveal subscription and restyles built views.</summary>
+    public FogOfWar Fog
+    {
+        get => fogOfWar;
+        set
+        {
+            if (fogOfWar == value) return;
+            UnsubscribeFog();
+            fogOfWar = value;
+            if (isActiveAndEnabled) SubscribeFog();
+            if (tileViews != null) RenderFullBoard();
+        }
+    }
+
     public float RockHeight { get => rockHeight; set => rockHeight = value; }
     public float FloorThickness => floorThickness;
     public float OverlayLift => overlayLift;
@@ -77,6 +97,7 @@ public class BoardRenderer : MonoBehaviour
         {
             dungeonBoard.OnTileChanged += HandleTileChanged;
         }
+        SubscribeFog();
     }
 
     private void OnDisable()
@@ -85,6 +106,20 @@ public class BoardRenderer : MonoBehaviour
         {
             dungeonBoard.OnTileChanged -= HandleTileChanged;
         }
+        UnsubscribeFog();
+    }
+
+    // Unsubscribe first so a repeated OnEnable (or a Fog set while enabled) never doubles the handler.
+    private void SubscribeFog()
+    {
+        if (fogOfWar == null) return;
+        fogOfWar.TileRevealed -= HandleTileRevealed;
+        fogOfWar.TileRevealed += HandleTileRevealed;
+    }
+
+    private void UnsubscribeFog()
+    {
+        if (fogOfWar != null) fogOfWar.TileRevealed -= HandleTileRevealed;
     }
 
     private void Start()
@@ -126,9 +161,26 @@ public class BoardRenderer : MonoBehaviour
         }
     }
 
-    /// <summary>Height of a tile's top surface: the block top for raised tiles, the ground (0) otherwise.</summary>
+    // ---- fog (#131): explored and state are independent inputs to one style ----
+
+    /// <summary>A tile's shape given whether it's explored: unexplored is the fog block at rock height, whatever the state.</summary>
+    public TileShape ShapeFor(TileState state, bool explored) => ShapeFor(explored ? state : TileState.Rock);
+
+    /// <summary>A tile's color given whether it's explored: unexplored is the one fog color, whatever the state.</summary>
+    public Color ColorFor(TileState state, bool explored) => explored ? ColorFor(state) : fogColor;
+
+    /// <summary>Whether the tile shows the door: only an explored Entrance (the fog hides the door entirely).</summary>
+    public static bool ShowsDoor(TileState state, bool explored) => explored && state == TileState.Entrance;
+
+    /// <summary>True when the player has seen the tile (always, without a FogOfWar).</summary>
+    public bool IsExplored(int x, int y) => FogOfWar.IsSeen(fogOfWar, new Vector2Int(x, y));
+
+    // What the tile looks like from outside: a raised block for Rock/Designated, and for every unexplored tile.
+    private bool RendersRaised(int x, int y) => IsRaised(dungeonBoard.GetTile(x, y)) || !IsExplored(x, y);
+
+    /// <summary>Height of a tile's top surface: the block top for raised tiles (and fog), the ground (0) otherwise.</summary>
     public float GetTileSurfaceHeight(int x, int y) =>
-        dungeonBoard != null && dungeonBoard.IsInBounds(x, y) && IsRaised(dungeonBoard.GetTile(x, y)) ? rockHeight : 0f;
+        dungeonBoard != null && dungeonBoard.IsInBounds(x, y) && RendersRaised(x, y) ? rockHeight : 0f;
 
     // ---- views ----
 
@@ -152,18 +204,20 @@ public class BoardRenderer : MonoBehaviour
         if (!dungeonBoard.IsInBounds(x, y)) return;
 
         TileState state = dungeonBoard.GetTile(x, y);
-        TileShape shape = ShapeFor(state);
+        bool explored = IsExplored(x, y);
+        TileShape shape = ShapeFor(state, explored);
         Vector3 center = GetTileCenterWorldPosition(x, y);
 
         GameObject view = tileViews[x, y];
         view.transform.position = new Vector3(center.x, shape.CenterY, center.z);
         view.transform.localScale = shape.Scale;
-        view.GetComponent<MeshRenderer>().sharedMaterial = MaterialFor(ColorFor(state));
+        view.GetComponent<MeshRenderer>().sharedMaterial = MaterialFor(ColorFor(state, explored));
 
+        // The door is built on first sight of an explored Entrance and only shown while it is one.
         Vector2Int tile = new Vector2Int(x, y);
-        bool isEntrance = state == TileState.Entrance;
-        if (isEntrance && !doors.ContainsKey(tile)) doors[tile] = CreateDoor(center);
-        if (doors.TryGetValue(tile, out GameObject door)) door.SetActive(isEntrance);
+        bool showsDoor = ShowsDoor(state, explored);
+        if (showsDoor && !doors.ContainsKey(tile)) doors[tile] = CreateDoor(center);
+        if (doors.TryGetValue(tile, out GameObject door)) door.SetActive(showsDoor);
     }
 
     /// <summary>The tile's view object (its box), or null before RenderFullBoard / out of bounds.</summary>
@@ -195,6 +249,11 @@ public class BoardRenderer : MonoBehaviour
     private void HandleTileChanged(int x, int y, TileState newState)
     {
         RefreshTile(x, y);
+    }
+
+    private void HandleTileRevealed(Vector2Int tile)
+    {
+        RefreshTile(tile.x, tile.y);
     }
 
     private void EnsureViews()
@@ -341,6 +400,7 @@ public class BoardRenderer : MonoBehaviour
     /// Picks the tile a screen ray actually lands on. A plain ground raycast lands behind a raised block (it
     /// passes over the block's top to y = 0), so this walks the ray from the block-top plane down to the ground
     /// and returns the first point inside a raised tile's column — its top or near face — else the ground hit.
+    /// Fogged tiles are raised columns here as they are on screen (#131), so picking lands where the eye does.
     /// The result is a ground-plane point inside the picked tile, ready for WorldToBoardCoords.
     /// </summary>
     public bool RaycastBoard(Ray ray, out Vector3 groundPoint)
@@ -354,7 +414,7 @@ public class BoardRenderer : MonoBehaviour
         {
             Vector3 p = ray.GetPoint(Mathf.Lerp(tTop, tGround, i / (float)PickSamples));
             Vector2Int tile = WorldToBoardCoords(p);
-            if (dungeonBoard.IsInBounds(tile.x, tile.y) && IsRaised(dungeonBoard.GetTile(tile.x, tile.y)))
+            if (dungeonBoard.IsInBounds(tile.x, tile.y) && RendersRaised(tile.x, tile.y))
             {
                 groundPoint = new Vector3(p.x, 0f, p.z);
                 return true;

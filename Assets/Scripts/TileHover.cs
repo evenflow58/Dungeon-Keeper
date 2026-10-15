@@ -9,6 +9,7 @@ public class TileHover : MonoBehaviour
     [SerializeField] private DungeonBoard dungeonBoard;
     [SerializeField] private BoardRenderer boardRenderer;
     [SerializeField] private Camera mainCamera;
+    [SerializeField] private FogOfWar fogOfWar; // Optional (#131): unwired, every tile counts as seen
 
     [Header("Highlight")]
     [SerializeField] private Color highlightColor = new Color(1f, 1f, 1f, 0.35f);
@@ -19,6 +20,7 @@ public class TileHover : MonoBehaviour
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
     public Camera MainCamera { get => mainCamera; set => mainCamera = value; }
+    public FogOfWar Fog { get => fogOfWar; set => fogOfWar = value; }
 
     private SpriteRenderer highlightSprite;
     private Canvas tooltipCanvas;
@@ -156,10 +158,22 @@ public class TileHover : MonoBehaviour
         highlightSprite.transform.position = new Vector3(center.x, surfaceY, center.z);
         highlightSprite.enabled = true;
 
-        if (tooltipText != null) tooltipText.text = FormatTileLabel(state, coords.x, coords.y);
+        // Unexplored (#131): the highlight still marks the position, but no tooltip, so hovering can't probe the fog.
+        string label = TooltipLabel(fogOfWar, state, coords);
+        if (label == null)
+        {
+            tooltipCanvas?.gameObject.SetActive(false);
+            return;
+        }
+
+        if (tooltipText != null) tooltipText.text = label;
         PositionTooltip(mouseScreen);
         tooltipCanvas?.gameObject.SetActive(true);
     }
+
+    /// <summary>The hover tooltip for a tile, or null for none: an unexplored tile shows nothing (#131).</summary>
+    public static string TooltipLabel(FogOfWar fog, TileState state, Vector2Int tile) =>
+        FogOfWar.IsSeen(fog, tile) ? FormatTileLabel(state, tile.x, tile.y) : null;
 
     private void SetHoverActive(bool active)
     {

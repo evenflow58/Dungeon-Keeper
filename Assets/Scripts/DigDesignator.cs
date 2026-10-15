@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -9,6 +10,7 @@ public class DigDesignator : MonoBehaviour
     [SerializeField] private DungeonBoard dungeonBoard;
     [SerializeField] private BoardRenderer boardRenderer;
     [SerializeField] private Camera mainCamera;
+    [SerializeField] private FogOfWar fogOfWar; // Optional (#131): unwired, every tile counts as seen
 
     [Header("Visual")]
     [SerializeField] private Color previewColor = new Color(0.85f, 0.65f, 0.15f, 0.35f);
@@ -16,6 +18,7 @@ public class DigDesignator : MonoBehaviour
     public DungeonBoard Board       { get => dungeonBoard;  set => dungeonBoard = value; }
     public BoardRenderer Renderer   { get => boardRenderer; set => boardRenderer = value; }
     public Camera        MainCamera { get => mainCamera;    set => mainCamera = value; }
+    public FogOfWar      Fog        { get => fogOfWar;      set => fogOfWar = value; }
 
     public enum DesignateMode { Designate, Clear }
 
@@ -33,7 +36,14 @@ public class DigDesignator : MonoBehaviour
     private Vector2Int dragCurrent;
 
     // ---- preview ----
+    // Clear drags show one rect (previewSprite). Designate drags tint exactly the tiles a release would designate
+    // (#131), one pooled quad per eligible tile, from the same EligibleTiles that ApplyRect uses.
     private SpriteRenderer previewSprite;
+    private readonly List<SpriteRenderer> tilePreviews = new List<SpriteRenderer>();
+    private readonly List<Vector2Int> previewTiles = new List<Vector2Int>();
+
+    /// <summary>The tiles the Designate preview currently tints (empty when it's hidden or the drag is a Clear).</summary>
+    public IReadOnlyList<Vector2Int> PreviewTiles => previewTiles;
 
     // ---- lifecycle ----
 
@@ -58,13 +68,15 @@ public class DigDesignator : MonoBehaviour
 
         // Disabled mid-drag (e.g. placement mode entered): drop the drag so it can't resume later.
         isDragging = false;
-        if (previewSprite != null) previewSprite.enabled = false;
+        HidePreview();
     }
 
     private void OnDestroy()
     {
         input?.Dispose();
         if (previewSprite != null) Destroy(previewSprite.gameObject);
+        foreach (SpriteRenderer quad in tilePreviews) if (quad != null) Destroy(quad.gameObject);
+        tilePreviews.Clear();
     }
 
     private void Start()
@@ -169,15 +181,24 @@ public class DigDesignator : MonoBehaviour
     private void UpdatePreview()
     {
         if (previewSprite == null) return;
-        if (!dragEnteredBoard) { previewSprite.enabled = false; return; }
+        if (!dragEnteredBoard) { HidePreview(); return; }
 
         RectInt rect = NormalizeRect(dragAnchor, dragCurrent);
+        // Flat over the rock tops it designates (at ground level it would be hidden inside the blocks).
+        float previewY = boardRenderer.RockHeight + boardRenderer.OverlayLift;
+
+        if (dragMode == DesignateMode.Designate)
+        {
+            previewSprite.enabled = false;
+            ShowTilePreview(rect, previewY);
+            return;
+        }
+
+        HideTilePreview();
         Vector3 minCenter = boardRenderer.GetTileCenterWorldPosition(rect.x, rect.y);
         Vector3 maxCenter = boardRenderer.GetTileCenterWorldPosition(rect.xMax - 1, rect.yMax - 1);
         Vector3 center    = (minCenter + maxCenter) * 0.5f;
 
-        // Flat over the rock tops it designates (at ground level it would be hidden inside the blocks).
-        float previewY = boardRenderer.RockHeight + boardRenderer.OverlayLift;
         previewSprite.transform.position   = new Vector3(center.x, previewY, center.z);
         previewSprite.transform.localScale = new Vector3(rect.width, rect.height, 1f);
         previewSprite.enabled = true;
@@ -188,11 +209,50 @@ public class DigDesignator : MonoBehaviour
         if (apply && dragEnteredBoard)
         {
             RectInt rect = NormalizeRect(dragAnchor, dragCurrent);
-            ApplyRect(dungeonBoard, rect, dragMode);
+            ApplyRect(dungeonBoard, fogOfWar, rect, dragMode);
         }
 
         isDragging = false;
+        HidePreview();
+    }
+
+    // Re-evaluated every frame of the drag: the imp can reveal tiles under a live rect.
+    private void ShowTilePreview(RectInt rect, float previewY)
+    {
+        EligibleTiles(dungeonBoard, fogOfWar, rect, DesignateMode.Designate, previewTiles);
+        for (int i = 0; i < previewTiles.Count; i++)
+        {
+            if (i == tilePreviews.Count) tilePreviews.Add(CreateTileQuad());
+            Vector3 center = boardRenderer.GetTileCenterWorldPosition(previewTiles[i].x, previewTiles[i].y);
+            tilePreviews[i].transform.position = new Vector3(center.x, previewY, center.z);
+            tilePreviews[i].enabled = true;
+        }
+        for (int i = previewTiles.Count; i < tilePreviews.Count; i++) tilePreviews[i].enabled = false;
+    }
+
+    // One tile's tint: the rect preview's sprite and color at unit scale.
+    private SpriteRenderer CreateTileQuad()
+    {
+        var go = new GameObject("DigPreviewTile");
+        go.transform.rotation = previewSprite.transform.rotation;
+        var quad = go.AddComponent<SpriteRenderer>();
+        quad.sprite = previewSprite.sprite;
+        quad.color = previewColor;
+        return quad;
+    }
+
+    // The quads are scene roots: on a scene teardown (exiting Play, Play Again's reload) Unity may destroy them
+    // before this component's OnDisable runs, so each is null-checked like previewSprite.
+    private void HideTilePreview()
+    {
+        previewTiles.Clear();
+        foreach (SpriteRenderer quad in tilePreviews) if (quad != null) quad.enabled = false;
+    }
+
+    private void HidePreview()
+    {
         if (previewSprite != null) previewSprite.enabled = false;
+        HideTilePreview();
     }
 
     // ---- pure logic (testable) ----
@@ -214,27 +274,46 @@ public class DigDesignator : MonoBehaviour
         );
     }
 
-    public static int ApplyRect(DungeonBoard board, RectInt rect, DesignateMode mode)
+    /// <summary>
+    /// Whether a drag in this mode changes the tile: Designate takes seen Rock (#131: unexplored rock is skipped),
+    /// Clear takes Designated tiles (never fogged: designating needs sight, and nothing re-fogs).
+    /// </summary>
+    public static bool IsEligible(DungeonBoard board, FogOfWar fog, Vector2Int tile, DesignateMode mode)
     {
-        int changed = 0;
+        if (!board.IsInBounds(tile.x, tile.y)) return false;
+        TileState state = board.GetTile(tile.x, tile.y);
+        return mode == DesignateMode.Designate
+            ? state == TileState.Rock && FogOfWar.IsSeen(fog, tile)
+            : state == TileState.Designated;
+    }
+
+    /// <summary>
+    /// The tiles in rect a release would change, in x-then-y order, into results (cleared first). The one
+    /// eligibility seam: ApplyRect changes exactly these and the Designate preview tints exactly these.
+    /// </summary>
+    public static void EligibleTiles(DungeonBoard board, FogOfWar fog, RectInt rect, DesignateMode mode, List<Vector2Int> results)
+    {
+        results.Clear();
         for (int x = rect.x; x < rect.xMax; x++)
         {
             for (int y = rect.y; y < rect.yMax; y++)
             {
-                if (!board.IsInBounds(x, y)) continue;
-                TileState state = board.GetTile(x, y);
-                if (mode == DesignateMode.Designate && state == TileState.Rock)
-                {
-                    board.SetTile(x, y, TileState.Designated);
-                    changed++;
-                }
-                else if (mode == DesignateMode.Clear && state == TileState.Designated)
-                {
-                    board.SetTile(x, y, TileState.Rock);
-                    changed++;
-                }
+                var tile = new Vector2Int(x, y);
+                if (IsEligible(board, fog, tile, mode)) results.Add(tile);
             }
         }
-        return changed;
+    }
+
+    /// <summary>ApplyRect without fog: every tile counts as seen (the game before #131, and fogless staging).</summary>
+    public static int ApplyRect(DungeonBoard board, RectInt rect, DesignateMode mode) => ApplyRect(board, null, rect, mode);
+
+    /// <summary>Designates (or clears) the eligible tiles in rect and returns how many changed.</summary>
+    public static int ApplyRect(DungeonBoard board, FogOfWar fog, RectInt rect, DesignateMode mode)
+    {
+        var tiles = new List<Vector2Int>();
+        EligibleTiles(board, fog, rect, mode, tiles);
+        TileState target = mode == DesignateMode.Designate ? TileState.Designated : TileState.Rock;
+        foreach (Vector2Int tile in tiles) board.SetTile(tile.x, tile.y, target);
+        return tiles.Count;
     }
 }

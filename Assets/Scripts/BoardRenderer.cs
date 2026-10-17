@@ -12,6 +12,8 @@ using UnityEngine;
 /// Fog of war (#131): with a FogOfWar wired, an unexplored tile renders as a uniform dark block at rock height
 /// whatever its state (no door), so the unexplored region is one dark mass; explored tiles render by state as before.
 /// Without one, every tile is explored.
+/// Tile identity (#132): explored Rock is tinted by its material (TileIdentity, from the ImpDigger's band seam):
+/// stone keeps rockColor, glimmerstone and deepstone get their own rock tints. Designated keeps its amber.
 /// </summary>
 public class BoardRenderer : MonoBehaviour
 {
@@ -22,6 +24,7 @@ public class BoardRenderer : MonoBehaviour
     [Header("References")]
     [SerializeField] private DungeonBoard dungeonBoard;
     [SerializeField] private FogOfWar fogOfWar; // Optional (#131): unwired, everything renders as explored
+    [SerializeField] private ImpDigger impDigger; // Optional (#132): the band seam rock is tinted by; unwired, all rock is rockColor
 
     [Header("Tile Shapes")]
     [SerializeField] private float rockHeight = 0.6f;     // Rock and designated blocks, in tiles
@@ -36,6 +39,8 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private Color doorFrameColor = new Color(0.16f, 0.09f, 0.04f, 1f);  // Near-black frame and lintel
     [SerializeField] private Color doorIronColor = new Color(0.20f, 0.20f, 0.22f, 1f);   // Bands and handle
     [SerializeField] private Color fogColor = new Color(0.06f, 0.06f, 0.07f, 1f);        // Unexplored (#131): darker than rock, one tone for every state
+    [SerializeField] private Color glimmerstoneRockColor = new Color(0.45f, 0.38f, 0.55f, 1f); // #132: rock of the shallow band, a rockier cousin of the catalog lavender
+    [SerializeField] private Color deepstoneRockColor = new Color(0.22f, 0.26f, 0.36f, 1f);    // #132: rock of the deep band, a rockier cousin of the catalog slate
 
     [Header("Door (Placeholder Art)")]
     [SerializeField] private float doorHeight = 0.9f;  // Taller than the rock so the entrance reads from afar
@@ -45,6 +50,17 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private float surfaceSmoothness = 0f; // Lit materials: matte rock and earth (no highlights, no reflections)
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
+
+    /// <summary>The digger whose band seam names each rock's material (#132). Setting it restyles built views.</summary>
+    public ImpDigger Digger
+    {
+        get => impDigger;
+        set
+        {
+            impDigger = value;
+            if (tileViews != null) RenderFullBoard();
+        }
+    }
 
     /// <summary>The fog this view follows (#131). Setting it moves the reveal subscription and restyles built views.</summary>
     public FogOfWar Fog
@@ -169,6 +185,33 @@ public class BoardRenderer : MonoBehaviour
     /// <summary>A tile's color given whether it's explored: unexplored is the one fog color, whatever the state.</summary>
     public Color ColorFor(TileState state, bool explored) => explored ? ColorFor(state) : fogColor;
 
+    // ---- identity (#132): what an explored tile is made of ----
+
+    /// <summary>The tile's identity (state, and for rock its material) from the board and the wired digger.</summary>
+    public TileIdentity IdentityAt(int x, int y) => TileIdentity.Of(dungeonBoard, impDigger, new Vector2Int(x, y));
+
+    /// <summary>
+    /// A tile's color from its identity: unexplored is the fog color whatever it is; explored Rock is its material's
+    /// rock tint (stone when the material is unknown); every other state is its state color, so Designated stays
+    /// amber in every band (designation is an order, not a material).
+    /// </summary>
+    public Color ColorFor(TileIdentity identity, bool explored)
+    {
+        if (!explored) return fogColor;
+        return identity.State == TileState.Rock ? RockColorFor(identity.Material ?? MaterialType.Stone) : ColorFor(identity.State);
+    }
+
+    /// <summary>The rock tint for a material: stone is rockColor, the shallow and deep bands their own tints.</summary>
+    public Color RockColorFor(MaterialType material)
+    {
+        switch (material)
+        {
+            case MaterialType.Glimmerstone: return glimmerstoneRockColor;
+            case MaterialType.Deepstone:    return deepstoneRockColor;
+            default:                        return rockColor;
+        }
+    }
+
     /// <summary>Whether the tile shows the door: only an explored Entrance (the fog hides the door entirely).</summary>
     public static bool ShowsDoor(TileState state, bool explored) => explored && state == TileState.Entrance;
 
@@ -211,7 +254,7 @@ public class BoardRenderer : MonoBehaviour
         GameObject view = tileViews[x, y];
         view.transform.position = new Vector3(center.x, shape.CenterY, center.z);
         view.transform.localScale = shape.Scale;
-        view.GetComponent<MeshRenderer>().sharedMaterial = MaterialFor(ColorFor(state, explored));
+        view.GetComponent<MeshRenderer>().sharedMaterial = MaterialFor(ColorFor(IdentityAt(x, y), explored));
 
         // The door is built on first sight of an explored Entrance and only shown while it is one.
         Vector2Int tile = new Vector2Int(x, y);

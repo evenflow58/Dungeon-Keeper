@@ -10,17 +10,22 @@ public class TileHover : MonoBehaviour
     [SerializeField] private BoardRenderer boardRenderer;
     [SerializeField] private Camera mainCamera;
     [SerializeField] private FogOfWar fogOfWar; // Optional (#131): unwired, every tile counts as seen
+    [SerializeField] private ImpDigger impDigger; // Optional (#132): names rock's material; unwired, labels as before
+    [SerializeField] private Stockpile stockpile; // Optional (#132): the catalog's display names; unwired, enum names
 
     [Header("Highlight")]
     [SerializeField] private Color highlightColor = new Color(1f, 1f, 1f, 0.35f);
 
     [Header("Tooltip")]
     [SerializeField] private Vector2 tooltipOffset = new Vector2(15f, -30f);
+    [SerializeField] private float tooltipMinWidth = 160f; // Grows past this to fit longer labels (#132: "Designated — Glimmerstone (x, y)")
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
     public Camera MainCamera { get => mainCamera; set => mainCamera = value; }
     public FogOfWar Fog { get => fogOfWar; set => fogOfWar = value; }
+    public ImpDigger Digger { get => impDigger; set => impDigger = value; }
+    public Stockpile Stockpile { get => stockpile; set => stockpile = value; }
 
     private SpriteRenderer highlightSprite;
     private Canvas tooltipCanvas;
@@ -100,7 +105,7 @@ public class TileHover : MonoBehaviour
         tooltipRect = panelGo.GetComponent<RectTransform>();
         tooltipRect.anchorMin = tooltipRect.anchorMax = new Vector2(0f, 0f);
         tooltipRect.pivot = new Vector2(0f, 1f);
-        tooltipRect.sizeDelta = new Vector2(160f, 28f);
+        tooltipRect.sizeDelta = new Vector2(tooltipMinWidth, 28f);
 
         var textGo = new GameObject("TooltipText");
         textGo.transform.SetParent(panelGo.transform, false);
@@ -109,6 +114,7 @@ public class TileHover : MonoBehaviour
         tooltipText.fontSize = 13;
         tooltipText.color = Color.white;
         tooltipText.alignment = TextAnchor.MiddleCenter;
+        tooltipText.horizontalOverflow = HorizontalWrapMode.Overflow; // One line; the panel is sized to it
         var textRect = textGo.GetComponent<RectTransform>();
         textRect.anchorMin = Vector2.zero;
         textRect.anchorMax = Vector2.one;
@@ -150,7 +156,6 @@ public class TileHover : MonoBehaviour
             return;
         }
 
-        TileState state = dungeonBoard.GetTile(coords.x, coords.y);
         Vector3 center = boardRenderer.GetTileCenterWorldPosition(coords.x, coords.y);
 
         // Flat on the tile's top surface (a block's top or the floor), just above it.
@@ -159,21 +164,40 @@ public class TileHover : MonoBehaviour
         highlightSprite.enabled = true;
 
         // Unexplored (#131): the highlight still marks the position, but no tooltip, so hovering can't probe the fog.
-        string label = TooltipLabel(fogOfWar, state, coords);
+        string label = TooltipLabel(fogOfWar, TileIdentity.Of(dungeonBoard, impDigger, coords), coords, stockpile);
         if (label == null)
         {
             tooltipCanvas?.gameObject.SetActive(false);
             return;
         }
 
-        if (tooltipText != null) tooltipText.text = label;
+        SetTooltipText(label);
         PositionTooltip(mouseScreen);
         tooltipCanvas?.gameObject.SetActive(true);
     }
 
-    /// <summary>The hover tooltip for a tile, or null for none: an unexplored tile shows nothing (#131).</summary>
+    /// <summary>The hover tooltip for a tile known only by state (no material), or null for none (#131).</summary>
     public static string TooltipLabel(FogOfWar fog, TileState state, Vector2Int tile) =>
-        FogOfWar.IsSeen(fog, tile) ? FormatTileLabel(state, tile.x, tile.y) : null;
+        TooltipLabel(fog, new TileIdentity(state, null), tile, null);
+
+    /// <summary>
+    /// The hover tooltip for a tile, or null for none: an unexplored tile shows nothing (#131); a seen one names its
+    /// identity (#132). Rock names its material whether or not the stockpile has ever held it: discovery governs
+    /// menus, not what a seen tile is called.
+    /// </summary>
+    public static string TooltipLabel(FogOfWar fog, TileIdentity identity, Vector2Int tile, Stockpile stockpile) =>
+        FogOfWar.IsSeen(fog, tile) ? FormatTileLabel(identity, tile.x, tile.y, stockpile) : null;
+
+    // The label's width changes with the material name, so the panel follows the text (never narrower than before).
+    private void SetTooltipText(string label)
+    {
+        if (tooltipText == null) return;
+        tooltipText.text = label;
+        if (tooltipRect == null) return;
+        float textInsets = -tooltipText.rectTransform.offsetMax.x + tooltipText.rectTransform.offsetMin.x;
+        tooltipRect.sizeDelta = new Vector2(Mathf.Max(tooltipMinWidth, tooltipText.preferredWidth + textInsets),
+            tooltipRect.sizeDelta.y);
+    }
 
     private void SetHoverActive(bool active)
     {
@@ -228,4 +252,17 @@ public class TileHover : MonoBehaviour
 
     public static string FormatTileLabel(TileState state, int x, int y) =>
         $"{state} ({x}, {y})";
+
+    /// <summary>
+    /// A tile's label from its identity (#132): today's "State (x, y)", with rock's material inserted as
+    /// "Rock — Glimmerstone (x, y)". Each identity fact adds its own part here (the seam for later facts).
+    /// </summary>
+    public static string FormatTileLabel(TileIdentity identity, int x, int y, Stockpile stockpile) =>
+        identity.Material is MaterialType material
+            ? $"{identity.State} — {MaterialName(stockpile, material)} ({x}, {y})"
+            : FormatTileLabel(identity.State, x, y);
+
+    /// <summary>A material's catalog display name, or its enum name with no stockpile wired.</summary>
+    public static string MaterialName(Stockpile stockpile, MaterialType material) =>
+        stockpile != null ? stockpile.DisplayName(material) : material.ToString();
 }

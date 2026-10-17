@@ -574,6 +574,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BoardRenderer
   dungeonBoard: {fileID: 565044520}
   fogOfWar: {fileID: 565044536}
+  impDigger: {fileID: 71735947}
   rockHeight: 0.6
   floorThickness: 0.1
   overlayLift: 0.01
@@ -584,6 +585,8 @@ MonoBehaviour:
   doorFrameColor: {r: 0.16, g: 0.09, b: 0.04, a: 1}
   doorIronColor: {r: 0.2, g: 0.2, b: 0.22, a: 1}
   fogColor: {r: 0.06, g: 0.06, b: 0.07, a: 1}
+  glimmerstoneRockColor: {r: 0.45, g: 0.38, b: 0.55, a: 1}
+  deepstoneRockColor: {r: 0.22, g: 0.26, b: 0.36, a: 1}
   doorHeight: 0.9
   doorPostWidth: 0.12
   surfaceSmoothness: 0
@@ -634,8 +637,11 @@ MonoBehaviour:
   boardRenderer: {fileID: 565044519}
   mainCamera: {fileID: 330585545}
   fogOfWar: {fileID: 565044536}
+  impDigger: {fileID: 71735947}
+  stockpile: {fileID: 565044532}
   highlightColor: {r: 1, g: 1, b: 1, a: 0.35}
   tooltipOffset: {x: 15, y: -30}
+  tooltipMinWidth: 160
 --- !u!114 &565044523
 MonoBehaviour:
   m_ObjectHideFlags: 0

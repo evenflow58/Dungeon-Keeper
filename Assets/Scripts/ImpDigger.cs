@@ -182,11 +182,19 @@ public class ImpDigger : MonoBehaviour
     /// </summary>
     public bool TryGetTileYield(Vector2Int tile, out MaterialType material, out int amount)
     {
-        material = dungeonBoard != null ? MaterialAtDepth(DepthOf(dungeonBoard, tile), glimmerstoneBandRows, deepstoneDepthThreshold)
-            : MaterialType.Stone;
+        material = MaterialOf(tile);
         amount = stoneYieldPerTile;
         return amount > 0;
     }
+
+    /// <summary>
+    /// The material a tile is made of: its band by depth, from this digger's serialized band values (stone without a
+    /// board). The one answer to "what is this rock" (#132): TryGetTileYield pays it, and the board view and the
+    /// hover tooltip show it (TileIdentity), so what you see is what a dig yields.
+    /// </summary>
+    public MaterialType MaterialOf(Vector2Int tile) =>
+        dungeonBoard != null ? MaterialAtDepth(DepthOf(dungeonBoard, tile), glimmerstoneBandRows, deepstoneDepthThreshold)
+            : MaterialType.Stone;
 
     /// <summary>
     /// A tile's depth on the entrance axis (#114): 0 on the door's row (the board's south edge, y = height − 1),

@@ -235,6 +235,7 @@ MonoBehaviour:
   imp: {fileID: 71735945}
   placementManager: {fileID: 565044525}
   stockpile: {fileID: 565044532}
+  powerGrid: {fileID: 565044537}
   digSecondsPerTile: 2.5
   stoneYieldPerTile: 1
   glimmerstoneBandRows: 6
@@ -553,6 +554,8 @@ GameObject:
   - component: {fileID: 565044534}
   - component: {fileID: 565044535}
   - component: {fileID: 565044536}
+  - component: {fileID: 565044537}
+  - component: {fileID: 565044538}
   m_Layer: 0
   m_Name: DungeonManager
   m_TagString: Untagged
@@ -575,6 +578,7 @@ MonoBehaviour:
   dungeonBoard: {fileID: 565044520}
   fogOfWar: {fileID: 565044536}
   impDigger: {fileID: 71735947}
+  powerGrid: {fileID: 565044537}
   rockHeight: 0.6
   floorThickness: 0.1
   overlayLift: 0.01
@@ -587,6 +591,10 @@ MonoBehaviour:
   fogColor: {r: 0.06, g: 0.06, b: 0.07, a: 1}
   glimmerstoneRockColor: {r: 0.45, g: 0.38, b: 0.55, a: 1}
   deepstoneRockColor: {r: 0.22, g: 0.26, b: 0.36, a: 1}
+  conduitColor: {r: 0.8, g: 0.48, b: 0.22, a: 1}
+  pendingConduitColor: {r: 0.95, g: 0.7, b: 0.4, a: 0.45}
+  conduitWidth: 0.16
+  conduitThickness: 0.012
   doorHeight: 0.9
   doorPostWidth: 0.12
   surfaceSmoothness: 0
@@ -675,6 +683,7 @@ MonoBehaviour:
   boardRenderer: {fileID: 565044519}
   imp: {fileID: 71735945}
   digDesignator: {fileID: 565044523}
+  conduitDesignator: {fileID: 565044538}
   placementManager: {fileID: 565044525}
   mainCamera: {fileID: 330585545}
   validPreviewColor: {r: 0.4, g: 0.9, b: 0.4, a: 0.35}
@@ -696,9 +705,11 @@ MonoBehaviour:
   dungeonBoard: {fileID: 565044520}
   boardRenderer: {fileID: 565044519}
   stockpile: {fileID: 565044532}
+  powerGrid: {fileID: 565044537}
   lairCotColor: {r: 0.4, g: 0.6, b: 0.9, a: 1}
   mushroomPlotColor: {r: 0.35, g: 0.75, b: 0.35, a: 1}
   spikeTrapColor: {r: 0.55, g: 0.55, b: 0.6, a: 1}
+  impWheelColor: {r: 0.62, g: 0.44, b: 0.26, a: 1}
   placeableSize: 0.8
   mushroomGrowthSecondsPerFood: 30
   mushroomCapacity: 5
@@ -706,6 +717,7 @@ MonoBehaviour:
   lairCotBuildSeconds: 4
   mushroomPlotBuildSeconds: 6
   spikeTrapBuildSeconds: 5
+  impWheelBuildSeconds: 6
   costs:
   - type: 0
     material: 0
@@ -734,6 +746,26 @@ MonoBehaviour:
   - type: 2
     material: 2
     amount: 2
+  - type: 3
+    material: 0
+    amount: 4
+  - type: 3
+    material: 1
+    amount: 4
+  - type: 3
+    material: 2
+    amount: 4
+  power:
+  - type: 3
+    role: 1
+    watts: 40
+    needsOperator: 1
+    poweredRearmSeconds: 0
+  - type: 2
+    role: 2
+    watts: 10
+    needsOperator: 0
+    poweredRearmSeconds: 4
   properties:
   - type: 0
     material: 0
@@ -1041,6 +1073,39 @@ MonoBehaviour:
   dungeonBoard: {fileID: 565044520}
   imp: {fileID: 71735945}
   impSightRange: 3
+--- !u!114 &565044537
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cbfc301b55a17854eb277fddc0ab1c31, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::PowerGrid
+  dungeonBoard: {fileID: 565044520}
+  wireSecondsPerTile: 0.5
+--- !u!114 &565044538
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c5335a419f91fa74cbbca7ed5f16365d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::ConduitDesignator
+  dungeonBoard: {fileID: 565044520}
+  boardRenderer: {fileID: 565044519}
+  mainCamera: {fileID: 330585545}
+  powerGrid: {fileID: 565044537}
+  fogOfWar: {fileID: 565044536}
+  layPreviewColor: {r: 0.95, g: 0.65, b: 0.25, a: 0.45}
+  removePreviewColor: {r: 0.9, g: 0.3, b: 0.3, a: 0.45}
 --- !u!1 &708604853
 GameObject:
   m_ObjectHideFlags: 0

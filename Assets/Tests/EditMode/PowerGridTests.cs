@@ -632,6 +632,64 @@ public class PowerGridTests
         Assert.IsTrue(node.IsConnected);
     }
 
+    // ---- building over conduit (Oct 18 amendment): conduit is not occupancy ----
+
+    [Test]
+    public void Placement_OverBuiltOrPendingConduit_IsValid_ExactlyLikeBareFloor()
+    {
+        Vector2Int built = T(22, 16), pending = T(23, 16), bare = T(24, 17);
+        BuildConduit(built);
+        grid.ApplyRect(null, new RectInt(pending.x, pending.y, 1, 1), PowerGrid.ConduitMode.Lay);
+        Assert.IsTrue(grid.IsPending(pending));
+
+        foreach (Vector2Int tile in new[] { built, pending })
+        {
+            Assert.AreEqual(manager.CanPlace(bare, ImpTile), manager.CanPlace(tile, ImpTile), $"{tile} reads as bare Floor");
+            Assert.IsTrue(manager.CanPlace(tile, ImpTile), $"{tile}");
+            Assert.IsTrue(manager.AnyPlaceable(new RectInt(tile.x, tile.y, 1, 1), ImpTile), $"The preview at {tile} is valid");
+        }
+
+        // Every type, the rect path the drag uses: one cot on the built tile, one wheel on the pending one.
+        Assert.AreEqual(1, manager.ApplyRect(PlaceableType.LairCot, new RectInt(built.x, built.y, 1, 1), ImpTile));
+        Assert.AreEqual(1, manager.ApplyRect(PlaceableType.ImpWheel, new RectInt(pending.x, pending.y, 1, 1), ImpTile));
+        foreach (PlaceableType type in new[] { PlaceableType.MushroomPlot, PlaceableType.SpikeTrap })
+        {
+            Vector2Int tile = type == PlaceableType.MushroomPlot ? T(25, 16) : T(26, 16);
+            BuildConduit(tile);
+            Assert.IsTrue(manager.TryPlace(type, tile, ImpTile, out _), $"{type} over built conduit");
+        }
+
+        Assert.IsTrue(grid.IsBuilt(built), "Placing leaves the conduit as it was");
+        Assert.IsTrue(grid.IsPending(pending), "Placing leaves a pending order pending");
+    }
+
+    [Test]
+    public void ANodeBuiltOverConduit_ConnectsThroughItsOwnTile()
+    {
+        UseUntendedProducer();
+        BuildConduit(WheelTile, LinkTile, TrapTile); // The run passes under both buildings
+        PowerNode wheel = PlaceBuiltNode(PlaceableType.ImpWheel, WheelTile);
+        PowerNode trap = PlaceBuiltNode(PlaceableType.SpikeTrap, TrapTile);
+
+        Assert.IsTrue(wheel.IsConnected && trap.IsConnected);
+        Assert.AreEqual(grid.GridAt(WheelTile), grid.GridAt(TrapTile), "One grid under both");
+        Assert.IsTrue(trap.IsPowered);
+    }
+
+    [Test]
+    public void PendingConduitUnderASite_StaysBuildable_TheImpWiresItFromBeside_AndTheBuildingConnects()
+    {
+        UseUntendedProducer();
+        grid.ApplyRect(null, new RectInt(22, 16, 2, 1), PowerGrid.ConduitMode.Lay);
+        Assert.IsTrue(manager.TryPlace(PlaceableType.ImpWheel, T(22, 16), ImpTile, out Placeable wheelSite), "A site on pending conduit");
+
+        StepUntil(() => grid.PendingCount == 0, 10f, "the run, including the tile under the site, wired");
+        Assert.IsTrue(grid.IsBuilt(T(22, 16)), "The site never blocked the tile");
+
+        wheelSite.CompleteConstruction();
+        Assert.IsTrue(wheelSite.GetComponent<PowerNode>().IsConnected, "Built over the wired run: on its grid");
+    }
+
     // ---- placed selection (Neutral only) ----
 
     [Test]

@@ -178,15 +178,16 @@ public class BuildRailTests
     [Test]
     public void Categories_AreInOrder_WithTodaysThreeTypes_AndMagicEmpty()
     {
+        // #142 migration: Power is seated between Defense and Magic (it holds the Imp Wheel; PowerGridTests pins it).
         CollectionAssert.AreEqual(
-            new[] { BuildCategory.Living, BuildCategory.Farming, BuildCategory.Defense, BuildCategory.Magic },
+            new[] { BuildCategory.Living, BuildCategory.Farming, BuildCategory.Defense, BuildCategory.Power, BuildCategory.Magic },
             BuildPresentation.CategoryOrder);
         CollectionAssert.AreEqual(new[] { PlaceableType.LairCot }, BuildPresentation.TypesInCategory(BuildCategory.Living));
         CollectionAssert.AreEqual(new[] { PlaceableType.MushroomPlot }, BuildPresentation.TypesInCategory(BuildCategory.Farming));
         CollectionAssert.AreEqual(new[] { PlaceableType.SpikeTrap }, BuildPresentation.TypesInCategory(BuildCategory.Defense));
         CollectionAssert.IsEmpty(BuildPresentation.TypesInCategory(BuildCategory.Magic));
         CollectionAssert.AreEqual(
-            new[] { BuildCategory.Living, BuildCategory.Farming, BuildCategory.Defense },
+            new[] { BuildCategory.Living, BuildCategory.Farming, BuildCategory.Defense, BuildCategory.Power },
             BuildPresentation.VisibleCategories(), "An empty category is not shown");
         Assert.AreEqual("FARM", BuildPresentation.RailLabel(BuildCategory.Farming));
         Assert.AreEqual("Farming", BuildPresentation.CategoryName(BuildCategory.Farming));
@@ -197,17 +198,19 @@ public class BuildRailTests
     [Test]
     public void VisibleEntries_AreDigThenTheNonEmptyCategories_ThenStock()
     {
-        // #126 migration: STOCK joins the rail after the categories (it was 4 entries).
+        // #126 migration: STOCK joins the rail after the categories (it was 4 entries). #142 migration: Power joins
+        // after Defense (5 → 6 entries).
         List<BuildRail.RailEntry> entries = BuildRail.VisibleEntries();
-        Assert.AreEqual(5, entries.Count, "DIG, Living, Farming, Defense, STOCK: no Magic");
+        Assert.AreEqual(6, entries.Count, "DIG, Living, Farming, Defense, Power, STOCK: no Magic");
         Assert.IsTrue(entries[0].isDig);
         Assert.IsFalse(entries[1].isDig);
         Assert.AreEqual(BuildCategory.Living, entries[1].category);
         Assert.AreEqual(BuildCategory.Farming, entries[2].category);
         Assert.AreEqual(BuildCategory.Defense, entries[3].category);
-        Assert.IsTrue(entries[4].isStock);
-        Assert.IsFalse(entries[4].isDig);
-        for (int i = 0; i < 4; i++) Assert.IsFalse(entries[i].isStock, $"Entry {i}");
+        Assert.AreEqual(BuildCategory.Power, entries[4].category);
+        Assert.IsTrue(entries[5].isStock);
+        Assert.IsFalse(entries[5].isDig);
+        for (int i = 0; i < 5; i++) Assert.IsFalse(entries[i].isStock, $"Entry {i}");
     }
 
     [Test]
@@ -227,7 +230,8 @@ public class BuildRailTests
         rail.ActivateEntry(2);
         controller.Select(PlaceableType.MushroomPlot);
         // #126 migration: index 4 (digit 5) is now STOCK, so "past the end" starts at 5. STOCK's digit is StockPanelTests'.
-        foreach (int beyond in new[] { 5, 6, -1 })
+        // #142 migration: Power takes index 4 and STOCK moves to 5, so "past the end" starts at 6.
+        foreach (int beyond in new[] { 6, 7, -1 })
         {
             Assert.IsFalse(rail.ActivateEntry(beyond), $"Index {beyond}");
             Assert.AreEqual(BuildCategory.Farming, rail.OpenCategory, "Nothing changed");

@@ -10,8 +10,9 @@ using UnityEngine.UI;
 /// API and paints from it. Presentation data comes from BuildPresentation. The armed type's description and its
 /// material choice are DetailCard's (#125). Below the categories, set apart, the STOCK entry opens StockPanel (#126);
 /// at most one of {a category's flyout, the STOCK panel} is open. Built in code like the rest of the chrome
-/// (own overlay Canvas, no scene-authored UI). Digits 1-6 activate the rail's visible entries in order, except while the
-/// player types into a field (TextInputFocus). Esc closes the flyout only from Neutral: while a tool is selected the controller owns the press, so one press
+/// (own overlay Canvas, no scene-authored UI). Digits 1-7 activate the rail's visible entries in order, except while the
+/// player types into a field (TextInputFocus). A flyout can also carry verb tiles before its type tiles (#142: Power's
+/// Lay conduit, which arms Wire mode). Esc closes the flyout only from Neutral: while a tool is selected the controller owns the press, so one press
 /// unwinds one level.
 /// </summary>
 [DisallowMultipleComponent]
@@ -89,6 +90,9 @@ public class BuildRail : MonoBehaviour
     private RectTransform[] tileRects;
     private Image[] tileImages;
     private Text[] tileCostLabels;
+    private BuildVerb[] verbTypes;            // #142: the verb tiles, in BuildPresentation order
+    private RectTransform[] verbRects;
+    private Image[] verbImages;
     private readonly List<Object> generatedAssets = new List<Object>(); // Icon textures and sprites, destroyed with the chrome
 
     // ---- lifecycle ----
@@ -166,7 +170,7 @@ public class BuildRail : MonoBehaviour
         }
     }
 
-    private const int RailActionCount = 6;
+    private const int RailActionCount = 7;
 
     private InputAction RailAction(int index)
     {
@@ -179,6 +183,7 @@ public class BuildRail : MonoBehaviour
             case 3: return input.Rail4;
             case 4: return input.Rail5;
             case 5: return input.Rail6;
+            case 6: return input.Rail7;
             default: return null;
         }
     }
@@ -249,7 +254,7 @@ public class BuildRail : MonoBehaviour
     public void OpenFlyout(BuildCategory category)
     {
         if (OpenCategory == category) return;
-        if (BuildPresentation.TypesInCategory(category).Count == 0) return;
+        if (BuildPresentation.TypesInCategory(category).Count == 0 && BuildPresentation.VerbsInCategory(category).Count == 0) return;
 
         CloseFlyout();
         if (stockPanel != null) stockPanel.Close(); // One open thing: the flyout or the STOCK panel
@@ -279,6 +284,17 @@ public class BuildRail : MonoBehaviour
         Repaint();
     }
 
+    /// <summary>A verb tile's click (#142): Lay conduit arms Wire mode (again disarms it).</summary>
+    public void SelectVerb(BuildVerb verb)
+    {
+        if (placementController != null && verb == BuildVerb.LayConduit) placementController.SelectWire();
+        Repaint();
+    }
+
+    /// <summary>Whether a verb's tool is the one armed now (#142).</summary>
+    public bool IsVerbArmed(BuildVerb verb) =>
+        placementController != null && verb == BuildVerb.LayConduit && placementController.IsWiring;
+
     /// <summary>
     /// Esc at the neutral level: closes the open flyout. While a tool is selected the press is the controller's (disarm,
     /// or exit dig), as it is on the frame the controller just spent it. True when the flyout closed.
@@ -287,16 +303,21 @@ public class BuildRail : MonoBehaviour
     {
         if (OpenCategory == null) return false;
         if (placementController != null &&
-            (placementController.Mode != PlacementController.ToolMode.Neutral || placementController.ExitedToolThisFrame))
+            (placementController.Mode != PlacementController.ToolMode.Neutral || placementController.ExitedToolThisFrame
+             || placementController.HasPlacedSelection)) // #142: that Esc clears the placed selection first
             return false;
 
         CloseFlyout();
         return true;
     }
 
-    private bool IsArmedIn(BuildCategory category) =>
-        placementController != null && placementController.SelectedType != null &&
-        BuildPresentation.TryGetCategory(placementController.SelectedType.Value, out BuildCategory armed) && armed == category;
+    private bool IsArmedIn(BuildCategory category)
+    {
+        if (placementController == null) return false;
+        if (placementController.IsWiring) return BuildPresentation.VerbsInCategory(category).Contains(BuildVerb.LayConduit); // #142
+        return placementController.SelectedType != null &&
+            BuildPresentation.TryGetCategory(placementController.SelectedType.Value, out BuildCategory armed) && armed == category;
+    }
 
     // ---- what the tiles read ----
 
@@ -375,6 +396,9 @@ public class BuildRail : MonoBehaviour
         tileRects = null;
         tileImages = null;
         tileCostLabels = null;
+        verbTypes = null;
+        verbRects = null;
+        verbImages = null;
     }
 
     private static void DestroyChromeObject(Object target)
@@ -444,6 +468,21 @@ public class BuildRail : MonoBehaviour
         flyoutTitle = CreateText(flyoutGo.transform, "Title", font, 13, secondaryTextColor, TextAnchor.MiddleLeft);
         PlaceTopLeft(flyoutTitle.rectTransform, iconInset, padding, flyoutWidth - 2f * iconInset, titleHeight);
 
+        var verbs = new List<BuildVerb>();
+        foreach (BuildCategory category in BuildPresentation.VisibleCategories()) verbs.AddRange(BuildPresentation.VerbsInCategory(category));
+        verbTypes = verbs.ToArray();
+        verbRects = new RectTransform[verbTypes.Length];
+        verbImages = new Image[verbTypes.Length];
+        for (int i = 0; i < verbTypes.Length; i++)
+        {
+            BuildVerb verb = verbTypes[i];
+            BuildPresentation.TryGetVerb(verb, out BuildPresentation.VerbEntry verbEntry);
+            GameObject verbGo = CreateButton(flyoutGo.transform, verb + "Tile", () => SelectVerb(verb), out verbImages[i]);
+            verbRects[i] = (RectTransform)verbGo.transform;
+            CreateTileFace(verbGo.transform, font, BuildPresentation.Shape(verbEntry.category), verbEntry.accent,
+                verbEntry.displayName).text = verbEntry.costLine;
+        }
+
         var types = new List<PlaceableType>();
         foreach (BuildCategory category in BuildPresentation.VisibleCategories()) types.AddRange(BuildPresentation.TypesInCategory(category));
         tileTypes = types.ToArray();
@@ -459,31 +498,37 @@ public class BuildRail : MonoBehaviour
 
             GameObject tileGo = CreateButton(flyoutGo.transform, type + "Tile", () => SelectTile(type), out tileImages[i]);
             tileRects[i] = (RectTransform)tileGo.transform;
-
-            Image icon = CreateIcon(tileGo.transform, BuildPresentation.Shape(category), entry?.accent ?? Color.white);
-            icon.rectTransform.anchorMin = icon.rectTransform.anchorMax = new Vector2(0f, 0.5f);
-            icon.rectTransform.pivot = new Vector2(0f, 0.5f);
-            icon.rectTransform.anchoredPosition = new Vector2(iconInset, 0f);
-            icon.rectTransform.sizeDelta = new Vector2(iconSize, iconSize);
-
-            float textLeft = iconInset + iconSize + iconInset;
-            Text name = CreateText(tileGo.transform, "Name", font, 13, Color.white, TextAnchor.LowerLeft);
-            name.text = BuildPresentation.DisplayName(type);
-            name.rectTransform.anchorMin = new Vector2(0f, 0.5f);
-            name.rectTransform.anchorMax = new Vector2(1f, 1f);
-            name.rectTransform.offsetMin = new Vector2(textLeft, 0f);
-            name.rectTransform.offsetMax = new Vector2(-4f, -4f);
-
-            Text cost = CreateText(tileGo.transform, "Cost", font, 11, secondaryTextColor, TextAnchor.UpperLeft);
-            cost.supportRichText = true; // The amount is colored on its own
-            cost.rectTransform.anchorMin = new Vector2(0f, 0f);
-            cost.rectTransform.anchorMax = new Vector2(1f, 0.5f);
-            cost.rectTransform.offsetMin = new Vector2(textLeft, 4f);
-            cost.rectTransform.offsetMax = new Vector2(-4f, -1f);
-            tileCostLabels[i] = cost;
+            tileCostLabels[i] = CreateTileFace(tileGo.transform, font, BuildPresentation.Shape(category), entry?.accent ?? Color.white,
+                BuildPresentation.DisplayName(type));
         }
 
         flyoutGo.SetActive(false);
+    }
+
+    // A tile's face: its icon, its name, and the second line (returned: a type's cost, a verb's note).
+    private Text CreateTileFace(Transform tile, Font font, BuildIconShape shape, Color accent, string displayName)
+    {
+        Image icon = CreateIcon(tile, shape, accent);
+        icon.rectTransform.anchorMin = icon.rectTransform.anchorMax = new Vector2(0f, 0.5f);
+        icon.rectTransform.pivot = new Vector2(0f, 0.5f);
+        icon.rectTransform.anchoredPosition = new Vector2(iconInset, 0f);
+        icon.rectTransform.sizeDelta = new Vector2(iconSize, iconSize);
+
+        float textLeft = iconInset + iconSize + iconInset;
+        Text name = CreateText(tile, "Name", font, 13, Color.white, TextAnchor.LowerLeft);
+        name.text = displayName;
+        name.rectTransform.anchorMin = new Vector2(0f, 0.5f);
+        name.rectTransform.anchorMax = new Vector2(1f, 1f);
+        name.rectTransform.offsetMin = new Vector2(textLeft, 0f);
+        name.rectTransform.offsetMax = new Vector2(-4f, -4f);
+
+        Text cost = CreateText(tile, "Cost", font, 11, secondaryTextColor, TextAnchor.UpperLeft);
+        cost.supportRichText = true; // The amount is colored on its own
+        cost.rectTransform.anchorMin = new Vector2(0f, 0f);
+        cost.rectTransform.anchorMax = new Vector2(1f, 0.5f);
+        cost.rectTransform.offsetMin = new Vector2(textLeft, 4f);
+        cost.rectTransform.offsetMax = new Vector2(-4f, -1f);
+        return cost;
     }
 
     /// <summary>
@@ -513,6 +558,21 @@ public class BuildRail : MonoBehaviour
         if (flyoutTitle != null) flyoutTitle.text = BuildPresentation.CategoryName(OpenCategory.Value);
 
         float y = padding + titleHeight + padding;
+        if (verbTypes != null && verbRects != null) // #142: a category's verbs come first
+        {
+            for (int i = 0; i < verbTypes.Length && i < verbRects.Length; i++)
+            {
+                if (verbRects[i] == null) continue;
+                bool shown = BuildPresentation.TryGetVerb(verbTypes[i], out BuildPresentation.VerbEntry verbEntry) && verbEntry.category == OpenCategory;
+                verbRects[i].gameObject.SetActive(shown);
+                if (!shown) continue;
+
+                PlaceTopLeft(verbRects[i], padding, y, flyoutWidth - 2f * padding, tileHeight);
+                y += tileHeight + padding;
+                if (verbImages != null && i < verbImages.Length && verbImages[i] != null)
+                    verbImages[i].color = IsVerbArmed(verbTypes[i]) ? buttonSelectedColor : buttonNormalColor;
+            }
+        }
         if (tileTypes != null && tileRects != null)
         {
             for (int i = 0; i < tileTypes.Length && i < tileRects.Length; i++)
@@ -630,6 +690,25 @@ public class BuildRail : MonoBehaviour
         return sprite;
     }
 
+    // A lightning bolt (#142): a zigzag from top right to bottom left.
+    private static readonly Vector2[] BoltOutline =
+    {
+        new Vector2(0.30f, 0.92f), new Vector2(-0.45f, -0.08f), new Vector2(-0.02f, -0.08f),
+        new Vector2(-0.30f, -0.92f), new Vector2(0.45f, 0.12f), new Vector2(0.02f, 0.12f),
+    };
+
+    // Even-odd ray cast against a closed outline.
+    private static bool IsInsidePolygon(Vector2[] outline, float u, float v)
+    {
+        bool inside = false;
+        for (int i = 0, j = outline.Length - 1; i < outline.Length; j = i++)
+        {
+            Vector2 a = outline[i], b = outline[j];
+            if ((a.y > v) != (b.y > v) && u < (b.x - a.x) * (v - a.y) / (b.y - a.y) + a.x) inside = !inside;
+        }
+        return inside;
+    }
+
     /// <summary>Whether the point (u right, v up, each -1..1) lies inside the icon shape.</summary>
     public static bool IsInsideShape(BuildIconShape shape, float u, float v)
     {
@@ -642,6 +721,7 @@ public class BuildRail : MonoBehaviour
             case BuildIconShape.Circle: return u * u + v * v <= 0.81f;
             case BuildIconShape.Diamond: return au + av <= 0.95f;
             case BuildIconShape.Stack: return au <= 0.85f && (Mathf.Abs(v - 0.55f) <= 0.17f || av <= 0.17f || Mathf.Abs(v + 0.55f) <= 0.17f);
+            case BuildIconShape.Bolt: return IsInsidePolygon(BoltOutline, u, v);
             default: return (au <= 0.3f && av <= 0.9f) || (av <= 0.3f && au <= 0.9f);
         }
     }

@@ -14,6 +14,9 @@ using UnityEngine;
 /// Without one, every tile is explored.
 /// Tile identity (#132): explored Rock is tinted by its material (TileIdentity, from the ImpDigger's band seam):
 /// stone keeps rockColor, glimmerstone and deepstone get their own rock tints. Designated keeps its amber.
+/// Conduit (#142): with a PowerGrid wired, each conduit tile draws on the floor: built conduit as a copper inlay (a centre
+/// plate plus an arm toward each 4-neighbor that has conduit), pending conduit as the same run in a translucent ghost.
+/// Explored only: conduit under fog doesn't render.
 /// </summary>
 public class BoardRenderer : MonoBehaviour
 {
@@ -25,6 +28,7 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private DungeonBoard dungeonBoard;
     [SerializeField] private FogOfWar fogOfWar; // Optional (#131): unwired, everything renders as explored
     [SerializeField] private ImpDigger impDigger; // Optional (#132): the band seam rock is tinted by; unwired, all rock is rockColor
+    [SerializeField] private PowerGrid powerGrid; // Optional (#142): the conduit layer drawn on the floor; unwired, none
 
     [Header("Tile Shapes")]
     [SerializeField] private float rockHeight = 0.6f;     // Rock and designated blocks, in tiles
@@ -42,6 +46,12 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private Color glimmerstoneRockColor = new Color(0.45f, 0.38f, 0.55f, 1f); // #132: rock of the shallow band, a rockier cousin of the catalog lavender
     [SerializeField] private Color deepstoneRockColor = new Color(0.22f, 0.26f, 0.36f, 1f);    // #132: rock of the deep band, a rockier cousin of the catalog slate
 
+    [Header("Conduit (#142)")]
+    [SerializeField] private Color conduitColor = new Color(0.80f, 0.48f, 0.22f, 1f);              // Copper inlay
+    [SerializeField] private Color pendingConduitColor = new Color(0.95f, 0.70f, 0.40f, 0.45f);    // Ghost run: ordered, not wired
+    [SerializeField] private float conduitWidth = 0.16f;     // Of the centre plate and the arms, in tiles
+    [SerializeField] private float conduitThickness = 0.012f; // Raised this far above the floor's top
+
     [Header("Door (Placeholder Art)")]
     [SerializeField] private float doorHeight = 0.9f;  // Taller than the rock so the entrance reads from afar
     [SerializeField] private float doorPostWidth = 0.12f;
@@ -50,6 +60,21 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private float surfaceSmoothness = 0f; // Lit materials: matte rock and earth (no highlights, no reflections)
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
+
+    /// <summary>The conduit layer this view draws (#142). Setting it moves the subscription and redraws every conduit tile.</summary>
+    public PowerGrid Grid
+    {
+        get => powerGrid;
+        set
+        {
+            if (powerGrid == value) return;
+            UnsubscribeGrid();
+            ClearConduitViews();
+            powerGrid = value;
+            if (isActiveAndEnabled) SubscribeGrid();
+            RefreshAllConduit();
+        }
+    }
 
     /// <summary>The digger whose band seam names each rock's material (#132). Setting it restyles built views.</summary>
     public ImpDigger Digger
@@ -99,6 +124,7 @@ public class BoardRenderer : MonoBehaviour
     private Transform viewRoot;
     private GameObject[,] tileViews;
     private readonly Dictionary<Vector2Int, GameObject> doors = new Dictionary<Vector2Int, GameObject>();
+    private readonly Dictionary<Vector2Int, GameObject> conduitViews = new Dictionary<Vector2Int, GameObject>();
     private readonly Dictionary<Color, Material> materials = new Dictionary<Color, Material>();
     private Mesh boxMesh;
 
@@ -114,6 +140,7 @@ public class BoardRenderer : MonoBehaviour
             dungeonBoard.OnTileChanged += HandleTileChanged;
         }
         SubscribeFog();
+        SubscribeGrid();
     }
 
     private void OnDisable()
@@ -123,6 +150,19 @@ public class BoardRenderer : MonoBehaviour
             dungeonBoard.OnTileChanged -= HandleTileChanged;
         }
         UnsubscribeFog();
+        UnsubscribeGrid();
+    }
+
+    private void SubscribeGrid()
+    {
+        if (powerGrid == null) return;
+        powerGrid.ConduitChanged -= HandleConduitChanged;
+        powerGrid.ConduitChanged += HandleConduitChanged;
+    }
+
+    private void UnsubscribeGrid()
+    {
+        if (powerGrid != null) powerGrid.ConduitChanged -= HandleConduitChanged;
     }
 
     // Unsubscribe first so a repeated OnEnable (or a Fog set while enabled) never doubles the handler.
@@ -239,6 +279,7 @@ public class BoardRenderer : MonoBehaviour
                 RefreshTile(x, y);
             }
         }
+        RefreshAllConduit();
     }
 
     public void RefreshTile(int x, int y)
@@ -297,6 +338,85 @@ public class BoardRenderer : MonoBehaviour
     private void HandleTileRevealed(Vector2Int tile)
     {
         RefreshTile(tile.x, tile.y);
+        RefreshConduit(tile); // Explored only: a reveal may show conduit that was there all along
+    }
+
+    private void HandleConduitChanged(Vector2Int tile)
+    {
+        RefreshConduit(tile);
+        foreach (Vector2Int d in ConduitNeighbors) RefreshConduit(tile + d); // Their arms toward this tile change too
+    }
+
+    // ---- conduit (#142) ----
+
+    private static readonly Vector2Int[] ConduitNeighbors =
+    {
+        new Vector2Int(1, 0), new Vector2Int(0, 1), new Vector2Int(-1, 0), new Vector2Int(0, -1),
+    };
+
+    /// <summary>A tile's conduit view (its inlay or ghost run), or null when it shows none.</summary>
+    public GameObject GetConduitView(int x, int y) =>
+        conduitViews.TryGetValue(new Vector2Int(x, y), out GameObject view) && view != null && view.activeSelf ? view : null;
+
+    /// <summary>Whether the tile's conduit shows: it has conduit and it's explored.</summary>
+    public bool ShowsConduit(Vector2Int tile) => powerGrid != null && powerGrid.HasConduit(tile) && IsExplored(tile.x, tile.y);
+
+    /// <summary>Rebuilds one tile's conduit view from the grid: built inlay, pending ghost, or nothing.</summary>
+    public void RefreshConduit(Vector2Int tile)
+    {
+        if (dungeonBoard == null || !dungeonBoard.IsInBounds(tile.x, tile.y)) return;
+        if (conduitViews.TryGetValue(tile, out GameObject old))
+        {
+            conduitViews.Remove(tile);
+            if (old != null) DestroyRuntimeObject(old);
+        }
+        if (!ShowsConduit(tile)) return;
+
+        bool built = powerGrid.IsBuilt(tile);
+        Material material = built ? MaterialFor(conduitColor) : CreatureModel.GhostMaterialFor(pendingConduitColor);
+        Vector3 center = GetTileCenterWorldPosition(tile.x, tile.y);
+        var view = new GameObject(built ? "Conduit" : "ConduitPending");
+        view.transform.SetParent(ViewRootOrSelf(), false);
+        view.transform.position = new Vector3(center.x, 0f, center.z);
+
+        float y = conduitThickness * 0.5f;
+        AddConduitPart(view, "Plate", material, new Vector3(0f, y, 0f), new Vector3(conduitWidth, conduitThickness, conduitWidth));
+        foreach (Vector2Int d in ConduitNeighbors)
+        {
+            if (!powerGrid.HasConduit(tile + d)) continue;
+            Vector3 dir = new Vector3(d.x, 0f, d.y);
+            Vector3 scale = d.x != 0 ? new Vector3(0.5f, conduitThickness, conduitWidth) : new Vector3(conduitWidth, conduitThickness, 0.5f);
+            AddConduitPart(view, $"Arm{d.x}{d.y}", material, dir * 0.25f + new Vector3(0f, y, 0f), scale);
+        }
+        conduitViews[tile] = view;
+    }
+
+    private void RefreshAllConduit()
+    {
+        ClearConduitViews();
+        if (powerGrid == null) return;
+        foreach (Vector2Int tile in powerGrid.BuiltTiles()) RefreshConduit(tile);
+        foreach (Vector2Int tile in powerGrid.PendingTiles()) RefreshConduit(tile);
+    }
+
+    private void ClearConduitViews()
+    {
+        foreach (GameObject view in conduitViews.Values) if (view != null) DestroyRuntimeObject(view);
+        conduitViews.Clear();
+    }
+
+    private Transform ViewRootOrSelf() => viewRoot != null ? viewRoot : transform;
+
+    private void AddConduitPart(GameObject view, string partName, Material material, Vector3 localPosition, Vector3 scale)
+    {
+        var part = new GameObject(partName);
+        part.transform.SetParent(view.transform, false);
+        part.transform.localPosition = localPosition;
+        part.transform.localScale = scale;
+        part.AddComponent<MeshFilter>().sharedMesh = BoxMesh();
+        var meshRenderer = part.AddComponent<MeshRenderer>();
+        meshRenderer.sharedMaterial = material;
+        meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; // A flat inlay casts nothing
     }
 
     private void EnsureViews()

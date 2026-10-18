@@ -34,6 +34,7 @@ public static class InputConfig
     public const string Rail4 = "Rail4";
     public const string Rail5 = "Rail5";
     public const string Rail6 = "Rail6";
+    public const string Rail7 = "Rail7";
 
     private const string MapName = "Player";
 
@@ -58,6 +59,7 @@ public static class InputConfig
         public InputAction Rail4 => Map[InputConfig.Rail4];                     // Button: 4 (build rail entry 4, #123)
         public InputAction Rail5 => Map[InputConfig.Rail5];                     // Button: 5 (build rail entry 5, #123)
         public InputAction Rail6 => Map[InputConfig.Rail6];                     // Button: 6 (build rail entry 6, #123)
+        public InputAction Rail7 => Map[InputConfig.Rail7];                     // Button: 7 (build rail entry 7, #142: the Power category made seven)
 
         internal Actions(InputActionMap map) { Map = map; }
 
@@ -130,6 +132,7 @@ public static class InputConfig
         AddSingle(map.AddAction(Rail4, InputActionType.Button), "<Keyboard>/4");
         AddSingle(map.AddAction(Rail5, InputActionType.Button), "<Keyboard>/5");
         AddSingle(map.AddAction(Rail6, InputActionType.Button), "<Keyboard>/6");
+        AddSingle(map.AddAction(Rail7, InputActionType.Button), "<Keyboard>/7");
 
         return map;
     }

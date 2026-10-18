@@ -79,6 +79,39 @@ public static class PropModel
         return parts;
     }
 
+    // ---- Imp wheel (#142): a spoked wheel on a timber stand, its face toward the camera; the operating imp stands beside it ----
+
+    /// <summary>Height of the wheel's hub above the ground, for a placeable of size s.</summary>
+    public static float WheelHubHeight(float s) => WheelRadius(s) + 0.07f;
+
+    public static float WheelRadius(float s) => 0.34f * s;
+
+    public static Part[] ImpWheelRecipe(float s, Color frame, Color wheel, Color iron)
+    {
+        const int rimSegments = 8;
+        const int spokes = 4;
+        float r = WheelRadius(s);
+        float hub = WheelHubHeight(s);
+        float segment = 2f * r * Mathf.Sin(Mathf.PI / rimSegments) * 1.12f; // A little overlap so the rim reads closed
+        var parts = new Part[4 + rimSegments + spokes];
+        parts[0] = new Part("Base", Shape.Box, new Vector3(0f, 0.03f, 0.06f * s), new Vector3(0.9f * s, 0.06f, 0.45f * s), frame);
+        parts[1] = new Part("Post", Shape.Box, new Vector3(0f, (hub + 0.06f) * 0.5f, 0.16f * s), new Vector3(0.09f, hub + 0.06f, 0.07f), frame);
+        // Cylinders stand on Y: turned 90° about X, their axis runs front-to-back through the wheel.
+        parts[2] = new Part("Axle", Shape.Cylinder, new Vector3(0f, hub, 0.08f * s), new Vector3(0.05f, 0.1f * s, 0.05f), iron, new Vector3(90f, 0f, 0f));
+        parts[3] = new Part("Hub", Shape.Cylinder, new Vector3(0f, hub, -0.01f), new Vector3(0.11f, 0.03f, 0.11f), iron, new Vector3(90f, 0f, 0f));
+        for (int i = 0; i < rimSegments; i++)
+        {
+            float angle = i * 360f / rimSegments;
+            float rad = angle * Mathf.Deg2Rad;
+            parts[4 + i] = new Part($"Rim{i}", Shape.Box, new Vector3(r * Mathf.Cos(rad), hub + r * Mathf.Sin(rad), 0f),
+                new Vector3(segment, 0.05f, 0.06f), wheel, new Vector3(0f, 0f, angle + 90f));
+        }
+        for (int i = 0; i < spokes; i++)
+            parts[4 + rimSegments + i] = new Part($"Spoke{i}", Shape.Box, new Vector3(0f, hub, 0f),
+                new Vector3(2f * r, 0.035f, 0.04f), wheel, new Vector3(0f, 0f, i * 180f / spokes));
+        return parts;
+    }
+
     // ---- Construction sites (#91): a materials pile per type, shown until the placeable is built ----
 
     /// <summary>Cot materials: a loose stack of frame planks, a crate, and a folded bolt of mattress cloth.</summary>
@@ -110,6 +143,15 @@ public static class PropModel
         new Part("Spike0", Shape.Cone, new Vector3(0.42f * s, 0.05f, 0.28f * s),  new Vector3(0.1f, 0.26f, 0.1f), spike, new Vector3(0f, 0f, 90f)),
         new Part("Spike1", Shape.Cone, new Vector3(0.4f * s, 0.05f, 0.08f * s),   new Vector3(0.1f, 0.26f, 0.1f), spike, new Vector3(0f, 25f, 90f)),
         new Part("Crate",  Shape.Box,  new Vector3(-0.3f * s, 0.08f, -0.28f * s), new Vector3(0.16f, 0.16f, 0.16f), crate, new Vector3(0f, -15f, 0f)),
+    };
+
+    /// <summary>Wheel materials (#142): stand timbers, a loose rim section, and a parts crate.</summary>
+    public static Part[] WheelMaterialsRecipe(float s, Color wood, Color crate, Color wheel) => new[]
+    {
+        new Part("Beam0", Shape.Box, new Vector3(0f, 0.025f, -0.1f * s),          new Vector3(0.85f * s, 0.05f, 0.1f * s), wood, new Vector3(0f, 6f, 0f)),
+        new Part("Beam1", Shape.Box, new Vector3(0.03f * s, 0.075f, -0.08f * s),   new Vector3(0.8f * s, 0.05f, 0.1f * s), wood, new Vector3(0f, -8f, 0f)),
+        new Part("Rim",   Shape.Box, new Vector3(-0.15f * s, 0.02f, 0.2f * s),     new Vector3(0.45f * s, 0.04f, 0.08f), wheel, new Vector3(0f, 25f, 0f)),
+        new Part("Crate", Shape.Box, new Vector3(0.26f * s, 0.1f, 0.2f * s),       new Vector3(0.2f, 0.2f, 0.2f), crate, new Vector3(0f, -12f, 0f)),
     };
 
     /// <summary>An order's ground outline (#104): a thin square frame around the footprint, just above the floor.</summary>

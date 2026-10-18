@@ -8,6 +8,11 @@ using UnityEngine;
 /// PlacementManager.BuildSecondsFor, to complete a site; rearmSecondsPerTrap to re-arm), and repeats.
 /// Build progress lives on the site (Placeable.BuildProgress), so an interrupted build resumes where it stopped.
 /// Work with no reachable stand-point is left as it is and skipped.
+/// Power (#142): pending conduit tiles are construction-family work beside sites (the imp stands next to the tile and
+/// wires it over PowerGrid.WireSecondsPerTile, progress kept on the tile). Operate is the lowest job: only when there is
+/// no dig, construction or rearm work does the imp walk to a built Imp Wheel and tend it. Operating is never committed:
+/// every idle-recheck interval the imp re-runs selection and leaves the wheel the moment real work exists (Evan, Oct 17,
+/// 2026), and the wheel's output stops with it.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Imp))]
@@ -18,6 +23,7 @@ public class ImpDigger : MonoBehaviour
     [SerializeField] private Imp imp;
     [SerializeField] private PlacementManager placementManager; // Source of traps, sites, and build times; null = dig-only
     [SerializeField] private Stockpile stockpile;               // Where completed digs pay their yield (#103); null = no pay
+    [SerializeField] private PowerGrid powerGrid;               // #142: pending conduit to build; null = no wiring work
 
     [Header("Digging")]
     [SerializeField] private float digSecondsPerTile = 2.5f;
@@ -34,6 +40,7 @@ public class ImpDigger : MonoBehaviour
     public PlacementManager PlacementManager { get => placementManager; set => placementManager = value; }
     public float DigSecondsPerTile { get => digSecondsPerTile; set => digSecondsPerTile = value; }
     public Stockpile Stockpile { get => stockpile; set => stockpile = value; }
+    public PowerGrid PowerGrid { get => powerGrid; set => powerGrid = value; }
     public int StoneYieldPerTile { get => stoneYieldPerTile; set => stoneYieldPerTile = value; }
     public int GlimmerstoneBandRows { get => glimmerstoneBandRows; set => glimmerstoneBandRows = value; }
     public int DeepstoneDepthThreshold { get => deepstoneDepthThreshold; set => deepstoneDepthThreshold = value; }
@@ -49,6 +56,21 @@ public class ImpDigger : MonoBehaviour
     /// <summary>The construction site being built, or null when not on a build job. Never set alongside another job.</summary>
     public Placeable CurrentSite { get; private set; }
 
+    /// <summary>The pending conduit tile being wired (#142), or null when not on a wiring job.</summary>
+    public Vector2Int? CurrentConduit { get; private set; }
+
+    /// <summary>True while stationary beside CurrentConduit, adding wire progress to it (#142).</summary>
+    public bool IsWiring { get; private set; }
+
+    /// <summary>
+    /// The wheel the imp is walking to or operating (#142), or null. Never set alongside another job: real work takes the
+    /// imp away from it.
+    /// </summary>
+    public PowerNode CurrentWheel { get; private set; }
+
+    /// <summary>True while standing beside CurrentWheel, tending it: the wheel produces exactly while this holds (#142).</summary>
+    public bool IsOperating { get; private set; }
+
     /// <summary>The Floor tile the imp stands on to work the current job (meaningful only while it has one).</summary>
     public Vector2Int StandPoint { get; private set; }
 
@@ -63,7 +85,7 @@ public class ImpDigger : MonoBehaviour
     /// <summary>True while stationary beside CurrentSite, writing progress onto it.</summary>
     public bool IsBuilding { get; private set; }
 
-    private bool HasJob => CurrentTarget != null || CurrentTrap != null || CurrentSite != null;
+    private bool HasJob => CurrentTarget != null || CurrentTrap != null || CurrentSite != null || CurrentConduit != null;
 
     // True after a state transition (start, completed job, dropped job): select on the next Tick
     // instead of waiting for the idle recheck interval.
@@ -76,6 +98,7 @@ public class ImpDigger : MonoBehaviour
         dungeonBoard ??= FindAnyObjectByType<DungeonBoard>();
         placementManager ??= FindAnyObjectByType<PlacementManager>();
         stockpile ??= FindAnyObjectByType<Stockpile>();
+        powerGrid ??= FindAnyObjectByType<PowerGrid>();
     }
 
     private void Update()
@@ -91,12 +114,16 @@ public class ImpDigger : MonoBehaviour
     {
         if (dungeonBoard == null || imp == null) return;
 
-        if (!HasJob)
+        if (CurrentWheel != null)
+            TickOperating(deltaTime);
+        else if (!HasJob)
             TickIdle(deltaTime);
         else if (IsDigging)
             TickDigging(deltaTime);
         else if (IsBuilding)
             TickBuilding(deltaTime);
+        else if (IsWiring)
+            TickWiring(deltaTime);
         else if (IsRearming)
             TickRearming(deltaTime);
         else
@@ -113,25 +140,90 @@ public class ImpDigger : MonoBehaviour
         idleTimer = 0f;
         selectPending = false;
 
-        Vector2Int target, standPoint;
-        SpikeTrap trap = null;
-        Placeable site = null;
-        bool found = placementManager != null
-            ? TrySelectWork(dungeonBoard, placementManager.GetConstructionSites(), placementManager.GetBuiltSpikeTraps(),
-                imp.CurrentTile, out target, out standPoint, out site, out trap)
-            : TrySelectTarget(dungeonBoard, imp.CurrentTile, out target, out standPoint); // No manager: dig-only
-        if (!found) return;
+        if (!TryDispatchWork()) TryDispatchOperate(); // Operate only when there's no real work (#142)
+    }
+
+    // Selects the nearest real work (dig, construction, rearm) and sets off for it. True when work was found, even if the
+    // dispatch failed (then it reselects next tick).
+    private bool TryDispatchWork()
+    {
+        if (!TrySelectRealWork(out Vector2Int target, out Vector2Int standPoint, out Placeable site, out bool conduit, out SpikeTrap trap))
+            return false;
 
         // Commit to this job; selection doesn't re-run while traveling.
         if (!imp.SetDestination(standPoint))
         {
             selectPending = true; // Board changed between selection and dispatch
-            return;
+            return true;
         }
         if (site != null) CurrentSite = site;
         else if (trap != null) CurrentTrap = trap;
+        else if (conduit) CurrentConduit = target;
         else CurrentTarget = target;
         StandPoint = standPoint;
+        return true;
+    }
+
+    private bool TrySelectRealWork(out Vector2Int target, out Vector2Int standPoint, out Placeable site, out bool conduit,
+        out SpikeTrap trap)
+    {
+        site = null;
+        trap = null;
+        conduit = false;
+        if (placementManager == null && powerGrid == null)
+            return TrySelectTarget(dungeonBoard, imp.CurrentTile, out target, out standPoint); // No manager: dig-only
+        return TrySelectWork(dungeonBoard, placementManager != null ? placementManager.GetConstructionSites() : null,
+            powerGrid != null ? powerGrid.PendingTiles() : null,
+            placementManager != null ? placementManager.GetBuiltSpikeTraps() : null,
+            imp.CurrentTile, out target, out standPoint, out site, out conduit, out trap);
+    }
+
+    // The bottom job (#142): walk to the nearest free built wheel and tend it.
+    private void TryDispatchOperate()
+    {
+        if (placementManager == null) return;
+        if (!TrySelectOperate(dungeonBoard, placementManager.GetBuiltWheels(), this, imp.CurrentTile,
+                out PowerNode wheel, out Vector2Int standPoint))
+            return;
+        if (!imp.SetDestination(standPoint))
+        {
+            selectPending = true;
+            return;
+        }
+        CurrentWheel = wheel;
+        StandPoint = standPoint;
+    }
+
+    // Walking to or tending a wheel. Never committed: on the idle rhythm, real work takes the imp away at once.
+    private void TickOperating(float deltaTime)
+    {
+        if (CurrentWheel == null || !CurrentWheel.IsBuilt || (CurrentWheel.Operator != null && CurrentWheel.Operator != this))
+        {
+            DropTarget(); // Gone, or another imp tends it
+            return;
+        }
+
+        idleTimer += deltaTime;
+        if (selectPending || idleTimer >= idleRecheckSeconds)
+        {
+            idleTimer = 0f;
+            selectPending = false;
+            if (TrySelectRealWork(out _, out _, out _, out _, out _))
+            {
+                DropTarget();   // Leave the wheel: its output stops now
+                TickIdle(0f);   // ...and set off for the work this same tick
+                return;
+            }
+        }
+
+        if (IsOperating || imp.IsMoving) return;
+        if (imp.CurrentTile != StandPoint || !IsAdjacent(imp.CurrentTile, CurrentWheel.Tile))
+        {
+            DropTarget();
+            return;
+        }
+        IsOperating = true;
+        CurrentWheel.SetOperator(this);
     }
 
     private void TickTraveling()
@@ -145,10 +237,13 @@ public class ImpDigger : MonoBehaviour
         }
         if (CurrentSite != null)
             IsBuilding = true; // Resumes from the site's own BuildProgress, never from zero
+        else if (CurrentConduit != null)
+            IsWiring = true;   // Resumes from the tile's own progress (#142)
         else if (CurrentTrap != null)
         {
             IsRearming = true;
             RearmElapsed = 0f;
+            CurrentTrap.ImpRearming = true; // #142: the trap's powered self-rearm pauses while the imp channels
         }
         else
         {
@@ -235,6 +330,16 @@ public class ImpDigger : MonoBehaviour
     // Progress is a sum of deltaTime / seconds steps; absorb float rounding so a build lands on its full duration.
     private const float BuildCompleteTolerance = 1e-4f;
 
+    private void TickWiring(float deltaTime)
+    {
+        if (!IsJobStillNeeded() || !IsAdjacent(imp.CurrentTile, CurrentConduit.Value))
+        {
+            DropTarget(); // Removed, or the imp is no longer beside it: progress stays on the tile
+            return;
+        }
+        if (powerGrid.AddWireProgress(CurrentConduit.Value, deltaTime)) DropTarget(); // Built: the grid dirties itself
+    }
+
     private void TickRearming(float deltaTime)
     {
         if (!IsJobStillNeeded() || !IsAdjacent(imp.CurrentTile, CurrentTrap.Tile))
@@ -254,9 +359,15 @@ public class ImpDigger : MonoBehaviour
     /// <summary>Clears whichever job is held (dig, build, or rearm) and asks for an immediate reselect.</summary>
     private void DropTarget()
     {
+        if (CurrentTrap != null) CurrentTrap.ImpRearming = false;
+        if (CurrentWheel != null) CurrentWheel.ClearOperator(this);
         CurrentTarget = null;
         CurrentTrap = null;
         CurrentSite = null;
+        CurrentConduit = null;
+        CurrentWheel = null;
+        IsOperating = false;
+        IsWiring = false;
         IsBuilding = false;
         IsDigging = false;
         DigElapsed = 0f;
@@ -266,10 +377,13 @@ public class ImpDigger : MonoBehaviour
     }
 
     // A build job is needed while its site exists unbuilt; a rearm job while its trap exists and is Spent
-    // (!= null is Unity's destroyed-object check); a dig while its tile is still Designated.
+    // (!= null is Unity's destroyed-object check) and, until the channel starts, while the powered self-rearm doesn't
+    // own it (#142: power arriving en route hands the trap to it; once channelling, the imp finishes); a wiring job while
+    // its tile is still pending; a dig while its tile is still Designated.
     private bool IsJobStillNeeded() =>
         CurrentSite != null ? !CurrentSite.IsBuilt
-        : CurrentTrap != null ? !CurrentTrap.IsArmed
+        : CurrentTrap != null ? !CurrentTrap.IsArmed && (IsRearming || !CurrentTrap.SelfRearmOwns)
+        : CurrentConduit != null ? powerGrid != null && powerGrid.IsPending(CurrentConduit.Value)
         : CurrentTarget != null && IsStillDesignated();
 
     private bool IsStillDesignated()
@@ -313,10 +427,22 @@ public class ImpDigger : MonoBehaviour
     /// (site and trap null).
     /// </summary>
     public static bool TrySelectWork(DungeonBoard board, IReadOnlyList<Placeable> sites, IReadOnlyList<SpikeTrap> traps,
-        Vector2Int fromTile, out Vector2Int targetTile, out Vector2Int standPoint, out Placeable site, out SpikeTrap trap)
+        Vector2Int fromTile, out Vector2Int targetTile, out Vector2Int standPoint, out Placeable site, out SpikeTrap trap) =>
+        TrySelectWork(board, sites, null, traps, fromTile, out targetTile, out standPoint, out site, out _, out trap);
+
+    /// <summary>
+    /// Unified selection with conduit (#142): pending conduit tiles are construction-family work, evaluated right after
+    /// the sites, so exact ties break dig &gt; construction (sites, then conduit) &gt; rearm. Like a site, a conduit tile
+    /// is Floor and the imp stands beside it. A spent trap the powered self-rearm owns isn't rearm work.
+    /// Exactly one outcome is set: site, conduit (targetTile = its tile), trap, or a dig.
+    /// </summary>
+    public static bool TrySelectWork(DungeonBoard board, IReadOnlyList<Placeable> sites, IReadOnlyList<Vector2Int> conduits,
+        IReadOnlyList<SpikeTrap> traps, Vector2Int fromTile, out Vector2Int targetTile, out Vector2Int standPoint,
+        out Placeable site, out bool conduit, out SpikeTrap trap)
     {
         trap = null;
         site = null;
+        conduit = false;
         int bestCost = SelectNearestDig(board, fromTile, out targetTile, out standPoint);
 
         if (sites != null)
@@ -336,18 +462,35 @@ public class ImpDigger : MonoBehaviour
             }
         }
 
+        if (conduits != null)
+        {
+            foreach (Vector2Int tile in conduits)
+            {
+                List<Vector2Int> path = Pathfinder.FindPathToNeighbor(board, fromTile, tile);
+                if (path.Count == 0 || path.Count >= bestCost) continue; // Unreachable (stays pending), or not strictly nearer
+
+                bestCost = path.Count;
+                site = null;
+                conduit = true;
+                targetTile = tile;
+                standPoint = path[path.Count - 1];
+            }
+        }
+
         if (traps != null)
         {
             foreach (SpikeTrap candidate in traps)
             {
-                // Armed traps aren't work, and a construction site isn't a spent trap (#91): never rearm one.
-                if (candidate == null || !candidate.IsBuilt || candidate.IsArmed) continue;
+                // Armed traps aren't work, and a construction site isn't a spent trap (#91): never rearm one. A spent
+                // trap on a powered grid rearms itself (#142): not the imp's.
+                if (candidate == null || !candidate.IsBuilt || candidate.IsArmed || candidate.SelfRearmOwns) continue;
 
                 List<Vector2Int> path = Pathfinder.FindPathToNeighbor(board, fromTile, candidate.Tile);
                 if (path.Count == 0 || path.Count >= bestCost) continue; // Unreachable, or not strictly nearer
 
                 bestCost = path.Count;
                 site = null; // A strictly nearer rearm beats the best build
+                conduit = false;
                 trap = candidate;
                 targetTile = candidate.Tile;
                 standPoint = path[path.Count - 1];
@@ -355,6 +498,32 @@ public class ImpDigger : MonoBehaviour
         }
 
         return bestCost != int.MaxValue;
+    }
+
+    /// <summary>
+    /// Operate selection (#142): the nearest built wheel that needs an operator and isn't tended by another imp, by path
+    /// length to a stand-point beside it (never onto it). Ties keep the earlier wheel in list (scan) order.
+    /// </summary>
+    public static bool TrySelectOperate(DungeonBoard board, IReadOnlyList<PowerNode> wheels, ImpDigger self, Vector2Int fromTile,
+        out PowerNode wheel, out Vector2Int standPoint)
+    {
+        wheel = null;
+        standPoint = default;
+        if (wheels == null) return false;
+        int bestCost = int.MaxValue;
+        foreach (PowerNode candidate in wheels)
+        {
+            if (candidate == null || !candidate.IsBuilt || !candidate.NeedsOperator) continue;
+            if (candidate.Operator != null && candidate.Operator != self) continue;
+
+            List<Vector2Int> path = Pathfinder.FindPathToNeighbor(board, fromTile, candidate.Tile);
+            if (path.Count == 0 || path.Count >= bestCost) continue;
+
+            bestCost = path.Count;
+            wheel = candidate;
+            standPoint = path[path.Count - 1];
+        }
+        return wheel != null;
     }
 
     /// <summary>The dig scan shared by both selectors. Returns the winning path cost, or int.MaxValue for none.</summary>

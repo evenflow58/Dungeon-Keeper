@@ -14,11 +14,17 @@ using UnityEngine.UI;
 /// frame describes that material instead: name and family, the amount on hand, description and source, the property
 /// highlights where its rows differ from the defaults, one read-only chip per type with a cost row in it, and how many
 /// orders wait for it. Arming a type always takes the card back to buildable mode.
+/// Placed mode (#142): in Neutral, a built placeable the controller has selected (a board click) shows here: its name and
+/// category, its description, and lines for what it's doing — a cot claimed or free, a plot's food, a trap armed or
+/// spent — plus, for a power node, its role, its power state and its grid's totals. Wire mode (#142): while Lay conduit
+/// is armed the card describes the verb. One thing at a time: armed, then wire, then placed, then material.
 /// </summary>
 [DisallowMultipleComponent]
 public class DetailCard : MonoBehaviour
 {
     public const string HintText = "Drag to place · Orders that can't be paid wait · Right-click cancels";
+    public const string WireHintText = "Drag over explored floor to lay conduit · Right-drag removes · Esc exits";
+    public const string PlacedHintText = "Esc or click empty floor to deselect";
 
     [Header("References")]
     [SerializeField] private PlacementController placementController;
@@ -167,11 +173,23 @@ public class DetailCard : MonoBehaviour
     /// <summary>The material the STOCK panel has selected (#126); null when it has none.</summary>
     public MaterialType? ShownMaterial { get; private set; }
 
-    /// <summary>Material mode (#126): a material is shown and nothing is armed (an armed type always wins the card).</summary>
-    public bool IsMaterialMode => ArmedType == null && ShownMaterial != null;
+    /// <summary>Wire mode (#142): Lay conduit is armed; the card describes the verb.</summary>
+    public bool IsWireMode => placementController != null && placementController.IsWiring;
 
-    /// <summary>The card shows while a buildable is armed, or in material mode.</summary>
-    public bool IsVisible => ArmedType != null || ShownMaterial != null;
+    /// <summary>The built placeable the controller has selected (#142); null when none.</summary>
+    public Placeable ShownPlaceable => placementController != null ? placementController.SelectedPlaceable : null;
+
+    /// <summary>Placed mode (#142): nothing armed and a built placeable selected.</summary>
+    public bool IsPlacedMode => ArmedType == null && !IsWireMode && ShownPlaceable != null;
+
+    /// <summary>
+    /// Material mode (#126): a material is shown and nothing is armed (an armed type always wins the card), and no placed
+    /// building is selected (#142: the most recent selection wins, and the two never stand together).
+    /// </summary>
+    public bool IsMaterialMode => ArmedType == null && !IsWireMode && ShownPlaceable == null && ShownMaterial != null;
+
+    /// <summary>The card shows while a buildable is armed, in wire mode, in placed mode, or in material mode.</summary>
+    public bool IsVisible => ArmedType != null || IsWireMode || IsPlacedMode || ShownMaterial != null;
 
     /// <summary>The STOCK panel's selection (#126): the material to describe while nothing is armed, or null to stop.</summary>
     public void ShowMaterial(MaterialType? material)
@@ -180,22 +198,44 @@ public class DetailCard : MonoBehaviour
         Repaint();
     }
 
-    /// <summary>The armed type's name, else the shown material's; empty with neither.</summary>
+    // The type the card is about: the armed one, else the selected placed one (#142).
+    private PlaceableType? CardType => ArmedType ?? (IsPlacedMode ? ShownPlaceable.Type : (PlaceableType?)null);
+
+    /// <summary>The card's category, when it shows a type or the wire verb (#142); false in material mode or hidden.</summary>
+    public bool TryGetCardCategory(out BuildCategory category)
+    {
+        if (CardType != null) return BuildPresentation.TryGetCategory(CardType.Value, out category);
+        if (IsWireMode && BuildPresentation.TryGetVerb(BuildVerb.LayConduit, out BuildPresentation.VerbEntry verb))
+        {
+            category = verb.category;
+            return true;
+        }
+        category = default;
+        return false;
+    }
+
+    /// <summary>The armed type's name, the wire verb's, the placed building's, else the shown material's; empty with none.</summary>
     public string Title =>
         ArmedType != null ? BuildPresentation.DisplayName(ArmedType.Value)
+        : IsWireMode ? (BuildPresentation.TryGetVerb(BuildVerb.LayConduit, out BuildPresentation.VerbEntry verb) ? verb.displayName : "")
+        : IsPlacedMode ? BuildPresentation.DisplayName(ShownPlaceable.Type)
         : ShownMaterial != null ? MaterialName(ShownMaterial.Value)
         : "";
 
-    /// <summary>The armed type's category ("Living"), else the shown material's family ("Stones"); empty with neither.</summary>
+    /// <summary>The card's category ("Living", "Power"), else the shown material's family ("Stones"); empty with neither.</summary>
     public string CategoryTag =>
-        ArmedType != null ? (BuildPresentation.TryGetCategory(ArmedType.Value, out BuildCategory category) ? BuildPresentation.CategoryName(category) : "")
-        : ShownMaterial != null ? BuildPresentation.FamilyName(BuildPresentation.FamilyOf(ShownMaterial.Value))
+        TryGetCardCategory(out BuildCategory category) ? BuildPresentation.CategoryName(category)
+        : IsMaterialMode ? BuildPresentation.FamilyName(BuildPresentation.FamilyOf(ShownMaterial.Value))
         : "";
 
     public string Description =>
-        ArmedType != null ? BuildPresentation.Description(ArmedType.Value)
-        : ShownMaterial != null ? BuildPresentation.MaterialDescription(ShownMaterial.Value)
+        CardType != null ? BuildPresentation.Description(CardType.Value)
+        : IsWireMode ? (BuildPresentation.TryGetVerb(BuildVerb.LayConduit, out BuildPresentation.VerbEntry verb) ? verb.description : "")
+        : IsMaterialMode ? BuildPresentation.MaterialDescription(ShownMaterial.Value)
         : "";
+
+    /// <summary>The bottom hint for the current mode; empty in material mode.</summary>
+    public string Hint => ArmedType != null ? HintText : IsWireMode ? WireHintText : IsPlacedMode ? PlacedHintText : "";
 
     private Stockpile CurrentStockpile => placementManager != null ? placementManager.Stockpile : null;
 
@@ -276,6 +316,8 @@ public class DetailCard : MonoBehaviour
     public List<string> StatLines()
     {
         var lines = new List<string>();
+        if (IsWireMode && ArmedType == null) return WireLines(placementManager != null ? placementManager.PowerGrid : null);
+        if (IsPlacedMode) return PlacedLines(ShownPlaceable);
         if (ArmedType == null || placementManager == null) return lines;
 
         PlaceableType type = ArmedType.Value;
@@ -305,9 +347,77 @@ public class DetailCard : MonoBehaviour
                 return $"Holds up to {manager.MushroomCapacity} food";
             case BuildStat.TrapDamage:
                 return $"Damage: {manager.SpikeDamage}";
+            case BuildStat.PowerOutput: // #142: the power table's watts
+                return manager.TryGetPower(type, out PlaceablePower output) && output.role == PowerRole.Producer ? $"Output {output.watts} W" : null;
+            case BuildStat.NeedsOperator:
+                return manager.TryGetPower(type, out PlaceablePower operated) && operated.needsOperator ? "Needs an imp" : null;
             default:
                 return null;
         }
+    }
+
+    // ---- wire and placed modes (#142) ----
+
+    /// <summary>The wire verb's lines: the imp time per tile, from the grid's own value. None with no grid.</summary>
+    public static List<string> WireLines(PowerGrid grid)
+    {
+        var lines = new List<string>();
+        if (grid == null) return lines;
+        lines.Add($"Imp time: {Number(grid.WireSecondsPerTile, "0.0#")}s per tile");
+        lines.Add("No material cost · Removing is instant, no refund");
+        return lines;
+    }
+
+    /// <summary>
+    /// A built placeable's lines: what it's doing (cot claimed/free, plot food, trap armed/spent), then, for a power node,
+    /// its role, its state and its grid's totals. Empty for none.
+    /// </summary>
+    public static List<string> PlacedLines(Placeable placeable)
+    {
+        var lines = new List<string>();
+        if (placeable == null) return lines;
+
+        if (placeable.Type == PlaceableType.LairCot) lines.Add(placeable.IsClaimed ? "Claimed" : "Free");
+        if (placeable.TryGetComponent(out MushroomPlot plot)) lines.Add($"Food: {plot.FoodCount} / {plot.Capacity}");
+        if (placeable.TryGetComponent(out SpikeTrap trap)) lines.Add(TrapLine(trap.IsArmed, trap.PoweredRearmProgress));
+
+        if (placeable.TryGetComponent(out PowerNode node) && node.Role != PowerRole.None)
+        {
+            PowerGrid.GridTotals totals = node.Totals;
+            bool powered = PowerGrid.IsPowered(totals.Connected, totals.Supply, totals.Demand);
+            lines.AddRange(PowerLines(node.Role, node.Watts, node.NeedsOperator, node.IsTended, totals.Connected, powered,
+                totals.Supply, totals.Demand));
+        }
+        return lines;
+    }
+
+    /// <summary>A trap's line: "Armed", "Spent", or "Spent · rearming itself 45%" while powered progress is under way.</summary>
+    public static string TrapLine(bool armed, float poweredProgress) =>
+        armed ? "Armed"
+        : poweredProgress > 0f ? $"Spent · rearming itself {Mathf.FloorToInt(Mathf.Clamp01(poweredProgress) * 100f)}%"
+        : "Spent";
+
+    /// <summary>
+    /// A node's power lines: the role ("Producer · 40 W", "Consumer · 10 W, drawn whenever built"), the state, and the
+    /// grid's totals when connected. Wheel states: Not connected / Producing / Untended; consumer states: Not connected /
+    /// Powered / Unpowered — grid over-drawn.
+    /// </summary>
+    public static List<string> PowerLines(PowerRole role, int watts, bool needsOperator, bool tended, bool connected, bool powered,
+        int supply, int demand)
+    {
+        var lines = new List<string>();
+        if (role == PowerRole.None) return lines;
+        lines.Add(role == PowerRole.Producer ? $"Producer · {watts} W" : $"Consumer · {watts} W, drawn whenever built");
+        lines.Add(PowerStateLine(role, needsOperator, tended, connected, powered));
+        if (connected) lines.Add($"Grid: {supply} produced · {demand} demanded");
+        return lines;
+    }
+
+    public static string PowerStateLine(PowerRole role, bool needsOperator, bool tended, bool connected, bool powered)
+    {
+        if (!connected) return "Not connected";
+        if (role == PowerRole.Producer) return !needsOperator || tended ? "Producing" : "Untended";
+        return powered ? "Powered" : "Unpowered — grid over-drawn";
     }
 
     private static string Number(float value, string format) => value.ToString(format, CultureInfo.InvariantCulture);
@@ -434,7 +544,11 @@ public class DetailCard : MonoBehaviour
         bool materialMode = IsMaterialMode;
         if (onHandText != null) onHandText.gameObject.SetActive(materialMode);
         if (waitingText != null) waitingText.gameObject.SetActive(materialMode);
-        if (hintText != null) hintText.gameObject.SetActive(!materialMode);
+        if (hintText != null)
+        {
+            hintText.gameObject.SetActive(!materialMode);
+            hintText.text = Hint;
+        }
 
         float inner = cardWidth - 2f * padding;
         float y = padding;
@@ -447,7 +561,7 @@ public class DetailCard : MonoBehaviour
         if (tagText != null)
         {
             tagText.text = CategoryTag;
-            tagText.color = !materialMode && BuildPresentation.TryGetCategory(ArmedType.Value, out BuildCategory category)
+            tagText.color = !materialMode && TryGetCardCategory(out BuildCategory category)
                 ? BuildPresentation.Accent(category)
                 : secondaryTextColor;
             PlaceTopLeft(tagText.rectTransform, padding, y, inner, headerHeight);

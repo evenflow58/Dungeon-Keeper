@@ -108,6 +108,9 @@ public class FurnaceLampToggleTests
         }
     }
 
+    // A node connects only through conduit on its own tile: the run passes under both ends.
+    private void WireLink() => BuildConduit(WheelTile, LinkTile, TrapTile);
+
     // A furnace site switched to a counting store, then built (its first purchase happens at build-complete).
     private FurnaceGenerator BuiltFurnace(Vector2Int tile, CountingStore store, float retrySeconds = 1f)
     {
@@ -164,7 +167,7 @@ public class FurnaceLampToggleTests
     [Test]
     public void Sum_LeavesDisabledNodesOut_ProducerAndConsumer()
     {
-        var comps = PowerGrid.Components(new[] { T(5, 5), T(6, 5) });
+        var comps = PowerGrid.Components(new[] { T(4, 5), T(5, 5), T(6, 5), T(7, 5), T(5, 6), T(6, 6) });
         var states = new[]
         {
             new PowerGrid.NodeState(T(4, 5), PowerRole.Producer, 40, true),
@@ -188,7 +191,7 @@ public class FurnaceLampToggleTests
         UseUntendedWheel();
         PowerNode wheel = PlaceBuiltNode(PlaceableType.ImpWheel, WheelTile);
         PowerNode trap = PlaceBuiltNode(PlaceableType.SpikeTrap, TrapTile);
-        BuildConduit(LinkTile);
+        WireLink();
         Assert.IsTrue(wheel.Enabled, "Default enabled");
         Assert.IsTrue(trap.IsPowered);
 
@@ -214,8 +217,9 @@ public class FurnaceLampToggleTests
         UseUntendedWheel();
         PowerNode wheel = PlaceBuiltNode(PlaceableType.ImpWheel, WheelTile);
         PowerNode trap = PlaceBuiltNode(PlaceableType.SpikeTrap, TrapTile);
-        PowerNode lamp = PlaceBuiltNode(PlaceableType.GrowLamp, T(23, 15)); // Touches the link at (23,14)
-        BuildConduit(LinkTile);
+        PowerNode lamp = PlaceBuiltNode(PlaceableType.GrowLamp, T(23, 15)); // A spur off the link at (23,14)
+        WireLink();
+        BuildConduit(T(23, 15));
         Assert.IsTrue(lamp.IsConnected);
         Assert.AreEqual(30, lamp.Totals.Demand, "Trap 10 + lamp 20");
         Assert.IsTrue(lamp.IsPowered);
@@ -241,7 +245,7 @@ public class FurnaceLampToggleTests
         UseUntendedWheel();
         PlaceBuiltNode(PlaceableType.ImpWheel, WheelTile);
         PowerNode node = PlaceBuiltNode(PlaceableType.SpikeTrap, TrapTile);
-        BuildConduit(LinkTile);
+        WireLink();
         var trap = node.GetComponent<SpikeTrap>();
         Assert.IsTrue(trap.TryTrigger(out _));
         Assert.IsTrue(trap.SelfRearmOwns, "Powered and enabled: the grid would rearm it");
@@ -310,7 +314,7 @@ public class FurnaceLampToggleTests
         var store = new CountingStore { Units = 1 };
         FurnaceGenerator furnace = BuiltFurnace(WheelTile, store, retrySeconds: 1f);
         PowerNode trap = PlaceBuiltNode(PlaceableType.SpikeTrap, TrapTile);
-        BuildConduit(LinkTile);
+        WireLink();
         Assert.AreEqual(100, trap.Totals.Supply);
 
         TickFor(furnace, 12.02f);
@@ -382,7 +386,7 @@ public class FurnaceLampToggleTests
         Assert.AreEqual(5, manager.TotalFood, "The top bar's Food drops with it");
 
         PowerNode trap = PlaceBuiltNode(PlaceableType.SpikeTrap, TrapTile);
-        BuildConduit(LinkTile);
+        WireLink();
         Assert.AreEqual(100, trap.Totals.Supply);
         Assert.IsTrue(trap.IsPowered);
         Assert.IsFalse(digger.IsOperating, "No tending: the furnace isn't an Operate job");
@@ -455,7 +459,7 @@ public class FurnaceLampToggleTests
         UseUntendedWheel();
         PowerNode wheel = PlaceBuiltNode(PlaceableType.ImpWheel, WheelTile);
         PowerNode lamp = PlaceBuiltNode(PlaceableType.GrowLamp, TrapTile);
-        BuildConduit(LinkTile);
+        WireLink();
         MushroomPlot near = BuiltPlot(T(25, 16), 0); // Chebyshev 2 from (24,14)
         MushroomPlot far = BuiltPlot(T(21, 18), 0);
         Assert.IsTrue(lamp.IsPowered);
@@ -471,7 +475,8 @@ public class FurnaceLampToggleTests
         Assert.AreEqual(1f, near.GrowthMultiplier, "An unpowered lamp: plots grow normally");
         wheel.SetEnabled(true);
 
-        PowerNode second = PlaceBuiltNode(PlaceableType.GrowLamp, T(23, 15)); // Touches (23,14)
+        PowerNode second = PlaceBuiltNode(PlaceableType.GrowLamp, T(23, 15)); // A spur off (23,14)
+        BuildConduit(T(23, 15));
         Assert.IsTrue(second.IsPowered, "40 W covers both lamps' 40 W");
         Assert.AreEqual(2f, near.GrowthMultiplier, 1e-6f, "Two lamps on one plot: still ×2");
 
@@ -484,7 +489,7 @@ public class FurnaceLampToggleTests
         UseUntendedWheel();
         PowerNode wheel = PlaceBuiltNode(PlaceableType.ImpWheel, WheelTile);
         PlaceBuiltNode(PlaceableType.GrowLamp, TrapTile);
-        BuildConduit(LinkTile);
+        WireLink();
         MushroomPlot near = BuiltPlot(T(25, 15), 0);
         MushroomPlot far = BuiltPlot(T(21, 18), 0);
         float perFood = near.GrowthSecondsPerFood;
@@ -546,7 +551,7 @@ public class FurnaceLampToggleTests
         BuiltPlot(T(25, 16), 5);
         Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.FurnaceGenerator, WheelTile, ImpTile, out Placeable furnace));
         PowerNode lamp = PlaceBuiltNode(PlaceableType.GrowLamp, TrapTile);
-        BuildConduit(LinkTile);
+        WireLink();
 
         CollectionAssert.AreEqual(new[]
         {

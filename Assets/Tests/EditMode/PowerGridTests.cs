@@ -88,12 +88,15 @@ public class PowerGridTests
         }
     }
 
+    // A node connects only through conduit on its own tile: the run passes under the wheel and the trap.
+    private void WireLink() => BuildConduit(WheelTile, LinkTile, TrapTile);
+
     private SpikeTrap SpentPoweredTrap()
     {
         UseUntendedProducer();
         PlaceBuiltNode(PlaceableType.ImpWheel, WheelTile);
         SpikeTrap trap = PlaceBuiltNode(PlaceableType.SpikeTrap, TrapTile).GetComponent<SpikeTrap>();
-        BuildConduit(LinkTile);
+        WireLink();
         Assert.IsTrue(trap.TryTrigger(out _));
         Assert.IsTrue(trap.IsPowered, "Wheel 40 W covers the trap's 10 W");
         return trap;
@@ -146,28 +149,31 @@ public class PowerGridTests
     }
 
     [Test]
-    public void GridAt_OwnTileOrA4Neighbor_ConnectsANode_ADiagonalDoesNot()
+    public void GridAt_OnlyConduitOnTheNodesOwnTile_ConnectsIt()
     {
         Dictionary<Vector2Int, int> comps = Comps(T(5, 5), T(6, 5), T(9, 9));
         Assert.AreEqual(0, PowerGrid.GridAt(comps, T(5, 5)), "On conduit");
-        Assert.AreEqual(0, PowerGrid.GridAt(comps, T(5, 6)), "Beside it (up)");
-        Assert.AreEqual(0, PowerGrid.GridAt(comps, T(7, 5)), "Beside it (right)");
-        Assert.AreEqual(-1, PowerGrid.GridAt(comps, T(7, 6)), "Diagonal only");
-        Assert.AreEqual(1, PowerGrid.GridAt(comps, T(9, 10)));
+        Assert.AreEqual(0, PowerGrid.GridAt(comps, T(6, 5)));
+        Assert.AreEqual(1, PowerGrid.GridAt(comps, T(9, 9)));
+        Assert.AreEqual(-1, PowerGrid.GridAt(comps, T(5, 6)), "Beside it (up): not connected");
+        Assert.AreEqual(-1, PowerGrid.GridAt(comps, T(7, 5)), "Beside it (right): not connected");
+        Assert.AreEqual(-1, PowerGrid.GridAt(comps, T(7, 6)), "Diagonal: not connected");
         Assert.AreEqual(-1, PowerGrid.GridAt(comps, T(20, 20)));
     }
 
     [Test]
     public void Sum_CountsActiveProducersAndAllConsumers_OnThatGridOnly()
     {
-        Dictionary<Vector2Int, int> comps = Comps(T(5, 5), T(6, 5), T(20, 20));
+        Dictionary<Vector2Int, int> comps = Comps(T(4, 5), T(5, 5), T(6, 5), T(7, 5), T(20, 20));
         var nodes = new[]
         {
             new PowerGrid.NodeState(T(4, 5), PowerRole.Producer, 40, true),
             new PowerGrid.NodeState(T(7, 5), PowerRole.Producer, 25, false), // Untended: no supply
-            new PowerGrid.NodeState(T(5, 6), PowerRole.Consumer, 10, true),
-            new PowerGrid.NodeState(T(6, 4), PowerRole.Consumer, 15, true),
-            new PowerGrid.NodeState(T(20, 21), PowerRole.Consumer, 99, true), // Another grid
+            new PowerGrid.NodeState(T(5, 5), PowerRole.Consumer, 10, true),
+            new PowerGrid.NodeState(T(6, 5), PowerRole.Consumer, 15, true),
+            new PowerGrid.NodeState(T(3, 5), PowerRole.Producer, 99, true),   // Beside the run, not on it: no grid
+            new PowerGrid.NodeState(T(5, 6), PowerRole.Consumer, 99, true),   // Beside the run, not on it: no grid
+            new PowerGrid.NodeState(T(20, 20), PowerRole.Consumer, 99, true), // Another grid
             new PowerGrid.NodeState(T(30, 30), PowerRole.Producer, 99, true), // No grid
         };
         PowerGrid.Sum(nodes, comps, 0, out int supply, out int demand);
@@ -199,13 +205,15 @@ public class PowerGridTests
         PowerNode wheel = PlaceBuiltNode(PlaceableType.ImpWheel, T(21, 14));
         PowerNode a = PlaceBuiltNode(PlaceableType.SpikeTrap, T(23, 14));
         PowerNode b = PlaceBuiltNode(PlaceableType.SpikeTrap, T(23, 16));
-        BuildConduit(T(22, 14), T(22, 15), T(22, 16));
+        BuildConduit(T(21, 14), T(22, 14), T(22, 15), T(22, 16), T(23, 14), T(23, 16));
 
         Assert.IsTrue(a.IsPowered && b.IsPowered, "20 supplied, 20 demanded: powered");
         Assert.AreEqual(20, wheel.Totals.Supply);
         Assert.AreEqual(20, wheel.Totals.Demand);
 
         PowerNode c = PlaceBuiltNode(PlaceableType.SpikeTrap, T(23, 15));
+        Assert.AreEqual(20, wheel.Totals.Demand, "Beside the run but not on it: not on the grid");
+        BuildConduit(T(23, 15));
         Assert.AreEqual(30, c.Totals.Demand);
         Assert.IsFalse(a.IsPowered || b.IsPowered || c.IsPowered, "Over-drawn: every consumer on the grid is unpowered");
     }
@@ -216,11 +224,11 @@ public class PowerGridTests
         SpikeTrap trap = SpentPoweredTrap();
         PowerNode node = trap.GetComponent<PowerNode>();
 
-        Assert.IsTrue(grid.RemoveConduit(LinkTile));
-        Assert.IsFalse(node.IsConnected, "Its only conduit is gone");
+        Assert.IsTrue(grid.RemoveConduit(TrapTile));
+        Assert.IsFalse(node.IsConnected, "The conduit under it is gone; the run beside it doesn't connect it");
         Assert.IsFalse(trap.IsPowered);
 
-        BuildConduit(LinkTile);
+        BuildConduit(TrapTile);
         Assert.IsTrue(trap.IsPowered, "Restored");
     }
 
@@ -230,11 +238,11 @@ public class PowerGridTests
         UseUntendedProducer();
         PlaceBuiltNode(PlaceableType.ImpWheel, T(21, 14));
         PowerNode trap = PlaceBuiltNode(PlaceableType.SpikeTrap, T(25, 14));
-        BuildConduit(T(22, 14), T(23, 14), T(24, 14));
+        BuildConduit(T(21, 14), T(22, 14), T(23, 14), T(24, 14), T(25, 14));
         Assert.IsTrue(trap.IsPowered);
         Assert.IsFalse(trap.ShowsMarker);
 
-        grid.RemoveConduit(T(23, 14)); // Two pieces: the wheel's (22) and the trap's (24)
+        grid.RemoveConduit(T(23, 14)); // Two pieces: the wheel's (21-22) and the trap's (24-25)
 
         Assert.IsTrue(trap.IsConnected, "Still on conduit");
         Assert.AreEqual(0, trap.Totals.Supply, "...but the producer is on the other piece");
@@ -384,7 +392,7 @@ public class PowerGridTests
     {
         PowerNode wheel = PlaceBuiltNode(PlaceableType.ImpWheel, WheelTile);
         PowerNode trap = PlaceBuiltNode(PlaceableType.SpikeTrap, TrapTile);
-        BuildConduit(LinkTile);
+        WireLink();
         Assert.AreEqual(0, wheel.Totals.Supply, "Untended: 0 W");
         Assert.IsFalse(trap.IsPowered);
 
@@ -401,7 +409,7 @@ public class PowerGridTests
     {
         PowerNode wheel = PlaceBuiltNode(PlaceableType.ImpWheel, WheelTile);
         PowerNode trap = PlaceBuiltNode(PlaceableType.SpikeTrap, TrapTile);
-        BuildConduit(LinkTile);
+        WireLink();
         StepUntil(() => digger.IsOperating, 5f, "operating");
 
         board.SetTile(27, 16, TileState.Designated);
@@ -506,7 +514,7 @@ public class PowerGridTests
 
         StepUntil(() => digger.IsRearming, 5f, "the imp to start rearming");
         Assert.IsTrue(trap.ImpRearming);
-        BuildConduit(LinkTile); // Power arrives mid-channel
+        WireLink(); // Power arrives mid-channel
         Assert.IsTrue(trap.IsPowered);
 
         float channel = digger.RearmElapsed;
@@ -533,7 +541,7 @@ public class PowerGridTests
         Assert.AreSame(trap, digger.CurrentTrap, "Dispatched");
         Assert.IsFalse(digger.IsRearming, "Still walking");
 
-        BuildConduit(LinkTile);
+        WireLink();
         StepUntil(() => digger.CurrentTrap == null, 2f, "the imp to drop the trap");
         Assert.IsFalse(digger.IsRearming);
         for (int i = 0; i < 200; i++) trap.Tick(Dt);
@@ -579,7 +587,7 @@ public class PowerGridTests
     {
         PowerNode wheel = PlaceBuiltNode(PlaceableType.ImpWheel, WheelTile);
         PowerNode trap = PlaceBuiltNode(PlaceableType.SpikeTrap, TrapTile);
-        BuildConduit(LinkTile);
+        WireLink();
 
         CollectionAssert.AreEqual(new[] { "Producer · 40 W", "Untended", "Grid: 0 produced · 10 demanded" },
             DetailCard.PlacedLines(wheel.GetComponent<Placeable>()));
@@ -624,7 +632,7 @@ public class PowerGridTests
         Assert.IsTrue(manager.TryPlace(PlaceableType.SpikeTrap, TrapTile, ImpTile, out Placeable site));
         PowerNode node = site.GetComponent<PowerNode>();
         Assert.IsNotNull(node, "Attached at placement");
-        BuildConduit(LinkTile);
+        WireLink();
         Assert.AreEqual(0, grid.NodeCount);
         Assert.IsFalse(node.IsConnected);
         Assert.IsFalse(node.ShowsMarker);
@@ -676,6 +684,24 @@ public class PowerGridTests
         Assert.IsTrue(wheel.IsConnected && trap.IsConnected);
         Assert.AreEqual(grid.GridAt(WheelTile), grid.GridAt(TrapTile), "One grid under both");
         Assert.IsTrue(trap.IsPowered);
+    }
+
+    [Test]
+    public void TwoGeneratorsSideBySide_OnlyTheOneOnConduit_SuppliesTheGrid()
+    {
+        UseUntendedProducer(); // 40 W each, whenever built
+        PowerNode onConduit = PlaceBuiltNode(PlaceableType.ImpWheel, WheelTile);
+        PowerNode beside = PlaceBuiltNode(PlaceableType.ImpWheel, T(22, 15)); // Touches the wheel and its conduit
+        PowerNode trap = PlaceBuiltNode(PlaceableType.SpikeTrap, TrapTile);
+        WireLink();
+
+        Assert.IsTrue(onConduit.IsConnected);
+        Assert.IsFalse(beside.IsConnected, "No conduit under it: not on the grid");
+        Assert.AreEqual(40, trap.Totals.Supply, "Only the connected wheel's watts count");
+
+        BuildConduit(T(22, 15));
+        Assert.IsTrue(beside.IsConnected);
+        Assert.AreEqual(80, trap.Totals.Supply, "Wired: both count");
     }
 
     [Test]

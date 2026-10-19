@@ -302,7 +302,8 @@ public class StockPanel : MonoBehaviour
     {
         if (!IsOpen) return false;
         if (placementController != null &&
-            (placementController.Mode != PlacementController.ToolMode.Neutral || placementController.ExitedToolThisFrame))
+            (placementController.Mode != PlacementController.ToolMode.Neutral || placementController.ExitedToolThisFrame
+             || placementController.HasPlacedSelection)) // #142: that Esc clears the placed selection first
             return false;
         if (TextInputFocus.IsTyping) return false; // That Esc defocuses the field
 
@@ -319,12 +320,21 @@ public class StockPanel : MonoBehaviour
     {
         SelectedMaterial = material;
         if (detailCard != null) detailCard.ShowMaterial(material);
+        // #142: the card shows one thing; the most recent selection wins, so a material replaces a placed building.
+        if (material != null && placementController != null) placementController.ClearPlacedSelection();
     }
 
-    // Arming a type or selecting DIG, from anywhere, closes the panel: what's open never disagrees with the mode.
+    // Arming a type or selecting DIG, from anywhere, closes the panel: what's open never disagrees with the mode. A placed
+    // building selected after the material (#142) takes the card: the row's selection clears.
     private void OnModeChanged()
     {
-        if (IsOpen && placementController != null && placementController.Mode != PlacementController.ToolMode.Neutral) Close();
+        if (placementController == null) return;
+        if (IsOpen && placementController.Mode != PlacementController.ToolMode.Neutral) Close();
+        else if (SelectedMaterial != null && placementController.HasPlacedSelection)
+        {
+            SetSelection(null);
+            Repaint();
+        }
     }
 
     // ---- chrome ----

@@ -6,7 +6,8 @@ public enum BuildCategory
     Living,
     Farming,
     Defense,
-    Magic
+    Magic,
+    Power // #142: appended; the rail seats it between Defense and Magic (CategoryOrder)
 }
 
 /// <summary>The simple filled shape a rail entry or tile wears as its icon (code-built; the runtime font has no emoji).</summary>
@@ -17,7 +18,17 @@ public enum BuildIconShape
     Circle,
     Diamond,
     Cross,
-    Stack // #126: the STOCK entry, three stacked slabs
+    Stack, // #126: the STOCK entry, three stacked slabs
+    Bolt   // #142: the Power category, a lightning bolt
+}
+
+/// <summary>
+/// A flyout tile that arms a tool verb rather than a placeable (#142): Lay conduit arms Wire mode. Verbs cost imp time
+/// only, so their tiles carry no material cost.
+/// </summary>
+public enum BuildVerb
+{
+    LayConduit
 }
 
 /// <summary>A material family (#126): the STOCK panel groups its rows under these, in this order.</summary>
@@ -33,7 +44,9 @@ public enum BuildStat
     RestRate,     // The material's rest-rate multiplier (the #110 property table)
     FoodGrowth,   // Seconds per food grown
     FoodCapacity, // Food a plot holds
-    TrapDamage
+    TrapDamage,
+    PowerOutput,  // #142: a producer's watts, from the power table ("Output 40 W")
+    NeedsOperator // #142: "Needs an imp" for a producer an imp must tend
 }
 
 /// <summary>
@@ -69,7 +82,7 @@ public static class BuildPresentation
     /// <summary>The rail's category order, top to bottom.</summary>
     public static readonly BuildCategory[] CategoryOrder =
     {
-        BuildCategory.Living, BuildCategory.Farming, BuildCategory.Defense, BuildCategory.Magic,
+        BuildCategory.Living, BuildCategory.Farming, BuildCategory.Defense, BuildCategory.Power, BuildCategory.Magic,
     };
 
     // In tile order within a category.
@@ -84,6 +97,38 @@ public static class BuildPresentation
         new Entry(PlaceableType.SpikeTrap, BuildCategory.Defense, "Spike Trap",
             "A one-shot trap. Hurts the first hero to step on it; an imp rearms it.", new Color(0.85f, 0.45f, 0.40f, 1f),
             BuildStat.TrapDamage),
+        new Entry(PlaceableType.ImpWheel, BuildCategory.Power, "Imp Wheel",
+            "A wheel an imp turns to power conduit. It stops whenever the imp leaves for other work.", new Color(0.95f, 0.80f, 0.30f, 1f),
+            BuildStat.PowerOutput, BuildStat.NeedsOperator),
+    };
+
+    /// <summary>A verb tile's presentation (#142).</summary>
+    public sealed class VerbEntry
+    {
+        public readonly BuildVerb verb;
+        public readonly BuildCategory category;
+        public readonly string displayName;
+        public readonly string description;
+        public readonly string costLine; // The tile's second line, in place of a material cost
+        public readonly Color accent;
+
+        public VerbEntry(BuildVerb verb, BuildCategory category, string displayName, string description, string costLine, Color accent)
+        {
+            this.verb = verb;
+            this.category = category;
+            this.displayName = displayName;
+            this.description = description;
+            this.costLine = costLine;
+            this.accent = accent;
+        }
+    }
+
+    // In tile order within a category; a category's verbs come before its types.
+    private static readonly VerbEntry[] VerbEntries =
+    {
+        new VerbEntry(BuildVerb.LayConduit, BuildCategory.Power, "Lay conduit",
+            "Drag over explored floor to order conduit; imps wire it. Grids carry power from producers to consumers.",
+            "Imp time only", new Color(0.85f, 0.55f, 0.25f, 1f)),
     };
 
     /// <summary>One material's presentation (#126). Its name and color stay the Stockpile catalog's.</summary>
@@ -183,12 +228,33 @@ public static class BuildPresentation
         return types;
     }
 
-    /// <summary>The categories the rail shows: CategoryOrder without the empty ones.</summary>
+    public static bool TryGetVerb(BuildVerb verb, out VerbEntry entry)
+    {
+        foreach (VerbEntry e in VerbEntries)
+        {
+            if (e.verb != verb) continue;
+            entry = e;
+            return true;
+        }
+        entry = null;
+        return false;
+    }
+
+    /// <summary>The verb tiles a category's flyout lists, before its types (#142). Empty for most categories.</summary>
+    public static List<BuildVerb> VerbsInCategory(BuildCategory category)
+    {
+        var verbs = new List<BuildVerb>();
+        foreach (VerbEntry e in VerbEntries)
+            if (e.category == category) verbs.Add(e.verb);
+        return verbs;
+    }
+
+    /// <summary>The categories the rail shows: CategoryOrder without the empty ones (no types and no verbs).</summary>
     public static List<BuildCategory> VisibleCategories()
     {
         var visible = new List<BuildCategory>();
         foreach (BuildCategory c in CategoryOrder)
-            if (TypesInCategory(c).Count > 0) visible.Add(c);
+            if (TypesInCategory(c).Count > 0 || VerbsInCategory(c).Count > 0) visible.Add(c);
         return visible;
     }
 
@@ -203,6 +269,7 @@ public static class BuildPresentation
             case BuildCategory.Living: return "LIVING";
             case BuildCategory.Farming: return "FARM";
             case BuildCategory.Defense: return "DEFENSE";
+            case BuildCategory.Power: return "POWER";
             default: return "MAGIC";
         }
     }
@@ -214,6 +281,7 @@ public static class BuildPresentation
             case BuildCategory.Living: return BuildIconShape.Bar;
             case BuildCategory.Farming: return BuildIconShape.Circle;
             case BuildCategory.Defense: return BuildIconShape.Diamond;
+            case BuildCategory.Power: return BuildIconShape.Bolt;
             default: return BuildIconShape.Cross;
         }
     }
@@ -225,6 +293,7 @@ public static class BuildPresentation
             case BuildCategory.Living: return new Color(0.55f, 0.72f, 0.92f, 1f);
             case BuildCategory.Farming: return new Color(0.50f, 0.78f, 0.45f, 1f);
             case BuildCategory.Defense: return new Color(0.85f, 0.45f, 0.40f, 1f);
+            case BuildCategory.Power: return new Color(0.95f, 0.80f, 0.30f, 1f);
             default: return new Color(0.62f, 0.50f, 0.88f, 1f);
         }
     }

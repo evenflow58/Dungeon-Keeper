@@ -13,6 +13,11 @@ using UnityEngine.InputSystem.UI;
 /// (BuildPresentation holds that).
 /// Placing is never blocked by cost (#104): the order waits for materials, and the drag preview takes the
 /// unaffordable tint then. Orders are placed in the selected material (#109).
+/// Wire mode (#142): the Power flyout's Lay conduit verb arms it; ConduitDesignator is enabled exactly then (as
+/// DigDesignator is in Dig), left-drag lays conduit, right-drag removes it, and Esc exits unless a wire drag is live.
+/// Placed selection (#142): in Neutral only, a left-click on a built placeable's tile selects it (the detail card's placed
+/// mode); a click on any other board tile clears it, and so do Esc (its own press: the rail and the STOCK panel leave that
+/// press alone), leaving Neutral, and the STOCK panel selecting a material (most recent wins).
 /// </summary>
 [DisallowMultipleComponent]
 public class PlacementController : MonoBehaviour
@@ -22,6 +27,7 @@ public class PlacementController : MonoBehaviour
     [SerializeField] private BoardRenderer boardRenderer;
     [SerializeField] private Imp imp;
     [SerializeField] private DigDesignator digDesignator;
+    [SerializeField] private ConduitDesignator conduitDesignator; // #142: enabled exactly in Wire mode
     [SerializeField] private PlacementManager placementManager;
     [SerializeField] private Camera mainCamera;
 
@@ -36,6 +42,7 @@ public class PlacementController : MonoBehaviour
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
     public Imp Imp { get => imp; set => imp = value; }
     public DigDesignator DigDesignator { get => digDesignator; set => digDesignator = value; }
+    public ConduitDesignator ConduitDesignator { get => conduitDesignator; set => conduitDesignator = value; }
     public PlacementManager PlacementManager { get => placementManager; set => placementManager = value; }
     public Camera MainCamera { get => mainCamera; set => mainCamera = value; }
 
@@ -49,18 +56,33 @@ public class PlacementController : MonoBehaviour
     public bool IsPlacing => SelectedType != null;
     public bool IsDragging => isDragging;
 
-    public enum ToolMode { Neutral, Dig, Armed }
+    public enum ToolMode { Neutral, Dig, Armed, Wire }
 
     /// <summary>True in Dig mode (#123): the dig tool is selected and DigDesignator is enabled.</summary>
     public bool IsDigging { get; private set; }
-    public ToolMode Mode => IsPlacing ? ToolMode.Armed : IsDigging ? ToolMode.Dig : ToolMode.Neutral;
 
-    /// <summary>Raised whenever the mode, the armed type or the selected material changes, so the chrome repaints at once.</summary>
+    /// <summary>True in Wire mode (#142): Lay conduit is armed and ConduitDesignator is enabled.</summary>
+    public bool IsWiring { get; private set; }
+
+    public ToolMode Mode => IsPlacing ? ToolMode.Armed : IsDigging ? ToolMode.Dig : IsWiring ? ToolMode.Wire : ToolMode.Neutral;
+
+    /// <summary>
+    /// The built placeable selected in Neutral (#142): the detail card's placed mode shows it. Null when nothing is
+    /// selected; never set outside Neutral.
+    /// </summary>
+    public Placeable SelectedPlaceable => selectedPlaceable != null ? selectedPlaceable : null; // Unity null: a destroyed one reads null
+
+    public bool HasPlacedSelection => SelectedPlaceable != null;
+
+    /// <summary>
+    /// Raised whenever the mode, the armed type, the selected material or the placed selection changes, so the chrome
+    /// repaints at once.
+    /// </summary>
     public event System.Action ModeChanged;
 
     /// <summary>
-    /// True on the frame a board Esc / right-click exited a tool here. BuildRail checks it so the same press can't also
-    /// close its flyout, whichever of the two updates first.
+    /// True on the frame a board Esc / right-click exited a tool here, or an Esc cleared the placed selection (#142).
+    /// BuildRail and StockPanel check it so the same press can't also close their panels, whichever updates first.
     /// </summary>
     public bool ExitedToolThisFrame => toolExitFrame == Time.frameCount;
 
@@ -83,6 +105,8 @@ public class PlacementController : MonoBehaviour
     // ---- mode state ----
     private int toolExitFrame = -1;
     private bool digWasDragging; // DigDesignator's drag state as of our last Update: an Esc that aborted a dig drag is not ours
+    private bool wireWasDragging; // The same for ConduitDesignator in Wire mode (#142)
+    private Placeable selectedPlaceable;
 
     // ---- visuals ----
     private SpriteRenderer previewSprite;
@@ -121,6 +145,7 @@ public class PlacementController : MonoBehaviour
         boardRenderer ??= FindAnyObjectByType<BoardRenderer>();
         imp ??= FindAnyObjectByType<Imp>();
         digDesignator ??= FindAnyObjectByType<DigDesignator>();
+        conduitDesignator ??= FindAnyObjectByType<ConduitDesignator>();
         placementManager ??= FindAnyObjectByType<PlacementManager>();
         mainCamera ??= Camera.main;
 
@@ -144,6 +169,7 @@ public class PlacementController : MonoBehaviour
         SelectedType = type;
         SelectedMaterial = MaterialFor(type);
         IsDigging = false;
+        IsWiring = false;
         ApplyMode();
     }
 
@@ -153,7 +179,53 @@ public class PlacementController : MonoBehaviour
         CancelDrag();
         SelectedType = null;
         IsDigging = true;
+        IsWiring = false;
         ApplyMode();
+    }
+
+    /// <summary>Arms Lay conduit (Wire mode, #142); selecting it again while armed exits to Neutral, like a type tile.</summary>
+    public void SelectWire()
+    {
+        if (IsWiring)
+        {
+            ClearSelection();
+            return;
+        }
+        CancelDrag();
+        SelectedType = null;
+        IsDigging = false;
+        IsWiring = true;
+        ApplyMode();
+    }
+
+    /// <summary>Selects a built placeable (#142): Neutral only, built only. False (and nothing changes) otherwise.</summary>
+    public bool SelectPlaced(Placeable placeable)
+    {
+        if (Mode != ToolMode.Neutral || placeable == null || !placeable.IsBuilt) return false;
+        if (selectedPlaceable == placeable) return true;
+        selectedPlaceable = placeable;
+        ModeChanged?.Invoke();
+        return true;
+    }
+
+    /// <summary>Clears the placed selection (#142). No-op when nothing is selected.</summary>
+    public void ClearPlacedSelection()
+    {
+        if (selectedPlaceable == null) return;
+        selectedPlaceable = null;
+        ModeChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// A Neutral board click (#142): selects the built placeable on the tile, else clears the selection (an empty tile, a
+    /// site, an order). Ignored outside Neutral, where board clicks keep their tool meanings.
+    /// </summary>
+    public void ClickBoardTile(Vector2Int tile)
+    {
+        if (Mode != ToolMode.Neutral) return;
+        Placeable placeable = placementManager != null ? placementManager.GetAt(tile) : null;
+        if (placeable != null && placeable.IsBuilt) SelectPlaced(placeable);
+        else ClearPlacedSelection();
     }
 
     /// <summary>
@@ -210,13 +282,26 @@ public class PlacementController : MonoBehaviour
         return placementManager.TryGetDefaultMaterial(type, out MaterialType fallback) ? fallback : SelectedMaterial;
     }
 
-    /// <summary>Exits the current tool, armed or dig, to Neutral: nothing selected, dig designation off.</summary>
+    /// <summary>Exits the current tool, armed, dig or wire, to Neutral: nothing selected, designation off.</summary>
     public void ClearSelection()
     {
         CancelDrag();
         SelectedType = null;
         IsDigging = false;
+        IsWiring = false;
         ApplyMode();
+    }
+
+    /// <summary>
+    /// Esc in Wire (#142): exits to Neutral unless a wire drag is live, or was when this component last updated (the
+    /// designator aborts its own drag on that press). False when the press isn't ours.
+    /// </summary>
+    public bool TryExitWireOnAbort()
+    {
+        if (!IsWiring) return false;
+        if (wireWasDragging || (conduitDesignator != null && conduitDesignator.IsDragging)) return false;
+        ExitFromBoardInput();
+        return true;
     }
 
     /// <summary>
@@ -238,10 +323,15 @@ public class PlacementController : MonoBehaviour
         ClearSelection();
     }
 
-    /// <summary>Enforces the mode on DigDesignator: enabled in Dig and at no other time. Start calls this too.</summary>
+    /// <summary>
+    /// Enforces the mode on the designators: DigDesignator enabled in Dig, ConduitDesignator in Wire, and at no other
+    /// time. Leaving Neutral clears the placed selection. Start calls this too.
+    /// </summary>
     public void ApplyMode()
     {
         if (digDesignator != null) digDesignator.enabled = IsDigging;
+        if (conduitDesignator != null) conduitDesignator.enabled = IsWiring;
+        if (Mode != ToolMode.Neutral) selectedPlaceable = null;
         ModeChanged?.Invoke();
     }
 
@@ -251,6 +341,9 @@ public class PlacementController : MonoBehaviour
     {
         if (IsDigging && (input?.Abort.WasPressedThisFrame() ?? false)) TryExitDigOnAbort();
         digWasDragging = IsDigging && digDesignator != null && digDesignator.IsDragging;
+        if (IsWiring && (input?.Abort.WasPressedThisFrame() ?? false)) TryExitWireOnAbort();
+        wireWasDragging = IsWiring && conduitDesignator != null && conduitDesignator.IsDragging;
+        if (Mode == ToolMode.Neutral) HandleNeutralInput();
 
         if (feedbackTimer > 0f)
         {
@@ -269,6 +362,23 @@ public class PlacementController : MonoBehaviour
             HandleIdleInput(hitGround, worldPos);
         else
             HandleDragInput(hitGround, worldPos);
+    }
+
+    // Neutral (#142): Esc clears the placed selection first (its own press); a board click selects or clears.
+    private void HandleNeutralInput()
+    {
+        if (HasPlacedSelection && !TextInputFocus.IsTyping && (input?.Abort.WasPressedThisFrame() ?? false))
+        {
+            toolExitFrame = Time.frameCount; // The rail and the STOCK panel leave this press alone
+            ClearPlacedSelection();
+            return;
+        }
+
+        if (!(input?.Designate.WasPressedThisFrame() ?? false) || IsPointerOverUI()) return;
+        if (dungeonBoard == null || boardRenderer == null || mainCamera == null) return;
+        Vector2 mouseScreen = input?.PointerPosition.ReadValue<Vector2>() ?? Vector2.zero;
+        if (!boardRenderer.RaycastBoard(mainCamera.ScreenPointToRay(mouseScreen), out Vector3 worldPos)) return;
+        ClickBoardTile(boardRenderer.WorldToBoardCoords(worldPos));
     }
 
     private void HandleIdleInput(bool hitGround, Vector3 worldPos)

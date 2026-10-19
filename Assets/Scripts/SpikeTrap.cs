@@ -5,6 +5,10 @@ using UnityEngine;
 /// (TryTrigger), dealing Damage and becoming Spent. A spent trap never re-fires until the imp rearms it.
 /// Visual (ticket #77): a grid of steel cone spikes on the trap's plate, raised while Armed and retracted
 /// nearly flat while Spent, switched instantly by every state change.
+/// Powered rearm (#142): a built, spent trap on a powered grid rearms itself over poweredRearmSeconds, progress kept on
+/// the trap. Losing power pauses the progress (kept) and hands the trap back to the imp's rearm pool; while powered it is
+/// not an imp candidate. An imp already channelling a rearm when power arrives finishes it, and the self-rearm stays
+/// paused meanwhile, so the two never advance the same trap together. With no power (no grid, no conduit), as before.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Placeable))]
@@ -12,6 +16,7 @@ public class SpikeTrap : MonoBehaviour
 {
     [Header("Trap")]
     [SerializeField] private int damage = 1; // Provisional: hero HP lands with Epic #5
+    [SerializeField] private float poweredRearmSeconds = 4f; // #142: self-rearm time on a powered grid (the power table's, set at placement)
 
     [Header("Spikes (code-built, ticket #77)")]
     [SerializeField] private Color spikeColor = new Color(0.85f, 0.87f, 0.90f, 1f); // Light steel
@@ -23,6 +28,21 @@ public class SpikeTrap : MonoBehaviour
     [SerializeField] private float spikeSpread = 0.8f;                              // Grid span as a fraction of the plate
 
     public int Damage { get => damage; set => damage = value; }
+    public float PoweredRearmSeconds { get => poweredRearmSeconds; set => poweredRearmSeconds = value; }
+
+    /// <summary>Self-rearm progress 0–1 (#142). Kept through a brownout; reset when the trap re-arms by any means.</summary>
+    public float PoweredRearmProgress { get; private set; }
+
+    /// <summary>True while an imp is channelling a rearm on this trap (ImpDigger sets it): self-rearm pauses.</summary>
+    public bool ImpRearming { get; set; }
+
+    /// <summary>On a grid that covers its demand (#142): its PowerNode's IsPowered. False with no node.</summary>
+    public bool IsPowered => TryGetComponent(out PowerNode node) && node.IsPowered;
+
+    /// <summary>
+    /// The self-rearm owns this trap (#142): built, spent and powered. Such a trap is not an imp rearm candidate.
+    /// </summary>
+    public bool SelfRearmOwns => IsBuilt && !IsArmed && IsPowered;
 
     public Vector2Int Tile => GetComponent<Placeable>().Tile;
 
@@ -82,8 +102,28 @@ public class SpikeTrap : MonoBehaviour
     {
         if (!IsBuilt) return;
         IsArmed = true;
+        PoweredRearmProgress = 0f;
         RefreshVisual();
     }
+
+    private void Update()
+    {
+        Tick(Time.deltaTime);
+    }
+
+    /// <summary>
+    /// Advances the powered self-rearm by deltaTime (game time): only for a built, spent trap that's powered and not being
+    /// rearmed by an imp; reaching full calls Rearm. Called from Update; public so tests can step it.
+    /// </summary>
+    public void Tick(float deltaTime)
+    {
+        if (!IsBuilt || IsArmed || ImpRearming || !IsPowered) return; // Paused, progress kept
+        PoweredRearmProgress += poweredRearmSeconds > 0f ? deltaTime / poweredRearmSeconds : 1f;
+        if (PoweredRearmProgress >= 1f - RearmCompleteTolerance) Rearm();
+    }
+
+    // Progress is a sum of deltaTime / seconds steps; absorb float rounding so a rearm lands on its full duration.
+    private const float RearmCompleteTolerance = 1e-4f;
 
     private void RefreshVisual()
     {

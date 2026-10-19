@@ -311,7 +311,8 @@ public class StockPanelTests
         Assert.AreEqual("Shallow stone from near the entrance, faintly magical.", card.Description);
         Assert.AreEqual("Source: Dug · entrance shallows", card.SourceLine);
         CollectionAssert.AreEqual(new[] { "Lair Cot rest ×1.25", "Lair Cot rests magical creatures" }, card.MaterialHighlights());
-        CollectionAssert.AreEqual(new[] { "Lair Cot · 3", "Mushroom Plot · 4", "Spike Trap · 2" }, card.UseChipLabels());
+        // #142 migration: the Imp Wheel has a Glimmerstone row too.
+        CollectionAssert.AreEqual(new[] { "Lair Cot · 3", "Mushroom Plot · 4", "Spike Trap · 2", "Imp Wheel · 4" }, card.UseChipLabels());
         Assert.AreEqual("Waiting orders: 1", card.WaitingLine);
 
         stockpile.Add(MaterialType.Glimmerstone, 7);
@@ -408,11 +409,12 @@ public class StockPanelTests
     }
 
     [Test]
-    public void DigitFive_IsTheStockEntry_AndTogglesThePanel()
+    public void DigitSix_IsTheStockEntry_AndTogglesThePanel()
     {
-        Assert.IsTrue(rail.ActivateEntry(4));
+        // #142 migration: the Power category takes digit 5, so STOCK moves to digit 6 (index 5).
+        Assert.IsTrue(rail.ActivateEntry(5));
         Assert.IsTrue(panel.IsOpen);
-        Assert.IsTrue(rail.ActivateEntry(4));
+        Assert.IsTrue(rail.ActivateEntry(5));
         Assert.IsFalse(panel.IsOpen);
 
         rail.StockPanel = null;

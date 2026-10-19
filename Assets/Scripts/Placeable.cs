@@ -4,13 +4,14 @@ public enum PlaceableType
 {
     LairCot,
     MushroomPlot,
-    SpikeTrap
+    SpikeTrap,
+    ImpWheel // #142: appended (never reorder: serialized rows reference these by value)
 }
 
 /// <summary>
 /// A placed item occupying one board tile. Placement never changes the tile's TileState:
 /// the tile stays Floor and walkable; occupancy lives in PlacementManager's registry.
-/// Its look is a code-built model (ticket #77): a cot, a mushroom mound, or a trap's base plate.
+/// Its look is a code-built model (ticket #77): a cot, a mushroom mound, a trap's base plate, or (#142) an imp wheel.
 /// Placement is an order (#91): it starts as an inert construction site (a materials pile) until
 /// CompleteConstruction, which the builder calls (story #92; tests and staging call it directly).
 /// Orders cost materials (#104): an order records its requirement and waits UNFUNDED — showing an order marker (a
@@ -25,6 +26,8 @@ public class Placeable : MonoBehaviour
     [SerializeField] private Color cotPillowColor = new Color(0.92f, 0.90f, 0.85f, 1f); // Off-white
     [SerializeField] private Color plotSoilColor = new Color(0.26f, 0.17f, 0.10f, 1f);  // Dark earth
     [SerializeField] private Color plotStemColor = new Color(0.90f, 0.87f, 0.78f, 1f);  // Pale stems
+    [SerializeField] private Color wheelFrameColor = new Color(0.30f, 0.20f, 0.12f, 1f); // #142: dark timber stand
+    [SerializeField] private Color wheelIronColor = new Color(0.25f, 0.25f, 0.27f, 1f);  // #142: hub and axle
     [SerializeField] private float modelSmoothness = 0.2f;                              // A little sheen, less than creatures
 
     [Header("Construction Site (#91)")]
@@ -208,6 +211,7 @@ public class Placeable : MonoBehaviour
 
         if (TryGetComponent(out SpikeTrap trap)) trap.OnConstructed();
         if (TryGetComponent(out MushroomPlot plot)) plot.OnConstructed();
+        if (TryGetComponent(out PowerNode node)) node.OnConstructed(); // #142: a node joins its grid once built
     }
 
     private void Update()
@@ -299,6 +303,7 @@ public class Placeable : MonoBehaviour
     private CreatureModel.Part[] FinishedRecipe(Color color, float size) =>
         Type == PlaceableType.LairCot ? PropModel.LairCotRecipe(size, cotFrameColor, color, cotPillowColor)
         : Type == PlaceableType.MushroomPlot ? PropModel.MushroomPlotRecipe(size, plotSoilColor, plotStemColor, color)
+        : Type == PlaceableType.ImpWheel ? PropModel.ImpWheelRecipe(size, wheelFrameColor, color, wheelIronColor)
         : PropModel.SpikeTrapPlateRecipe(size, color);
 
     private void CreateModel(Color color, float size)
@@ -336,6 +341,7 @@ public class Placeable : MonoBehaviour
         CreatureModel.Part[] recipe =
             Type == PlaceableType.LairCot ? PropModel.CotMaterialsRecipe(size, cotFrameColor, crateColor, color)
             : Type == PlaceableType.MushroomPlot ? PropModel.PlotMaterialsRecipe(size, plotSoilColor, sackColor, color)
+            : Type == PlaceableType.ImpWheel ? PropModel.WheelMaterialsRecipe(size, wheelFrameColor, crateColor, color)
             : PropModel.TrapMaterialsRecipe(size, color, Color.Lerp(color, Color.white, 0.45f), crateColor);
         MaterialsPile = CreatureModel.Build(transform, Type + "Materials", recipe, modelSmoothness);
     }

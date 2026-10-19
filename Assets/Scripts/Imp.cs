@@ -185,17 +185,20 @@ public class Imp : MonoBehaviour
         if (poser == null) return;
         if (digger == null) TryGetComponent(out digger);
         bool swinging = digger != null && (digger.IsDigging || digger.IsRearming);
-        bool building = digger != null && digger.IsBuilding;
-        bool working = swinging || building;
+        bool building = digger != null && (digger.IsBuilding || digger.IsWiring); // #142: wiring conduit is construction work
+        bool operating = digger != null && digger.IsOperating;                    // #142: stands at the wheel, facing it
+        bool working = swinging || building || operating;
         poser.Step(deltaTime, new CreatureMotion.Flags { Digging = swinging, Building = building, FaceTarget = working ? WorkPoint() : null });
     }
 
-    // The tile being worked (#94): the site being built, the trap being rearmed, else the rock being dug.
-    // Unity null checks on the site and trap.
+    // The tile being worked (#94): the site being built, the trap being rearmed, the conduit being wired or the wheel
+    // being tended (#142), else the rock being dug. Unity null checks on the site, trap and wheel.
     private Vector3? WorkPoint()
     {
         if (digger.CurrentSite != null) return digger.CurrentSite.transform.position;
         if (digger.CurrentTrap != null) return digger.CurrentTrap.transform.position;
+        if (digger.CurrentWheel != null) return digger.CurrentWheel.transform.position;
+        if (digger.CurrentConduit.HasValue) return TileCenter(digger.CurrentConduit.Value);
         return digger.CurrentTarget.HasValue ? TileCenter(digger.CurrentTarget.Value) : (Vector3?)null;
     }
 }

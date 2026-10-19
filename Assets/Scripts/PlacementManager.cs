@@ -12,6 +12,8 @@ using UnityEngine;
 /// an earlier one of the same material), while a waiting order never holds up orders in other materials. The pass runs at placement and every frame while anything waits, so an affordable order funds at once
 /// and a waiting one funds the frame the stockpile covers it. Only funded sites are build jobs. With no Stockpile
 /// wired, every order funds at once (an unwired system degrades, never blocks). Placing is never blocked by cost.
+/// Power (#142): the power table gives each type a role (none, producer, consumer), its watts and per-type params; a type
+/// with a role gets a PowerNode at placement, which joins the PowerGrid once built.
 /// </summary>
 [DisallowMultipleComponent]
 public class PlacementManager : MonoBehaviour
@@ -20,11 +22,13 @@ public class PlacementManager : MonoBehaviour
     [SerializeField] private DungeonBoard dungeonBoard;
     [SerializeField] private BoardRenderer boardRenderer;
     [SerializeField] private Stockpile stockpile; // Pays for orders (#104); null = orders fund at once
+    [SerializeField] private PowerGrid powerGrid; // #142: where built power nodes register; null = nodes never connect
 
     [Header("Placeable Visuals (Placeholder Art)")]
     [SerializeField] private Color lairCotColor = new Color(0.40f, 0.60f, 0.90f, 1f);      // Blue
     [SerializeField] private Color mushroomPlotColor = new Color(0.35f, 0.75f, 0.35f, 1f); // Green
     [SerializeField] private Color spikeTrapColor = new Color(0.55f, 0.55f, 0.60f, 1f);    // Steel gray
+    [SerializeField] private Color impWheelColor = new Color(0.62f, 0.44f, 0.26f, 1f);     // #142: worn wood
     [SerializeField] private float placeableSize = 0.8f;                                    // Fraction of a tile
 
     // Placeables are runtime-created (no Inspector presence), so their behavior config lives here.
@@ -40,6 +44,7 @@ public class PlacementManager : MonoBehaviour
     [SerializeField] private float lairCotBuildSeconds = 4f;
     [SerializeField] private float mushroomPlotBuildSeconds = 6f;
     [SerializeField] private float spikeTrapBuildSeconds = 5f;
+    [SerializeField] private float impWheelBuildSeconds = 6f; // #142
 
     // What an order costs (#104), per type AND material (#109): a type is orderable in a material exactly when a row
     // exists. Ships with every type in Stone, Glimmerstone (#114) and Deepstone (#111); later materials add rows, not fields.
@@ -55,6 +60,17 @@ public class PlacementManager : MonoBehaviour
         new PlaceableCost(PlaceableType.LairCot, MaterialType.Deepstone, 3),         // #111: at Stone's amounts
         new PlaceableCost(PlaceableType.MushroomPlot, MaterialType.Deepstone, 4),
         new PlaceableCost(PlaceableType.SpikeTrap, MaterialType.Deepstone, 2),
+        new PlaceableCost(PlaceableType.ImpWheel, MaterialType.Stone, 4),            // #142
+        new PlaceableCost(PlaceableType.ImpWheel, MaterialType.Glimmerstone, 4),
+        new PlaceableCost(PlaceableType.ImpWheel, MaterialType.Deepstone, 4),
+    };
+
+    // What each type does on a power grid (#142), the same row-table pattern as the costs: a type with no row has no role.
+    [Header("Power")]
+    [SerializeField] private List<PlaceablePower> power = new List<PlaceablePower>
+    {
+        new PlaceablePower(PlaceableType.ImpWheel, PowerRole.Producer, 40, needsOperator: true),
+        new PlaceablePower(PlaceableType.SpikeTrap, PowerRole.Consumer, 10, poweredRearmSeconds: 4f),
     };
 
     // What a material makes a building DO (#110), per type AND material: numeric modifiers plus capability flags.
@@ -77,6 +93,10 @@ public class PlacementManager : MonoBehaviour
     public float MushroomPlotBuildSeconds { get => mushroomPlotBuildSeconds; set => mushroomPlotBuildSeconds = value; }
     public float SpikeTrapBuildSeconds { get => spikeTrapBuildSeconds; set => spikeTrapBuildSeconds = value; }
     public Stockpile Stockpile { get => stockpile; set => stockpile = value; }
+    public PowerGrid PowerGrid { get => powerGrid; set => powerGrid = value; }
+    public float ImpWheelBuildSeconds { get => impWheelBuildSeconds; set => impWheelBuildSeconds = value; }
+    /// <summary>The power rows, in table order (replaceable in code, e.g. by tests).</summary>
+    public List<PlaceablePower> Power { get => power; set => power = value ?? new List<PlaceablePower>(); }
     /// <summary>The cost rows, in table order (replaceable in code, e.g. by tests).</summary>
     public List<PlaceableCost> Costs { get => costs; set => costs = value ?? new List<PlaceableCost>(); }
     /// <summary>The material-property rows, in table order (replaceable in code, e.g. by tests).</summary>
@@ -121,6 +141,24 @@ public class PlacementManager : MonoBehaviour
             }
         }
         property = null;
+        return false;
+    }
+
+    /// <summary>A type's power row (#142): its role, watts and params. False + null with no row (no role). Never throws.</summary>
+    public bool TryGetPower(PlaceableType type, out PlaceablePower row)
+    {
+        if (power != null)
+        {
+            foreach (PlaceablePower candidate in power)
+            {
+                if (candidate != null && candidate.type == type)
+                {
+                    row = candidate;
+                    return true;
+                }
+            }
+        }
+        row = null;
         return false;
     }
 
@@ -190,6 +228,7 @@ public class PlacementManager : MonoBehaviour
             case PlaceableType.LairCot: return lairCotBuildSeconds;
             case PlaceableType.MushroomPlot: return mushroomPlotBuildSeconds;
             case PlaceableType.SpikeTrap: return spikeTrapBuildSeconds;
+            case PlaceableType.ImpWheel: return impWheelBuildSeconds;
             default: return 0f;
         }
     }
@@ -267,6 +306,7 @@ public class PlacementManager : MonoBehaviour
     {
         dungeonBoard ??= GetComponent<DungeonBoard>() ?? FindAnyObjectByType<DungeonBoard>();
         boardRenderer ??= GetComponent<BoardRenderer>() ?? FindAnyObjectByType<BoardRenderer>();
+        powerGrid ??= GetComponent<PowerGrid>();
     }
 
     public bool IsOccupied(Vector2Int tile) => placed.ContainsKey(tile);
@@ -307,6 +347,9 @@ public class PlacementManager : MonoBehaviour
 
     /// <summary>Built Lair Cots only, in scan order: the ones a goblin can claim.</summary>
     public List<Placeable> GetBuiltCots() => Collect<Placeable>(PlaceableType.LairCot, builtOnly: true);
+
+    /// <summary>Built Imp Wheels' power nodes (#142), in scan order: the wheels an imp can operate.</summary>
+    public List<PowerNode> GetBuiltWheels() => Collect<PowerNode>(PlaceableType.ImpWheel, builtOnly: true);
 
     /// <summary>Build jobs (#92): every FUNDED, unbuilt site, any type, in board scan order. Orders still awaiting
     /// materials are excluded (#104): they are not work until paid for.</summary>
@@ -376,6 +419,11 @@ public class PlacementManager : MonoBehaviour
             go.AddComponent<MushroomPlot>().Initialize(mushroomGrowthSecondsPerFood, mushroomCapacity);
         else if (type == PlaceableType.SpikeTrap)
             go.AddComponent<SpikeTrap>().Initialize(spikeDamage);
+        if (TryGetPower(type, out PlaceablePower powerRow) && powerRow.role != PowerRole.None)
+        {
+            go.AddComponent<PowerNode>().Initialize(powerGrid, powerRow.role, powerRow.watts, powerRow.needsOperator);
+            if (go.TryGetComponent(out SpikeTrap trap)) trap.PoweredRearmSeconds = powerRow.poweredRearmSeconds;
+        }
         placed[tile] = placeable;
 
         // The order (#104): stamp its place in line and cost, then fund it now if it can be (it waits otherwise).
@@ -430,6 +478,7 @@ public class PlacementManager : MonoBehaviour
             case PlaceableType.LairCot: return lairCotColor;
             case PlaceableType.MushroomPlot: return mushroomPlotColor;
             case PlaceableType.SpikeTrap: return spikeTrapColor;
+            case PlaceableType.ImpWheel: return impWheelColor;
             default: return Color.magenta;
         }
     }
@@ -488,5 +537,29 @@ public class PlaceableProperty
         this.restRateMultiplier = restRateMultiplier;
         this.restQuality = restQuality;
         this.restsMagicalCreatures = restsMagicalCreatures;
+    }
+}
+
+/// <summary>
+/// One power row (#142): what a type does on a power grid — its role and watts (output for a producer, draw for a
+/// consumer) — plus per-type params: needsOperator (a producer that runs only while an imp tends it, the Imp Wheel) and
+/// poweredRearmSeconds (the Spike Trap's self-rearm time on a powered grid).
+/// </summary>
+[System.Serializable]
+public class PlaceablePower
+{
+    public PlaceableType type;
+    public PowerRole role;
+    public int watts;
+    public bool needsOperator;
+    public float poweredRearmSeconds;
+
+    public PlaceablePower(PlaceableType type, PowerRole role, int watts, bool needsOperator = false, float poweredRearmSeconds = 0f)
+    {
+        this.type = type;
+        this.role = role;
+        this.watts = watts;
+        this.needsOperator = needsOperator;
+        this.poweredRearmSeconds = poweredRearmSeconds;
     }
 }

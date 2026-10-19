@@ -123,7 +123,7 @@ public static class PropModel
             new Part("Body",    Shape.Box,      new Vector3(0f, 0.27f, 0f),                 new Vector3(0.66f * s, 0.42f, 0.56f * s), body),
             new Part("Band",    Shape.Box,      new Vector3(0f, 0.40f, 0f),                 new Vector3(0.68f * s, 0.04f, 0.58f * s), iron),
             new Part("Door",    Shape.Box,      new Vector3(0f, 0.2f, front - 0.006f),      new Vector3(0.3f * s, 0.2f, 0.02f), iron),
-            new Part("Fire",    Shape.Box,      new Vector3(0f, 0.17f, front - 0.018f),     new Vector3(0.22f * s, 0.06f, 0.01f), fire),
+            new Part("Fire",    Shape.Box,      new Vector3(0f, 0.17f, front - 0.018f),     new Vector3(0.24f * s, 0.08f, 0.01f), fire),
             // A cylinder is 2 units tall: scale.y is half its height. This one stands from the body's top to ~0.98.
             new Part("Chimney", Shape.Cylinder, new Vector3(0.18f * s, 0.73f, 0.14f * s),   new Vector3(0.12f, 0.25f, 0.12f), iron),
             new Part("Cap",     Shape.Cylinder, new Vector3(0.18f * s, 0.99f, 0.14f * s),   new Vector3(0.17f, 0.02f, 0.17f), iron),
@@ -136,8 +136,8 @@ public static class PropModel
     {
         new Part("Foot",  Shape.Cylinder, new Vector3(0f, 0.02f, 0f), new Vector3(0.3f * s, 0.02f, 0.3f * s), post),
         new Part("Post",  Shape.Cylinder, new Vector3(0f, 0.34f, 0f), new Vector3(0.05f, 0.3f, 0.05f), post),
-        new Part("Glass", Shape.Sphere,   new Vector3(0f, 0.72f, 0f), new Vector3(0.2f, 0.2f, 0.2f), glass),
-        new Part("Cap",   Shape.Cylinder, new Vector3(0f, 0.83f, 0f), new Vector3(0.26f, 0.02f, 0.26f), post),
+        new Part("Glass", Shape.Sphere,   new Vector3(0f, 0.74f, 0f), new Vector3(0.26f, 0.26f, 0.26f), glass),
+        new Part("Cap",   Shape.Cylinder, new Vector3(0f, 0.875f, 0f), new Vector3(0.14f, 0.015f, 0.14f), post),
     };
 
     // ---- Construction sites (#91): a materials pile per type, shown until the placeable is built ----

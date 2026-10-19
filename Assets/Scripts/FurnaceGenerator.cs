@@ -30,6 +30,14 @@ public class FurnaceGenerator : MonoBehaviour, IPowerSupplyGate
     [SerializeField] private float secondsPerUnit = 12f;    // Burn bought by one unit
     [SerializeField] private float retrySeconds = 1f;       // While out of fuel, how often it tries to buy again
 
+    [Header("Firebox Glow (feel)")]
+    [SerializeField] private Color fireColor = new Color(1.00f, 0.50f, 0.15f, 1f); // Burning
+    [SerializeField] private Color coldColor = new Color(0.14f, 0.12f, 0.11f, 1f); // Out: a dark slot
+    [SerializeField] private float fireIntensity = 2f;
+    [SerializeField] private float fireSmoothness = 0.2f;
+
+    private bool? shownBurning;
+
     public string FuelId => fuelId;
     public float SecondsPerUnit => secondsPerUnit;
     public float RetrySeconds => retrySeconds;
@@ -84,6 +92,20 @@ public class FurnaceGenerator : MonoBehaviour, IPowerSupplyGate
     private void Update()
     {
         Tick(Time.deltaTime);
+        RefreshGlow();
+    }
+
+    /// <summary>Shows the firebox glowing while burning and dark while not; swaps the material only on a change.</summary>
+    public void RefreshGlow()
+    {
+        bool burning = IsBurning;
+        if (shownBurning == burning) return;
+        Transform fire = CreatureModel.FindPart(GetComponent<Placeable>().Model, "Fire");
+        if (fire == null || !fire.TryGetComponent(out MeshRenderer fireRenderer)) return;
+        fireRenderer.sharedMaterial = burning
+            ? CreatureModel.EmissiveMaterialFor(fireColor, fireIntensity, fireSmoothness)
+            : CreatureModel.MaterialFor(coldColor, fireSmoothness);
+        shownBurning = burning;
     }
 
     /// <summary>

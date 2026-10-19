@@ -7,11 +7,20 @@ using UnityEngine;
 /// a plot takes the best single multiplier of the lit lamps covering it, and with none it grows at ×1. The effect is
 /// live — MushroomPlot asks PlacementManager each growth tick, so power flickers and toggles change growth at once.
 /// The coverage rule is a static helper over plain data so tests drive it without a scene.
+/// Its glass glows while it's lit and goes dull when it isn't, so a dark lamp reads at a glance.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Placeable))]
 public class GrowLamp : MonoBehaviour
 {
+    [Header("Glow (feel)")]
+    [SerializeField] private Color litColor = new Color(1.00f, 0.86f, 0.45f, 1f);   // Warm light
+    [SerializeField] private Color unlitColor = new Color(0.36f, 0.34f, 0.30f, 1f); // Dull glass
+    [SerializeField] private float glowIntensity = 1.6f;
+    [SerializeField] private float glassSmoothness = 0.6f;
+
+    private bool? shownLit;
+
     /// <summary>One lamp as the coverage rule sees it: where it stands and whether it's lit (powered and enabled).</summary>
     public readonly struct LampState
     {
@@ -32,6 +41,24 @@ public class GrowLamp : MonoBehaviour
     public bool IsLit => IsBuilt && TryGetComponent(out PowerNode node) && node.IsPowered;
 
     public LampState State => new LampState(Tile, IsLit);
+
+    private void Update()
+    {
+        RefreshGlow();
+    }
+
+    /// <summary>Shows the glass lit or dull from IsLit; swaps the material only when that changes.</summary>
+    public void RefreshGlow()
+    {
+        bool lit = IsLit;
+        if (shownLit == lit) return;
+        Transform glass = CreatureModel.FindPart(GetComponent<Placeable>().Model, "Glass");
+        if (glass == null || !glass.TryGetComponent(out MeshRenderer glassRenderer)) return;
+        glassRenderer.sharedMaterial = lit
+            ? CreatureModel.EmissiveMaterialFor(litColor, glowIntensity, glassSmoothness)
+            : CreatureModel.MaterialFor(unlitColor, glassSmoothness);
+        shownLit = lit;
+    }
 
     /// <summary>Chebyshev distance: diagonal steps count as one, so a radius covers a square.</summary>
     public static int Chebyshev(Vector2Int a, Vector2Int b) => Mathf.Max(Mathf.Abs(a.x - b.x), Mathf.Abs(a.y - b.y));

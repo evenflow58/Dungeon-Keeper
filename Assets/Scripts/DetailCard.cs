@@ -18,6 +18,9 @@ using UnityEngine.UI;
 /// category, its description, and lines for what it's doing — a cot claimed or free, a plot's food, a trap armed or
 /// spent — plus, for a power node, its role, its power state and its grid's totals. Wire mode (#142): while Lay conduit
 /// is armed the card describes the verb. One thing at a time: armed, then wire, then placed, then material.
+/// Toggles (#143): in placed mode a power node's card carries an Enable/Disable button (the only new raycast target; the
+/// card's own panel already keeps presses off the board). A click flips the node's Enabled at once. The furnace's card
+/// adds its fuel lines, the Grow-Lamp's the plots it covers.
 /// </summary>
 [DisallowMultipleComponent]
 public class DetailCard : MonoBehaviour
@@ -54,6 +57,9 @@ public class DetailCard : MonoBehaviour
     [SerializeField] private int chipNameFontSize = 12;
     [SerializeField] private int chipCostFontSize = 10;
     [SerializeField] private int hintFontSize = 10;
+    [SerializeField] private float toggleWidth = 110f;       // #143: the placed card's Enable/Disable button
+    [SerializeField] private float toggleHeight = 24f;
+    [SerializeField] private int toggleFontSize = 12;
     [SerializeField] private float refreshSeconds = 0.25f;   // How often counts and affordability re-check (unscaled)
 
     [Header("Colors")]
@@ -62,6 +68,8 @@ public class DetailCard : MonoBehaviour
     [SerializeField] private Color chipSelectedColor = new Color(0.85f, 0.65f, 0.15f, 1f);   // Amber outline on the selected chip
     [SerializeField] private Color unaffordableCostColor = new Color(1f, 0.38f, 0.38f, 1f);
     [SerializeField] private Color secondaryTextColor = new Color(0.82f, 0.82f, 0.82f, 1f);
+    [SerializeField] private Color toggleOnColor = new Color(0.25f, 0.25f, 0.30f, 1f);  // #143: "Disable" (the node is on)
+    [SerializeField] private Color toggleOffColor = new Color(0.55f, 0.42f, 0.12f, 1f); // #143: "Enable" (it's off: amber)
 
     public PlacementController PlacementController { get => placementController; set => placementController = value; }
     public PlacementManager PlacementManager { get => placementManager; set => placementManager = value; }
@@ -109,6 +117,9 @@ public class DetailCard : MonoBehaviour
     private Text waitingText;  // Material mode only
     private ChipView[] chipViews;
     private Font font;
+    private Button toggleButton; // #143: placed mode, power nodes only
+    private Image toggleImage;
+    private Text toggleText;
 
     private sealed class ChipView
     {
@@ -317,7 +328,7 @@ public class DetailCard : MonoBehaviour
     {
         var lines = new List<string>();
         if (IsWireMode && ArmedType == null) return WireLines(placementManager != null ? placementManager.PowerGrid : null);
-        if (IsPlacedMode) return PlacedLines(ShownPlaceable);
+        if (IsPlacedMode) return PlacedLines(ShownPlaceable, placementManager);
         if (ArmedType == null || placementManager == null) return lines;
 
         PlaceableType type = ArmedType.Value;
@@ -351,6 +362,14 @@ public class DetailCard : MonoBehaviour
                 return manager.TryGetPower(type, out PlaceablePower output) && output.role == PowerRole.Producer ? $"Output {output.watts} W" : null;
             case BuildStat.NeedsOperator:
                 return manager.TryGetPower(type, out PlaceablePower operated) && operated.needsOperator ? "Needs an imp" : null;
+            case BuildStat.PowerDraw: // #143
+                return manager.TryGetPower(type, out PlaceablePower draw) && draw.role == PowerRole.Consumer ? $"Draw {draw.watts} W" : null;
+            case BuildStat.FuelUse: // #143: the row's fuel and burn interval
+                return manager.TryGetPower(type, out PlaceablePower fuel) && !string.IsNullOrEmpty(fuel.fuelId)
+                    ? $"Burns 1 {FuelUnitName(fuel.fuelId)} per {Number(fuel.fuelSecondsPerUnit, "0.#")} s"
+                    : null;
+            case BuildStat.LampCoverage: // #143
+                return $"Plots within {manager.LampRadius} tiles grow ×{Number(manager.LampGrowthMultiplier, "0.#")}";
             default:
                 return null;
         }
@@ -370,9 +389,10 @@ public class DetailCard : MonoBehaviour
 
     /// <summary>
     /// A built placeable's lines: what it's doing (cot claimed/free, plot food, trap armed/spent), then, for a power node,
-    /// its role, its state and its grid's totals. Empty for none.
+    /// its role, its state and its grid's totals — for the furnace (#143) with its fuel, for the Grow-Lamp the plots it
+    /// covers (counted through the manager; 0 without one). Empty for none.
     /// </summary>
-    public static List<string> PlacedLines(Placeable placeable)
+    public static List<string> PlacedLines(Placeable placeable, PlacementManager manager = null)
     {
         var lines = new List<string>();
         if (placeable == null) return lines;
@@ -384,11 +404,67 @@ public class DetailCard : MonoBehaviour
         if (placeable.TryGetComponent(out PowerNode node) && node.Role != PowerRole.None)
         {
             PowerGrid.GridTotals totals = node.Totals;
-            bool powered = PowerGrid.IsPowered(totals.Connected, totals.Supply, totals.Demand);
-            lines.AddRange(PowerLines(node.Role, node.Watts, node.NeedsOperator, node.IsTended, totals.Connected, powered,
-                totals.Supply, totals.Demand));
+            bool powered = PowerGrid.IsNodePowered(node.Enabled, totals.Connected, totals.Supply, totals.Demand);
+            if (placeable.TryGetComponent(out FurnaceGenerator furnace))
+                lines.AddRange(FurnaceLines(node.Watts, node.Enabled, totals.Connected, furnace.IsBurning, furnace.FuelOnHand,
+                    furnace.FuelId, furnace.SecondsPerUnit, furnace.MinutesRemaining, totals.Supply, totals.Demand));
+            else if (placeable.Type == PlaceableType.GrowLamp)
+                lines.AddRange(LampLines(node.Watts, node.Enabled, totals.Connected, powered,
+                    manager != null ? manager.PlotsCoveredFrom(placeable.Tile) : 0, totals.Supply, totals.Demand));
+            else
+                lines.AddRange(PowerLines(node.Role, node.Watts, node.NeedsOperator, node.IsTended, totals.Connected, powered,
+                    totals.Supply, totals.Demand, node.Enabled));
         }
         return lines;
+    }
+
+    /// <summary>
+    /// The furnace's lines (#143): "Producer · 100 W", its state, "Fuel: 7 mushrooms · burns 1 per 12 s", the minutes of
+    /// burn left (its paid time plus the stock, if it alone drew on it), and the grid's totals when connected.
+    /// </summary>
+    public static List<string> FurnaceLines(int watts, bool enabled, bool connected, bool burning, int fuelOnHand, string fuelId,
+        float secondsPerUnit, float minutesLeft, int supply, int demand)
+    {
+        var lines = new List<string>
+        {
+            $"Producer · {watts} W",
+            FurnaceStateLine(enabled, connected, burning),
+            $"Fuel: {fuelOnHand} {FuelUnitName(fuelId, fuelOnHand)} · burns 1 per {Number(secondsPerUnit, "0.#")} s",
+            minutesLeft > 0f ? $"About {Number(minutesLeft, "0.#")} min of fuel left" : "No fuel left",
+        };
+        if (connected) lines.Add($"Grid: {supply} produced · {demand} demanded");
+        return lines;
+    }
+
+    /// <summary>
+    /// The furnace's state (#143): Disabled; Not connected (or "Burning · not connected": it burns fuel either way);
+    /// Burning; Out of fuel.
+    /// </summary>
+    public static string FurnaceStateLine(bool enabled, bool connected, bool burning)
+    {
+        if (!enabled) return "Disabled";
+        if (!connected) return burning ? "Burning · not connected" : "Not connected";
+        return burning ? "Burning" : "Out of fuel";
+    }
+
+    /// <summary>The Grow-Lamp's lines (#143): "Consumer · 20 W", its state, "Covers 3 plots", the grid's totals when connected.</summary>
+    public static List<string> LampLines(int watts, bool enabled, bool connected, bool powered, int plotsCovered, int supply, int demand)
+    {
+        var lines = new List<string>
+        {
+            $"Consumer · {watts} W",
+            PowerStateLine(PowerRole.Consumer, false, false, connected, powered, enabled),
+            plotsCovered == 1 ? "Covers 1 plot" : $"Covers {plotsCovered} plots",
+        };
+        if (connected) lines.Add($"Grid: {supply} produced · {demand} demanded");
+        return lines;
+    }
+
+    // A fuel's unit word: "mushrooms" (or "mushroom" for one), a material's name.
+    private static string FuelUnitName(string fuelId, int count = 1)
+    {
+        string name = PlacementManager.FuelDisplayName(fuelId);
+        return count == 1 && name.EndsWith("s") ? name.Substring(0, name.Length - 1) : name;
     }
 
     /// <summary>A trap's line: "Armed", "Spent", or "Spent · rearming itself 45%" while powered progress is under way.</summary>
@@ -398,29 +474,66 @@ public class DetailCard : MonoBehaviour
         : "Spent";
 
     /// <summary>
-    /// A node's power lines: the role ("Producer · 40 W", "Consumer · 10 W, drawn whenever built"), the state, and the
-    /// grid's totals when connected. Wheel states: Not connected / Producing / Untended; consumer states: Not connected /
-    /// Powered / Unpowered — grid over-drawn.
+    /// A node's power lines: the role ("Producer · 40 W", "Consumer · 10 W"), the state, and the grid's totals when
+    /// connected. Wheel states: Disabled / Not connected / Producing / Untended; consumer states: Disabled / Not connected /
+    /// Powered / Unpowered — grid over-drawn. (#143: "drawn whenever built" left the consumer line once nodes could be
+    /// switched off.)
     /// </summary>
     public static List<string> PowerLines(PowerRole role, int watts, bool needsOperator, bool tended, bool connected, bool powered,
-        int supply, int demand)
+        int supply, int demand, bool enabled = true)
     {
         var lines = new List<string>();
         if (role == PowerRole.None) return lines;
-        lines.Add(role == PowerRole.Producer ? $"Producer · {watts} W" : $"Consumer · {watts} W, drawn whenever built");
-        lines.Add(PowerStateLine(role, needsOperator, tended, connected, powered));
+        lines.Add(role == PowerRole.Producer ? $"Producer · {watts} W" : $"Consumer · {watts} W");
+        lines.Add(PowerStateLine(role, needsOperator, tended, connected, powered, enabled));
         if (connected) lines.Add($"Grid: {supply} produced · {demand} demanded");
         return lines;
     }
 
-    public static string PowerStateLine(PowerRole role, bool needsOperator, bool tended, bool connected, bool powered)
+    public static string PowerStateLine(PowerRole role, bool needsOperator, bool tended, bool connected, bool powered, bool enabled = true)
     {
+        if (!enabled) return "Disabled"; // #143: off by choice, whatever the grid is doing
         if (!connected) return "Not connected";
         if (role == PowerRole.Producer) return !needsOperator || tended ? "Producing" : "Untended";
         return powered ? "Powered" : "Unpowered — grid over-drawn";
     }
 
     private static string Number(float value, string format) => value.ToString(format, CultureInfo.InvariantCulture);
+
+    // ---- the node toggle (#143) ----
+
+    /// <summary>The shown placed building's power node, when it has a role; null otherwise (and outside placed mode).</summary>
+    public PowerNode ShownNode
+    {
+        get
+        {
+            if (!IsPlacedMode) return null;
+            return ShownPlaceable.TryGetComponent(out PowerNode node) && node.Role != PowerRole.None ? node : null;
+        }
+    }
+
+    /// <summary>The card carries the Enable/Disable button: placed mode on a power node.</summary>
+    public bool HasToggle => ShownNode != null;
+
+    /// <summary>The button's label: "Disable" while the node is on, "Enable" while it's off. Empty with no toggle.</summary>
+    public string ToggleLabel
+    {
+        get
+        {
+            PowerNode node = ShownNode;
+            return node == null ? "" : node.Enabled ? "Disable" : "Enable";
+        }
+    }
+
+    /// <summary>The button's click: flips the shown node's Enabled and repaints. False (nothing changes) with no toggle.</summary>
+    public bool ToggleShownNode()
+    {
+        PowerNode node = ShownNode;
+        if (node == null) return false;
+        node.SetEnabled(!node.Enabled);
+        Repaint();
+        return true;
+    }
 
     /// <summary>
     /// One chip per material the armed type can be ordered in (the controller's AvailableMaterials, in that order):
@@ -498,6 +611,7 @@ public class DetailCard : MonoBehaviour
         hintText = CreateText(cardGo.transform, "Hint", hintFontSize, secondaryTextColor, TextAnchor.UpperLeft);
         hintText.text = HintText;
         waitingText = CreateText(cardGo.transform, "Waiting", statFontSize, Color.white, TextAnchor.UpperLeft);
+        CreateToggle(cardGo.transform);
 
         chromeWired = true; // Chips are built (and wired) later, by Repaint, under this same flag
         Repaint();
@@ -520,6 +634,9 @@ public class DetailCard : MonoBehaviour
         onHandText = null;
         waitingText = null;
         chipViews = null;
+        toggleButton = null;
+        toggleImage = null;
+        toggleText = null;
     }
 
     private static void DestroyChromeObject(Object target)
@@ -542,6 +659,8 @@ public class DetailCard : MonoBehaviour
         if (!visible) return;
 
         bool materialMode = IsMaterialMode;
+        bool hasToggle = !materialMode && HasToggle;
+        if (toggleButton != null) toggleButton.gameObject.SetActive(hasToggle);
         if (onHandText != null) onHandText.gameObject.SetActive(materialMode);
         if (waitingText != null) waitingText.gameObject.SetActive(materialMode);
         if (hintText != null)
@@ -598,6 +717,15 @@ public class DetailCard : MonoBehaviour
             PlaceTopLeft(statsText.rectTransform, padding, y, inner, stats.Count * statLineHeight);
         }
         if (stats.Count > 0) y += stats.Count * statLineHeight + sectionGap;
+
+        if (hasToggle && toggleButton != null)
+        {
+            bool on = ShownNode.Enabled;
+            if (toggleText != null) toggleText.text = ToggleLabel;
+            if (toggleImage != null) toggleImage.color = on ? toggleOnColor : toggleOffColor;
+            PlaceTopLeft((RectTransform)toggleButton.transform, padding, y, toggleWidth, toggleHeight);
+            y += toggleHeight + sectionGap;
+        }
 
         List<Chip> chips = Chips();
         if (chipRow != null)
@@ -789,6 +917,22 @@ public class DetailCard : MonoBehaviour
         view.cost.rectTransform.offsetMax = new Vector2(-chipBorder, 0f);
 
         return view;
+    }
+
+    // The placed card's Enable/Disable button (#143). Its image is the only raycast target in it.
+    private void CreateToggle(Transform card)
+    {
+        var go = new GameObject("Toggle");
+        go.transform.SetParent(card, false);
+        go.AddComponent<RectTransform>();
+        toggleImage = go.AddComponent<Image>();
+        toggleImage.color = toggleOnColor;
+        toggleButton = go.AddComponent<Button>();
+        toggleButton.targetGraphic = toggleImage;
+        toggleButton.onClick.AddListener(() => ToggleShownNode());
+        toggleText = CreateText(go.transform, "Label", toggleFontSize, Color.white, TextAnchor.MiddleCenter);
+        Stretch(toggleText.rectTransform, 0f, 0f, 0f, 0f);
+        go.SetActive(false);
     }
 
     // A material chip's name starts right of its swatch.

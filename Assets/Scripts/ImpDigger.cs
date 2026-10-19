@@ -197,9 +197,10 @@ public class ImpDigger : MonoBehaviour
     // Walking to or tending a wheel. Never committed: on the idle rhythm, real work takes the imp away at once.
     private void TickOperating(float deltaTime)
     {
-        if (CurrentWheel == null || !CurrentWheel.IsBuilt || (CurrentWheel.Operator != null && CurrentWheel.Operator != this))
+        if (CurrentWheel == null || !CurrentWheel.IsBuilt || !CurrentWheel.Enabled
+            || (CurrentWheel.Operator != null && CurrentWheel.Operator != this))
         {
-            DropTarget(); // Gone, or another imp tends it
+            DropTarget(); // Gone, switched off (#143), or another imp tends it
             return;
         }
 
@@ -501,8 +502,8 @@ public class ImpDigger : MonoBehaviour
     }
 
     /// <summary>
-    /// Operate selection (#142): the nearest built wheel that needs an operator and isn't tended by another imp, by path
-    /// length to a stand-point beside it (never onto it). Ties keep the earlier wheel in list (scan) order.
+    /// Operate selection (#142): the nearest built, enabled (#143) wheel that needs an operator and isn't tended by another
+    /// imp, by path length to a stand-point beside it (never onto it). Ties keep the earlier wheel in list (scan) order.
     /// </summary>
     public static bool TrySelectOperate(DungeonBoard board, IReadOnlyList<PowerNode> wheels, ImpDigger self, Vector2Int fromTile,
         out PowerNode wheel, out Vector2Int standPoint)
@@ -513,7 +514,7 @@ public class ImpDigger : MonoBehaviour
         int bestCost = int.MaxValue;
         foreach (PowerNode candidate in wheels)
         {
-            if (candidate == null || !candidate.IsBuilt || !candidate.NeedsOperator) continue;
+            if (candidate == null || !candidate.IsBuilt || !candidate.NeedsOperator || !candidate.Enabled) continue; // #143: off = no tending
             if (candidate.Operator != null && candidate.Operator != self) continue;
 
             List<Vector2Int> path = Pathfinder.FindPathToNeighbor(board, fromTile, candidate.Tile);

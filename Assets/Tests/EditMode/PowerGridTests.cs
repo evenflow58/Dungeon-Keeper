@@ -564,11 +564,12 @@ public class PowerGridTests
             DetailCard.PowerLines(PowerRole.Producer, 40, true, false, true, false, 0, 10));
         CollectionAssert.AreEqual(new[] { "Producer · 40 W", "Not connected" },
             DetailCard.PowerLines(PowerRole.Producer, 40, true, true, false, false, 0, 0));
-        CollectionAssert.AreEqual(new[] { "Consumer · 10 W, drawn whenever built", "Powered", "Grid: 40 produced · 10 demanded" },
+        // #143 migration: "drawn whenever built" left the consumer line once a node can be switched off.
+        CollectionAssert.AreEqual(new[] { "Consumer · 10 W", "Powered", "Grid: 40 produced · 10 demanded" },
             DetailCard.PowerLines(PowerRole.Consumer, 10, false, false, true, true, 40, 10));
-        CollectionAssert.AreEqual(new[] { "Consumer · 10 W, drawn whenever built", "Unpowered — grid over-drawn", "Grid: 0 produced · 10 demanded" },
+        CollectionAssert.AreEqual(new[] { "Consumer · 10 W", "Unpowered — grid over-drawn", "Grid: 0 produced · 10 demanded" },
             DetailCard.PowerLines(PowerRole.Consumer, 10, false, false, true, false, 0, 10));
-        CollectionAssert.AreEqual(new[] { "Consumer · 10 W, drawn whenever built", "Not connected" },
+        CollectionAssert.AreEqual(new[] { "Consumer · 10 W", "Not connected" },
             DetailCard.PowerLines(PowerRole.Consumer, 10, false, false, false, false, 0, 0));
         CollectionAssert.IsEmpty(DetailCard.PowerLines(PowerRole.None, 0, false, false, true, true, 0, 0));
     }
@@ -582,7 +583,8 @@ public class PowerGridTests
 
         CollectionAssert.AreEqual(new[] { "Producer · 40 W", "Untended", "Grid: 0 produced · 10 demanded" },
             DetailCard.PlacedLines(wheel.GetComponent<Placeable>()));
-        CollectionAssert.AreEqual(new[] { "Armed", "Consumer · 10 W, drawn whenever built", "Unpowered — grid over-drawn", "Grid: 0 produced · 10 demanded" },
+        // #143 migration: the consumer line is just its draw now.
+        CollectionAssert.AreEqual(new[] { "Armed", "Consumer · 10 W", "Unpowered — grid over-drawn", "Grid: 0 produced · 10 demanded" },
             DetailCard.PlacedLines(trap.GetComponent<Placeable>()));
 
         StepUntil(() => digger.IsOperating, 5f, "tending");
@@ -740,7 +742,9 @@ public class PowerGridTests
             new[] { BuildCategory.Living, BuildCategory.Farming, BuildCategory.Defense, BuildCategory.Power, BuildCategory.Magic },
             BuildPresentation.CategoryOrder);
         CollectionAssert.AreEqual(new[] { BuildVerb.LayConduit }, BuildPresentation.VerbsInCategory(BuildCategory.Power));
-        CollectionAssert.AreEqual(new[] { PlaceableType.ImpWheel }, BuildPresentation.TypesInCategory(BuildCategory.Power));
+        // #143 migration: the furnace and the lamp join the wheel, in that order.
+        CollectionAssert.AreEqual(new[] { PlaceableType.ImpWheel, PlaceableType.FurnaceGenerator, PlaceableType.GrowLamp },
+            BuildPresentation.TypesInCategory(BuildCategory.Power));
         Assert.AreEqual("Imp Wheel", BuildPresentation.DisplayName(PlaceableType.ImpWheel));
         Assert.AreEqual("POWER", BuildPresentation.RailLabel(BuildCategory.Power));
         // Six, not seven: Magic is still empty and hidden. Rail7 is bound anyway, for the entry Magic will add.

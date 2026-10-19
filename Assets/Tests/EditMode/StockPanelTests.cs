@@ -311,8 +311,9 @@ public class StockPanelTests
         Assert.AreEqual("Shallow stone from near the entrance, faintly magical.", card.Description);
         Assert.AreEqual("Source: Dug · entrance shallows", card.SourceLine);
         CollectionAssert.AreEqual(new[] { "Lair Cot rest ×1.25", "Lair Cot rests magical creatures" }, card.MaterialHighlights());
-        // #142 migration: the Imp Wheel has a Glimmerstone row too.
-        CollectionAssert.AreEqual(new[] { "Lair Cot · 3", "Mushroom Plot · 4", "Spike Trap · 2", "Imp Wheel · 4" }, card.UseChipLabels());
+        // #142 migration: the Imp Wheel has a Glimmerstone row too. #143 migration: so do the furnace and the lamp.
+        CollectionAssert.AreEqual(new[] { "Lair Cot · 3", "Mushroom Plot · 4", "Spike Trap · 2", "Imp Wheel · 4", "Furnace Generator · 6", "Grow-Lamp · 4" },
+            card.UseChipLabels());
         Assert.AreEqual("Waiting orders: 1", card.WaitingLine);
 
         stockpile.Add(MaterialType.Glimmerstone, 7);

@@ -58,6 +58,12 @@ public static class PowerOverlay
     }
 
     /// <summary>
+    /// Whether a placeable goes see-through: in the power overlay, everything that isn't a power node (a cot, a plot), so
+    /// the conduit under it shows. Power nodes stay solid; their tiles carry their state. Normal mode never changes models.
+    /// </summary>
+    public static bool SeesThrough(ViewMode mode, bool isPowerNode) => mode == ViewMode.Power && !isPowerNode;
+
+    /// <summary>
     /// A tile's displayed color. Normal mode is the identity: the normal color, always. In an overlay an unexplored tile
     /// keeps its normal (fog) color, so nothing shows through the fog; an explored tile takes the overlay's override when
     /// it has one, else its normal color dimmed (dimmed = false keeps it as is, e.g. a designation).

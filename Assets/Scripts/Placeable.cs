@@ -335,6 +335,54 @@ public class Placeable : MonoBehaviour
         frame.name = "Outline";
     }
 
+    // ---- see-through (#144: the power overlay shows conduit under non-power placeables) ----
+
+    // Each swapped renderer's own material and shadow mode, restored exactly when the see-through look ends.
+    private readonly System.Collections.Generic.Dictionary<Renderer, (Material material, UnityEngine.Rendering.ShadowCastingMode shadows)>
+        seeThroughOriginals = new System.Collections.Generic.Dictionary<Renderer, (Material, UnityEngine.Rendering.ShadowCastingMode)>();
+
+    /// <summary>True while the model is drawn see-through.</summary>
+    public bool IsSeeThrough { get; private set; }
+
+    /// <summary>
+    /// Draws every part (model, pile, marker, pips) as a translucent copy of its own color at opacity alpha, casting no
+    /// shadow, or puts every part back exactly. Idempotent, and incremental while on: a repeat call also catches parts
+    /// created since (a pile arriving at funding), so the caller can simply re-apply.
+    /// </summary>
+    public void SetSeeThrough(bool on, float alpha)
+    {
+        if (!on)
+        {
+            if (!IsSeeThrough) return;
+            foreach (var entry in seeThroughOriginals)
+            {
+                if (entry.Key == null) continue; // Destroyed meanwhile (the pile at completion)
+                entry.Key.sharedMaterial = entry.Value.material;
+                entry.Key.shadowCastingMode = entry.Value.shadows;
+            }
+            seeThroughOriginals.Clear();
+            IsSeeThrough = false;
+            return;
+        }
+
+        IsSeeThrough = true;
+        foreach (MeshRenderer part in GetComponentsInChildren<MeshRenderer>(true))
+        {
+            if (seeThroughOriginals.ContainsKey(part)) continue;
+            seeThroughOriginals[part] = (part.sharedMaterial, part.shadowCastingMode);
+            part.sharedMaterial = CreatureModel.GhostMaterialFor(SeeThroughColor(part.sharedMaterial, alpha));
+            part.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; // A shadow would darken the conduit too
+        }
+    }
+
+    /// <summary>A part's see-through color: its own base color, at no more than alpha (white with no material).</summary>
+    public static Color SeeThroughColor(Material material, float alpha)
+    {
+        Color color = material != null && material.HasProperty("_BaseColor") ? material.GetColor("_BaseColor") : Color.white;
+        color.a = Mathf.Min(color.a, Mathf.Clamp01(alpha));
+        return color;
+    }
+
     private void DestroyOrderMarker()
     {
         if (OrderMarker == null) return;

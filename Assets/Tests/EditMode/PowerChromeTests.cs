@@ -380,6 +380,100 @@ public class PowerChromeTests
         Assert.AreSame(before[OffNetwork], TileMaterial(OffNetwork));
     }
 
+    // ---- see-through placeables (conduit under a cot shows in the overlay) ----
+
+    [Test]
+    public void SeesThrough_OnlyNonPowerPlaceables_OnlyInThePowerOverlay()
+    {
+        Assert.IsTrue(PowerOverlay.SeesThrough(ViewMode.Power, false), "A cot in the overlay");
+        Assert.IsFalse(PowerOverlay.SeesThrough(ViewMode.Power, true), "Power nodes stay solid");
+        Assert.IsFalse(PowerOverlay.SeesThrough(ViewMode.Normal, false), "Normal never changes models");
+        Assert.IsFalse(PowerOverlay.SeesThrough(ViewMode.Normal, true));
+    }
+
+    [Test]
+    public void SeeThroughColor_KeepsThePartsColor_CapsItsAlpha()
+    {
+        var material = new Material(Shader.Find(BoardRenderer.LitShaderName));
+        try
+        {
+            material.SetColor("_BaseColor", new Color(0.4f, 0.3f, 0.2f, 1f));
+            Color c = Placeable.SeeThroughColor(material, 0.25f); // Through a material: compare within float tolerance
+            Assert.AreEqual(0.4f, c.r, 1e-4f);
+            Assert.AreEqual(0.3f, c.g, 1e-4f);
+            Assert.AreEqual(0.2f, c.b, 1e-4f);
+            Assert.AreEqual(0.25f, c.a, 1e-6f);
+            material.SetColor("_BaseColor", new Color(0.4f, 0.3f, 0.2f, 0.1f));
+            Assert.AreEqual(0.1f, Placeable.SeeThroughColor(material, 0.25f).a, 1e-6f, "Already fainter: kept");
+            Assert.AreEqual(new Color(1f, 1f, 1f, 0.25f), Placeable.SeeThroughColor(null, 0.25f));
+        }
+        finally
+        {
+            Object.DestroyImmediate(material);
+        }
+    }
+
+    [Test]
+    public void PowerOverlay_MakesTheCotOverConduitSeeThrough_LeavesPowerNodesSolid_AndNormalRestoresExactly()
+    {
+        BuildConduit(T(22, 15), T(23, 15));
+        Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.LairCot, T(22, 15), ImpTile, out Placeable cot), "A cot over the run");
+        Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.MushroomPlot, T(25, 17), ImpTile, out Placeable plot));
+        PowerNode wheel = PlaceBuiltNode(PlaceableType.ImpWheel, T(23, 15));
+
+        var original = new Dictionary<Renderer, (Material, UnityEngine.Rendering.ShadowCastingMode)>();
+        foreach (Placeable p in new[] { cot, plot, wheel.GetComponent<Placeable>() })
+            foreach (MeshRenderer r in p.GetComponentsInChildren<MeshRenderer>(true)) original[r] = (r.sharedMaterial, r.shadowCastingMode);
+
+        boardRenderer.SetViewMode(ViewMode.Power);
+        manager.RefreshSeeThrough(); // The ViewModeChanged handler's call (EditMode: no OnEnable hookup)
+
+        Assert.IsTrue(cot.IsSeeThrough && plot.IsSeeThrough);
+        Assert.IsFalse(wheel.GetComponent<Placeable>().IsSeeThrough, "A power node stays solid");
+        foreach (MeshRenderer r in cot.GetComponentsInChildren<MeshRenderer>(true))
+        {
+            Color expected = Placeable.SeeThroughColor(original[r].Item1, boardRenderer.OverlayPropAlpha);
+            Assert.AreSame(CreatureModel.GhostMaterialFor(expected), r.sharedMaterial, $"{r.name}: its own color, translucent");
+            Assert.AreEqual(UnityEngine.Rendering.ShadowCastingMode.Off, r.shadowCastingMode, $"{r.name}: no shadow on the run");
+        }
+        foreach (MeshRenderer r in wheel.GetComponentsInChildren<MeshRenderer>(true))
+            Assert.AreSame(original[r].Item1, r.sharedMaterial, $"{r.name}: untouched");
+
+        manager.RefreshSeeThrough(); // A repeat (the cadence) changes nothing
+        Assert.IsTrue(cot.IsSeeThrough);
+
+        boardRenderer.SetViewMode(ViewMode.Normal);
+        manager.RefreshSeeThrough();
+        Assert.IsFalse(cot.IsSeeThrough || plot.IsSeeThrough);
+        foreach (KeyValuePair<Renderer, (Material, UnityEngine.Rendering.ShadowCastingMode)> entry in original)
+        {
+            Assert.AreSame(entry.Value.Item1, entry.Key.sharedMaterial, $"{entry.Key.name}: material restored");
+            Assert.AreEqual(entry.Value.Item2, entry.Key.shadowCastingMode, $"{entry.Key.name}: shadows restored");
+        }
+    }
+
+    [Test]
+    public void SeeThrough_CatchesPartsCreatedLater_AndSurvivesPartsDestroyed()
+    {
+        boardRenderer.SetViewMode(ViewMode.Power);
+        Assert.IsTrue(manager.TryPlace(PlaceableType.LairCot, T(22, 15), ImpTile, out Placeable site), "Placed mid-overlay");
+        Assert.IsTrue(site.IsSeeThrough, "Placement applies the current look");
+        GameObject pile = site.MaterialsPile;
+        Assert.IsNotNull(pile, "Unwired stockpile: funded at once, the pile shows");
+        Assert.AreEqual(UnityEngine.Rendering.ShadowCastingMode.Off, pile.GetComponentInChildren<MeshRenderer>().shadowCastingMode);
+
+        site.CompleteConstruction(); // The pile is destroyed
+        manager.RefreshSeeThrough();
+        foreach (MeshRenderer r in site.Model.GetComponentsInChildren<MeshRenderer>(true))
+            Assert.AreEqual(UnityEngine.Rendering.ShadowCastingMode.Off, r.shadowCastingMode, $"{r.name}: the model is see-through too");
+
+        boardRenderer.SetViewMode(ViewMode.Normal);
+        Assert.DoesNotThrow(() => manager.RefreshSeeThrough(), "Restoring skips the destroyed pile");
+        Assert.IsFalse(site.IsSeeThrough);
+        foreach (MeshRenderer r in site.Model.GetComponentsInChildren<MeshRenderer>(true))
+            Assert.AreNotEqual(UnityEngine.Rendering.ShadowCastingMode.Off, r.shadowCastingMode, $"{r.name}: shadows back");
+    }
+
     [Test]
     public void ViewModeChanged_FiresOnChangesOnly()
     {

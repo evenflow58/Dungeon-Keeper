@@ -22,7 +22,9 @@ using UnityEngine;
 /// (the warning hue while that grid is browned out), and a built node's tile takes its state color. Fog wins over every
 /// overlay: unexplored tiles render exactly as in Normal. The mode only overrides at resolution time, so switching back
 /// to Normal restores the normal colors exactly. While an overlay is on it repaints when the network changes shape and on
-/// a short cadence for live state (tending, fuel, toggles); in Normal it doesn't poll.
+/// a short cadence for live state (tending, fuel, toggles); in Normal it doesn't poll. Non-power placeables turn
+/// see-through in the power overlay so conduit under them shows (PlacementManager applies it on ViewModeChanged and
+/// OverlayRepainted, at overlayPropAlpha).
 /// </summary>
 public class BoardRenderer : MonoBehaviour
 {
@@ -77,6 +79,7 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private float overlayDimFactor = 0.35f;      // Off-network explored tiles keep this much brightness
     [SerializeField] private float conduitTileTint = 0.5f;        // How far the floor under a built run leans to its grid hue
     [SerializeField] private float overlayRefreshSeconds = 0.25f; // Live-state repaint cadence while an overlay is on
+    [SerializeField] private float overlayPropAlpha = 0.25f;      // Non-power placeables' opacity in the power overlay (conduit shows through)
 
     [Header("Door (Placeholder Art)")]
     [SerializeField] private float doorHeight = 0.9f;  // Taller than the rock so the entrance reads from afar
@@ -133,7 +136,11 @@ public class BoardRenderer : MonoBehaviour
     /// <summary>Raised after the view mode changes, with the new mode.</summary>
     public event System.Action<ViewMode> ViewModeChanged;
 
+    /// <summary>Raised after each overlay repaint (the cadence and network changes), so model-level overlay looks can follow.</summary>
+    public event System.Action OverlayRepainted;
+
     public float OverlayDimFactor => overlayDimFactor;
+    public float OverlayPropAlpha => overlayPropAlpha;
     public float OverlayRefreshSeconds { get => overlayRefreshSeconds; set => overlayRefreshSeconds = value; }
     public IReadOnlyList<Color> GridPalette => gridPalette;
     public Color BrownoutGridColor => brownoutGridColor;
@@ -439,13 +446,16 @@ public class BoardRenderer : MonoBehaviour
         for (int x = 0; x < dungeonBoard.Width; x++)
             for (int y = 0; y < dungeonBoard.Height; y++)
                 tileViews[x, y].GetComponent<MeshRenderer>().sharedMaterial = MaterialFor(DisplayColorAt(x, y));
-        if (powerGrid == null) return;
-        foreach (KeyValuePair<Vector2Int, GameObject> entry in conduitViews)
+        if (powerGrid != null)
         {
-            if (entry.Value == null) continue;
-            Material material = ConduitMaterial(entry.Key, powerGrid.IsBuilt(entry.Key));
-            foreach (MeshRenderer part in entry.Value.GetComponentsInChildren<MeshRenderer>()) part.sharedMaterial = material;
+            foreach (KeyValuePair<Vector2Int, GameObject> entry in conduitViews)
+            {
+                if (entry.Value == null) continue;
+                Material material = ConduitMaterial(entry.Key, powerGrid.IsBuilt(entry.Key));
+                foreach (MeshRenderer part in entry.Value.GetComponentsInChildren<MeshRenderer>()) part.sharedMaterial = material;
+            }
         }
+        OverlayRepainted?.Invoke();
     }
 
     /// <summary>

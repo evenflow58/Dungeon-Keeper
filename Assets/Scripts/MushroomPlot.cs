@@ -5,6 +5,8 @@ using UnityEngine;
 /// Mushroom Plot behavior: grows 1 food per growthSecondsPerFood up to capacity, shown as a row of small
 /// sphere pips across the front of the plot's mound (ticket #77; pip i shows exactly when FoodCount > i). Consumers take food through TryTakeFood(). Time spent at capacity is discarded
 /// (no banking): after a take from a full plot, the next food needs a full fresh interval.
+/// Grow-Lamps (#143): each tick the plot asks PlacementManager for its growth multiplier (a lit lamp nearby: x2, no
+/// stacking) and grows that much faster. With no manager it grows at x1.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Placeable))]
@@ -24,6 +26,12 @@ public class MushroomPlot : MonoBehaviour
     public float GrowthSecondsPerFood { get => growthSecondsPerFood; set => growthSecondsPerFood = value; }
     public int Capacity { get => capacity; set => capacity = value; }
 
+    /// <summary>Where the plot reads its growth multiplier (#143); null = always x1.</summary>
+    public PlacementManager Manager { get; set; }
+
+    /// <summary>The growth multiplier right now (#143): a lit Grow-Lamp's within its radius, else 1.</summary>
+    public float GrowthMultiplier => Manager != null ? Manager.GrowthMultiplierAt(Tile) : 1f;
+
     public Vector2Int Tile => GetComponent<Placeable>().Tile;
 
     /// <summary>False while a construction site (#91): no growth, holds no food, nothing to take.</summary>
@@ -37,8 +45,9 @@ public class MushroomPlot : MonoBehaviour
     private readonly List<MeshRenderer> pips = new List<MeshRenderer>();
 
     /// <summary>Called once by PlacementManager right after Placeable.Initialize.</summary>
-    public void Initialize(float growthSeconds, int cap)
+    public void Initialize(float growthSeconds, int cap, PlacementManager manager = null)
     {
+        Manager = manager;
         growthSecondsPerFood = growthSeconds;
         capacity = cap;
         FoodCount = 0;
@@ -52,7 +61,8 @@ public class MushroomPlot : MonoBehaviour
     }
 
     /// <summary>
-    /// Advances growth by deltaTime (scaled time). Called from Update; public so tests can step it.
+    /// Advances growth by deltaTime (scaled time) times the growth multiplier (#143). Called from Update; public so tests
+    /// can step it.
     /// </summary>
     public void Tick(float deltaTime)
     {
@@ -63,7 +73,7 @@ public class MushroomPlot : MonoBehaviour
             return;
         }
 
-        GrowthElapsed += deltaTime;
+        GrowthElapsed += deltaTime * GrowthMultiplier;
         int before = FoodCount;
         while (GrowthElapsed >= growthSecondsPerFood && FoodCount < capacity)
         {

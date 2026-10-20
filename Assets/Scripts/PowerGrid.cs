@@ -16,12 +16,14 @@ public enum PowerRole
 /// stand on it. Pending tiles are a task list: the imp builds them as construction-family work (ImpDigger), each over
 /// wireSecondsPerTile with progress kept on the tile, and an unreachable one simply stays pending.
 /// Grids: a grid is a connected component of BUILT conduit (4-neighbor). A registered power node (a built placeable with
-/// a power role) connects when its own tile or a 4-neighbor has built conduit; a node touching two grids joins the first
-/// it finds (own tile, then right, up, left, down: Pathfinder's order). The topology is cached and recomputed only when
+/// a power role) connects only when built conduit runs under its own tile; conduit beside it doesn't count, so
+/// neighboring buildings never share a grid without a conduit under each. The topology is cached and recomputed only when
 /// built conduit changes (a dirty flag, never a per-frame flood fill). Supply and demand are live on query: supply is the
 /// active producers' watts (a wheel only while an imp tends it), demand every built consumer's (v1: a built consumer
 /// draws whenever built). A node is powered when it's connected and its grid's supply covers its demand (equality is
-/// powered). The math lives in static helpers over plain data so tests drive it without a scene.
+/// powered). Toggles (#143): a disabled node is inert and left out of the math entirely — it supplies nothing, draws
+/// nothing and is never powered; the topology doesn't change. The math lives in static helpers over plain data so tests
+/// drive it without a scene.
 /// </summary>
 [DisallowMultipleComponent]
 public class PowerGrid : MonoBehaviour
@@ -205,11 +207,15 @@ public class PowerGrid : MonoBehaviour
 
     public bool IsConnected(PowerNode node) => TotalsFor(node).Connected;
 
-    /// <summary>The seam (#142): powered ⟺ connected and the grid's supply ≥ its demand (equality is powered).</summary>
+    /// <summary>
+    /// The seam (#142): powered ⟺ connected and the grid's supply ≥ its demand (equality is powered). #143: a disabled
+    /// node is never powered.
+    /// </summary>
     public bool IsPowered(PowerNode node)
     {
+        if (node == null) return false;
         GridTotals totals = TotalsFor(node);
-        return IsPowered(totals.Connected, totals.Supply, totals.Demand);
+        return IsNodePowered(node.Enabled, totals.Connected, totals.Supply, totals.Demand);
     }
 
     private Dictionary<Vector2Int, int> Topology()
@@ -222,20 +228,25 @@ public class PowerGrid : MonoBehaviour
 
     // ---- the math (static, over plain data) ----
 
-    /// <summary>One node as the grid math sees it: where it is, what it does, its watts, and whether it's active now.</summary>
+    /// <summary>
+    /// One node as the grid math sees it: where it is, what it does, its watts, whether it's active now, and (#143) whether
+    /// the player has it enabled.
+    /// </summary>
     public readonly struct NodeState
     {
         public readonly Vector2Int Tile;
         public readonly PowerRole Role;
         public readonly int Watts;
-        public readonly bool Active; // A producer counts only while active (a wheel: tended); consumers draw whenever built
+        public readonly bool Active;  // A producer counts only while active (a wheel: tended; a furnace: burning)
+        public readonly bool Enabled; // #143: a disabled node counts for nothing, producer or consumer
 
-        public NodeState(Vector2Int tile, PowerRole role, int watts, bool active)
+        public NodeState(Vector2Int tile, PowerRole role, int watts, bool active, bool enabled = true)
         {
             Tile = tile;
             Role = role;
             Watts = watts;
             Active = active;
+            Enabled = enabled;
         }
     }
 
@@ -291,18 +302,17 @@ public class PowerGrid : MonoBehaviour
     }
 
     /// <summary>
-    /// The grid a node on nodeTile connects to: its own tile's, else the first 4-neighbor's with built conduit (right, up,
-    /// left, down). -1 when none.
+    /// The grid a node on nodeTile connects to: the grid of the built conduit on its own tile, or -1 when its tile has
+    /// none. Conduit beside a node doesn't connect it, so two buildings side by side only share a grid through conduit
+    /// under each of them.
     /// </summary>
-    public static int GridAt(IReadOnlyDictionary<Vector2Int, int> components, Vector2Int nodeTile)
-    {
-        if (components.TryGetValue(nodeTile, out int own)) return own;
-        foreach (Vector2Int d in Neighbors)
-            if (components.TryGetValue(nodeTile + d, out int grid)) return grid;
-        return -1;
-    }
+    public static int GridAt(IReadOnlyDictionary<Vector2Int, int> components, Vector2Int nodeTile) =>
+        components.TryGetValue(nodeTile, out int grid) ? grid : -1;
 
-    /// <summary>One grid's live totals: supply = its active producers' watts, demand = its consumers' watts.</summary>
+    /// <summary>
+    /// One grid's live totals: supply = its active producers' watts, demand = its consumers' watts. Disabled nodes (#143)
+    /// are skipped entirely.
+    /// </summary>
     public static void Sum(IEnumerable<NodeState> nodeStates, IReadOnlyDictionary<Vector2Int, int> components, int grid,
         out int supply, out int demand)
     {
@@ -311,7 +321,7 @@ public class PowerGrid : MonoBehaviour
         if (grid < 0) return;
         foreach (NodeState node in nodeStates)
         {
-            if (GridAt(components, node.Tile) != grid) continue;
+            if (!node.Enabled || GridAt(components, node.Tile) != grid) continue;
             if (node.Role == PowerRole.Producer && node.Active) supply += node.Watts;
             else if (node.Role == PowerRole.Consumer) demand += node.Watts;
         }
@@ -319,6 +329,10 @@ public class PowerGrid : MonoBehaviour
 
     /// <summary>The powered rule: connected, and supply covers demand (equality is powered).</summary>
     public static bool IsPowered(bool connected, int supply, int demand) => connected && supply >= demand;
+
+    /// <summary>A node's powered rule (#143): enabled, and the powered rule for its grid. A disabled node is never powered.</summary>
+    public static bool IsNodePowered(bool enabled, bool connected, int supply, int demand) =>
+        enabled && IsPowered(connected, supply, demand);
 
     private static List<Vector2Int> ScanOrdered(IEnumerable<Vector2Int> tiles)
     {

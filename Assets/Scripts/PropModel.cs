@@ -112,6 +112,34 @@ public static class PropModel
         return parts;
     }
 
+    // ---- Furnace generator (#143): a stout stone body on an iron plinth, a glowing firebox door, a chimney ----
+
+    public static Part[] FurnaceRecipe(float s, Color body, Color iron, Color fire)
+    {
+        float front = -0.28f * s; // The body's camera-facing (−Z) face
+        return new[]
+        {
+            new Part("Plinth",  Shape.Box,      new Vector3(0f, 0.03f, 0f),                 new Vector3(0.8f * s, 0.06f, 0.7f * s), iron),
+            new Part("Body",    Shape.Box,      new Vector3(0f, 0.27f, 0f),                 new Vector3(0.66f * s, 0.42f, 0.56f * s), body),
+            new Part("Band",    Shape.Box,      new Vector3(0f, 0.40f, 0f),                 new Vector3(0.68f * s, 0.04f, 0.58f * s), iron),
+            new Part("Door",    Shape.Box,      new Vector3(0f, 0.2f, front - 0.006f),      new Vector3(0.3f * s, 0.2f, 0.02f), iron),
+            new Part("Fire",    Shape.Box,      new Vector3(0f, 0.17f, front - 0.018f),     new Vector3(0.24f * s, 0.08f, 0.01f), fire),
+            // A cylinder is 2 units tall: scale.y is half its height. This one stands from the body's top to ~0.98.
+            new Part("Chimney", Shape.Cylinder, new Vector3(0.18f * s, 0.73f, 0.14f * s),   new Vector3(0.12f, 0.25f, 0.12f), iron),
+            new Part("Cap",     Shape.Cylinder, new Vector3(0.18f * s, 0.99f, 0.14f * s),   new Vector3(0.17f, 0.02f, 0.17f), iron),
+        };
+    }
+
+    // ---- Grow-lamp (#143): an iron post on a round foot, a glass lamp head under a flat cap ----
+
+    public static Part[] GrowLampRecipe(float s, Color post, Color glass) => new[]
+    {
+        new Part("Foot",  Shape.Cylinder, new Vector3(0f, 0.02f, 0f), new Vector3(0.3f * s, 0.02f, 0.3f * s), post),
+        new Part("Post",  Shape.Cylinder, new Vector3(0f, 0.34f, 0f), new Vector3(0.05f, 0.3f, 0.05f), post),
+        new Part("Glass", Shape.Sphere,   new Vector3(0f, 0.74f, 0f), new Vector3(0.26f, 0.26f, 0.26f), glass),
+        new Part("Cap",   Shape.Cylinder, new Vector3(0f, 0.875f, 0f), new Vector3(0.14f, 0.015f, 0.14f), post),
+    };
+
     // ---- Construction sites (#91): a materials pile per type, shown until the placeable is built ----
 
     /// <summary>Cot materials: a loose stack of frame planks, a crate, and a folded bolt of mattress cloth.</summary>
@@ -152,6 +180,23 @@ public static class PropModel
         new Part("Beam1", Shape.Box, new Vector3(0.03f * s, 0.075f, -0.08f * s),   new Vector3(0.8f * s, 0.05f, 0.1f * s), wood, new Vector3(0f, -8f, 0f)),
         new Part("Rim",   Shape.Box, new Vector3(-0.15f * s, 0.02f, 0.2f * s),     new Vector3(0.45f * s, 0.04f, 0.08f), wheel, new Vector3(0f, 25f, 0f)),
         new Part("Crate", Shape.Box, new Vector3(0.26f * s, 0.1f, 0.2f * s),       new Vector3(0.2f, 0.2f, 0.2f), crate, new Vector3(0f, -12f, 0f)),
+    };
+
+    /// <summary>Furnace materials (#143): two cut stone blocks, a chimney section lying on its side, a parts crate.</summary>
+    public static Part[] FurnaceMaterialsRecipe(float s, Color stone, Color iron, Color crate) => new[]
+    {
+        new Part("Block0",  Shape.Box,      new Vector3(-0.14f * s, 0.07f, -0.08f * s), new Vector3(0.3f * s, 0.14f, 0.26f * s), stone, new Vector3(0f, 10f, 0f)),
+        new Part("Block1",  Shape.Box,      new Vector3(-0.1f * s, 0.2f, -0.06f * s),   new Vector3(0.26f * s, 0.12f, 0.22f * s), stone, new Vector3(0f, -14f, 0f)),
+        new Part("Chimney", Shape.Cylinder, new Vector3(0.12f * s, 0.06f, 0.24f * s),   new Vector3(0.11f, 0.2f, 0.11f), iron, new Vector3(0f, 20f, 90f)),
+        new Part("Crate",   Shape.Box,      new Vector3(0.28f * s, 0.1f, -0.2f * s),    new Vector3(0.2f, 0.2f, 0.2f), crate, new Vector3(0f, -8f, 0f)),
+    };
+
+    /// <summary>Lamp materials (#143): the post lying on the floor, the glass head beside it, a small crate.</summary>
+    public static Part[] LampMaterialsRecipe(float s, Color post, Color glass, Color crate) => new[]
+    {
+        new Part("Post",  Shape.Cylinder, new Vector3(-0.05f * s, 0.04f, -0.1f * s), new Vector3(0.05f, 0.3f, 0.05f), post, new Vector3(0f, 15f, 90f)),
+        new Part("Glass", Shape.Sphere,   new Vector3(0.22f * s, 0.08f, 0.16f * s),  new Vector3(0.16f, 0.16f, 0.16f), glass),
+        new Part("Crate", Shape.Box,      new Vector3(-0.24f * s, 0.08f, 0.2f * s),  new Vector3(0.16f, 0.16f, 0.16f), crate, new Vector3(0f, 18f, 0f)),
     };
 
     /// <summary>An order's ground outline (#104): a thin square frame around the footprint, just above the floor.</summary>

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -14,10 +15,16 @@ using UnityEngine;
 /// wired, every order funds at once (an unwired system degrades, never blocks). Placing is never blocked by cost.
 /// Power (#142): the power table gives each type a role (none, producer, consumer), its watts and per-type params; a type
 /// with a role gets a PowerNode at placement, which joins the PowerGrid once built.
+/// #143: a power row with a fuel id makes its type a fueled producer (a FurnaceGenerator burning that fuel); the Grow-Lamp
+/// speeds up plots near it while powered. This is also the fuel store: "mushrooms" are the food stored in built plots (the
+/// top bar's Food), and a fuel id naming a material is that material's Stockpile count — global stock, never hauled.
 /// </summary>
 [DisallowMultipleComponent]
-public class PlacementManager : MonoBehaviour
+public class PlacementManager : MonoBehaviour, IFuelStore
 {
+    /// <summary>The fuel id for food (#143): the mushrooms stored in built plots.</summary>
+    public const string FoodFuelId = "mushrooms";
+
     [Header("References")]
     [SerializeField] private DungeonBoard dungeonBoard;
     [SerializeField] private BoardRenderer boardRenderer;
@@ -29,6 +36,8 @@ public class PlacementManager : MonoBehaviour
     [SerializeField] private Color mushroomPlotColor = new Color(0.35f, 0.75f, 0.35f, 1f); // Green
     [SerializeField] private Color spikeTrapColor = new Color(0.55f, 0.55f, 0.60f, 1f);    // Steel gray
     [SerializeField] private Color impWheelColor = new Color(0.62f, 0.44f, 0.26f, 1f);     // #142: worn wood
+    [SerializeField] private Color furnaceColor = new Color(0.40f, 0.36f, 0.34f, 1f);      // #143: sooty stone body
+    [SerializeField] private Color growLampColor = new Color(1.00f, 0.86f, 0.45f, 1f);     // #143: warm lamp glass
     [SerializeField] private float placeableSize = 0.8f;                                    // Fraction of a tile
 
     // Placeables are runtime-created (no Inspector presence), so their behavior config lives here.
@@ -39,12 +48,21 @@ public class PlacementManager : MonoBehaviour
     [Header("Spike Trap")]
     [SerializeField] private int spikeDamage = 1; // Provisional: hero HP lands with Epic #5
 
+    [Header("Furnace Generator (#143)")]
+    [SerializeField] private float furnaceRetrySeconds = 1f; // Out of fuel: how often it tries to buy the next unit
+
+    [Header("Grow-Lamp (#143)")]
+    [SerializeField] private int lampRadius = 2;              // Chebyshev: plots within this many tiles, diagonals in
+    [SerializeField] private float lampGrowthMultiplier = 2f; // Covered plots grow this much faster while it's lit
+
     // How long the imp works at a construction site to finish it (#92), in game seconds.
     [Header("Build Times")]
     [SerializeField] private float lairCotBuildSeconds = 4f;
     [SerializeField] private float mushroomPlotBuildSeconds = 6f;
     [SerializeField] private float spikeTrapBuildSeconds = 5f;
     [SerializeField] private float impWheelBuildSeconds = 6f; // #142
+    [SerializeField] private float furnaceBuildSeconds = 8f;  // #143
+    [SerializeField] private float growLampBuildSeconds = 5f; // #143
 
     // What an order costs (#104), per type AND material (#109): a type is orderable in a material exactly when a row
     // exists. Ships with every type in Stone, Glimmerstone (#114) and Deepstone (#111); later materials add rows, not fields.
@@ -63,6 +81,12 @@ public class PlacementManager : MonoBehaviour
         new PlaceableCost(PlaceableType.ImpWheel, MaterialType.Stone, 4),            // #142
         new PlaceableCost(PlaceableType.ImpWheel, MaterialType.Glimmerstone, 4),
         new PlaceableCost(PlaceableType.ImpWheel, MaterialType.Deepstone, 4),
+        new PlaceableCost(PlaceableType.FurnaceGenerator, MaterialType.Stone, 6),    // #143
+        new PlaceableCost(PlaceableType.FurnaceGenerator, MaterialType.Glimmerstone, 6),
+        new PlaceableCost(PlaceableType.FurnaceGenerator, MaterialType.Deepstone, 6),
+        new PlaceableCost(PlaceableType.GrowLamp, MaterialType.Stone, 4),            // #143
+        new PlaceableCost(PlaceableType.GrowLamp, MaterialType.Glimmerstone, 4),
+        new PlaceableCost(PlaceableType.GrowLamp, MaterialType.Deepstone, 4),
     };
 
     // What each type does on a power grid (#142), the same row-table pattern as the costs: a type with no row has no role.
@@ -71,6 +95,8 @@ public class PlacementManager : MonoBehaviour
     {
         new PlaceablePower(PlaceableType.ImpWheel, PowerRole.Producer, 40, needsOperator: true),
         new PlaceablePower(PlaceableType.SpikeTrap, PowerRole.Consumer, 10, poweredRearmSeconds: 4f),
+        new PlaceablePower(PlaceableType.FurnaceGenerator, PowerRole.Producer, 100, fuelId: FoodFuelId, fuelSecondsPerUnit: 12f), // #143
+        new PlaceablePower(PlaceableType.GrowLamp, PowerRole.Consumer, 20),                                                       // #143
     };
 
     // What a material makes a building DO (#110), per type AND material: numeric modifiers plus capability flags.
@@ -95,6 +121,11 @@ public class PlacementManager : MonoBehaviour
     public Stockpile Stockpile { get => stockpile; set => stockpile = value; }
     public PowerGrid PowerGrid { get => powerGrid; set => powerGrid = value; }
     public float ImpWheelBuildSeconds { get => impWheelBuildSeconds; set => impWheelBuildSeconds = value; }
+    public float FurnaceBuildSeconds { get => furnaceBuildSeconds; set => furnaceBuildSeconds = value; }
+    public float GrowLampBuildSeconds { get => growLampBuildSeconds; set => growLampBuildSeconds = value; }
+    public float FurnaceRetrySeconds { get => furnaceRetrySeconds; set => furnaceRetrySeconds = value; }
+    public int LampRadius { get => lampRadius; set => lampRadius = value; }
+    public float LampGrowthMultiplier { get => lampGrowthMultiplier; set => lampGrowthMultiplier = value; }
     /// <summary>The power rows, in table order (replaceable in code, e.g. by tests).</summary>
     public List<PlaceablePower> Power { get => power; set => power = value ?? new List<PlaceablePower>(); }
     /// <summary>The cost rows, in table order (replaceable in code, e.g. by tests).</summary>
@@ -229,6 +260,8 @@ public class PlacementManager : MonoBehaviour
             case PlaceableType.MushroomPlot: return mushroomPlotBuildSeconds;
             case PlaceableType.SpikeTrap: return spikeTrapBuildSeconds;
             case PlaceableType.ImpWheel: return impWheelBuildSeconds;
+            case PlaceableType.FurnaceGenerator: return furnaceBuildSeconds;
+            case PlaceableType.GrowLamp: return growLampBuildSeconds;
             default: return 0f;
         }
     }
@@ -250,6 +283,68 @@ public class PlacementManager : MonoBehaviour
             }
             return total;
         }
+    }
+
+    // ---- the fuel store (#143) ----
+
+    /// <summary>
+    /// Units of a fuel on hand: "mushrooms" is the food in built plots (TotalFood); a material's name is its Stockpile
+    /// count. 0 for an unknown id, or a material with no stockpile wired.
+    /// </summary>
+    public int FuelCount(string fuelId)
+    {
+        if (fuelId == FoodFuelId) return TotalFood;
+        if (TryParseMaterialFuel(fuelId, out MaterialType material)) return stockpile != null ? stockpile.Count(material) : 0;
+        return 0;
+    }
+
+    /// <summary>
+    /// Spends one unit of a fuel. Mushrooms come from the fullest built plot (ties in board scan order), taken the way a
+    /// goblin eats; a material comes out of the Stockpile. False when there's none.
+    /// </summary>
+    public bool TrySpendFuel(string fuelId)
+    {
+        if (fuelId == FoodFuelId)
+        {
+            MushroomPlot fullest = null;
+            foreach (MushroomPlot plot in GetBuiltMushroomPlots())
+                if (plot.FoodCount > 0 && (fullest == null || plot.FoodCount > fullest.FoodCount)) fullest = plot;
+            return fullest != null && fullest.TryTakeFood();
+        }
+        return TryParseMaterialFuel(fuelId, out MaterialType material) && stockpile != null && stockpile.TrySpend(material, 1);
+    }
+
+    /// <summary>How a fuel reads on the furnace's card: "mushrooms", or a material's lower-case name.</summary>
+    public static string FuelDisplayName(string fuelId) => string.IsNullOrEmpty(fuelId) ? "fuel" : fuelId.ToLowerInvariant();
+
+    private static bool TryParseMaterialFuel(string fuelId, out MaterialType material) =>
+        Enum.TryParse(fuelId, true, out material) && Enum.IsDefined(typeof(MaterialType), material);
+
+    // ---- grow-lamp coverage (#143) ----
+
+    /// <summary>Built Grow-Lamps, in scan order.</summary>
+    public List<GrowLamp> GetBuiltLamps() => Collect<GrowLamp>(PlaceableType.GrowLamp, builtOnly: true);
+
+    /// <summary>Built Furnace Generators, in scan order.</summary>
+    public List<FurnaceGenerator> GetBuiltFurnaces() => Collect<FurnaceGenerator>(PlaceableType.FurnaceGenerator, builtOnly: true);
+
+    /// <summary>
+    /// The growth multiplier at a tile: the best single multiplier of the lit lamps within lampRadius (GrowLamp's rule: no
+    /// stacking), else 1. MushroomPlot reads this each growth tick.
+    /// </summary>
+    public float GrowthMultiplierAt(Vector2Int tile)
+    {
+        var lamps = new List<GrowLamp.LampState>();
+        foreach (GrowLamp lamp in GetBuiltLamps()) lamps.Add(lamp.State);
+        return GrowLamp.MultiplierAt(lamps, tile, lampRadius, lampGrowthMultiplier);
+    }
+
+    /// <summary>How many plots (sites included) stand within lampRadius of a tile: the lamp card's "Covers n plots".</summary>
+    public int PlotsCoveredFrom(Vector2Int lampTile)
+    {
+        var tiles = new List<Vector2Int>();
+        foreach (MushroomPlot plot in GetMushroomPlots()) tiles.Add(plot.Tile);
+        return GrowLamp.CountCovered(lampTile, tiles, lampRadius);
     }
 
     private readonly Dictionary<Vector2Int, Placeable> placed = new Dictionary<Vector2Int, Placeable>();
@@ -416,13 +511,22 @@ public class PlacementManager : MonoBehaviour
         placeable = go.AddComponent<Placeable>();
         placeable.Initialize(type, tile, ColorFor(type), placeableSize);
         if (type == PlaceableType.MushroomPlot)
-            go.AddComponent<MushroomPlot>().Initialize(mushroomGrowthSecondsPerFood, mushroomCapacity);
+            go.AddComponent<MushroomPlot>().Initialize(mushroomGrowthSecondsPerFood, mushroomCapacity, this);
         else if (type == PlaceableType.SpikeTrap)
             go.AddComponent<SpikeTrap>().Initialize(spikeDamage);
+        else if (type == PlaceableType.GrowLamp)
+            go.AddComponent<GrowLamp>();
         if (TryGetPower(type, out PlaceablePower powerRow) && powerRow.role != PowerRole.None)
         {
-            go.AddComponent<PowerNode>().Initialize(powerGrid, powerRow.role, powerRow.watts, powerRow.needsOperator);
+            var node = go.AddComponent<PowerNode>();
+            node.Initialize(powerGrid, powerRow.role, powerRow.watts, powerRow.needsOperator);
             if (go.TryGetComponent(out SpikeTrap trap)) trap.PoweredRearmSeconds = powerRow.poweredRearmSeconds;
+            if (powerRow.role == PowerRole.Producer && !string.IsNullOrEmpty(powerRow.fuelId)) // #143: a fueled producer
+            {
+                var furnace = go.AddComponent<FurnaceGenerator>();
+                furnace.Initialize(this, powerRow.fuelId, powerRow.fuelSecondsPerUnit, furnaceRetrySeconds);
+                node.SetSupplyGate(furnace);
+            }
         }
         placed[tile] = placeable;
 
@@ -479,6 +583,8 @@ public class PlacementManager : MonoBehaviour
             case PlaceableType.MushroomPlot: return mushroomPlotColor;
             case PlaceableType.SpikeTrap: return spikeTrapColor;
             case PlaceableType.ImpWheel: return impWheelColor;
+            case PlaceableType.FurnaceGenerator: return furnaceColor;
+            case PlaceableType.GrowLamp: return growLampColor;
             default: return Color.magenta;
         }
     }
@@ -543,7 +649,9 @@ public class PlaceableProperty
 /// <summary>
 /// One power row (#142): what a type does on a power grid — its role and watts (output for a producer, draw for a
 /// consumer) — plus per-type params: needsOperator (a producer that runs only while an imp tends it, the Imp Wheel) and
-/// poweredRearmSeconds (the Spike Trap's self-rearm time on a powered grid).
+/// poweredRearmSeconds (the Spike Trap's self-rearm time on a powered grid). #143: fuelId and fuelSecondsPerUnit make a
+/// producer fueled — it burns one unit of that fuel (an IFuelStore key: "mushrooms", or a material's name) per interval
+/// and supplies only while burning. An empty fuelId is an unfueled type. A new fuel is a new row, not new code.
 /// </summary>
 [System.Serializable]
 public class PlaceablePower
@@ -553,13 +661,18 @@ public class PlaceablePower
     public int watts;
     public bool needsOperator;
     public float poweredRearmSeconds;
+    public string fuelId = "";
+    public float fuelSecondsPerUnit;
 
-    public PlaceablePower(PlaceableType type, PowerRole role, int watts, bool needsOperator = false, float poweredRearmSeconds = 0f)
+    public PlaceablePower(PlaceableType type, PowerRole role, int watts, bool needsOperator = false, float poweredRearmSeconds = 0f,
+        string fuelId = "", float fuelSecondsPerUnit = 0f)
     {
         this.type = type;
         this.role = role;
         this.watts = watts;
         this.needsOperator = needsOperator;
         this.poweredRearmSeconds = poweredRearmSeconds;
+        this.fuelId = fuelId ?? "";
+        this.fuelSecondsPerUnit = fuelSecondsPerUnit;
     }
 }

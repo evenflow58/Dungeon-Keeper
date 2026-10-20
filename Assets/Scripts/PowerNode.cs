@@ -1,12 +1,24 @@
 using UnityEngine;
 
 /// <summary>
+/// A producer's own say in whether it supplies right now (#143): the furnace supplies only inside a paid burn interval.
+/// A node with no gate supplies whenever its other conditions hold.
+/// </summary>
+public interface IPowerSupplyGate
+{
+    bool IsSupplying { get; }
+}
+
+/// <summary>
 /// A placeable's place on the power grid (#142). PlacementManager attaches it at placement to every type whose power row
 /// has a role (the MushroomPlot pattern); it joins the PowerGrid when construction completes (a site is never a node) and
 /// leaves it when destroyed. It reports its role, watts and tile, and whether it's active right now: a producer that needs
 /// an operator (the Imp Wheel) is active only while an imp tends it; any other built node is always active.
 /// The unpowered marker: a built consumer that's connected to a grid that can't cover it shows a small lightning badge
 /// above it. Producers, sites and unconnected consumers (a trap with no conduit, as before #142) never show it.
+/// Toggle (#143): every node has Enabled (default true; the placed card flips it). A disabled node is inert: it supplies
+/// nothing, draws nothing, is never powered, and shows no marker (off by choice isn't a fault). Later node types inherit
+/// it by being PowerNodes.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Placeable))]
@@ -17,6 +29,9 @@ public class PowerNode : MonoBehaviour
     [SerializeField] private float markerHeight = 0.75f;                          // Badge centre above the ground, tiles
     [SerializeField] private float markerSize = 0.28f;                            // Badge height, tiles
     [SerializeField] private float markerSmoothness = 0.3f;
+
+    [Header("Toggle (#143)")]
+    [SerializeField] private bool nodeEnabled = true; // Off: out of the grid math entirely
 
     public PowerRole Role { get; private set; }
     public int Watts { get; private set; }
@@ -35,11 +50,23 @@ public class PowerNode : MonoBehaviour
     /// <summary>An operator is at work here: it still holds this node and is operating, not walking to it.</summary>
     public bool IsTended => Operator != null && Operator.CurrentWheel == this && Operator.IsOperating;
 
-    /// <summary>Active now: a built node, and for an operated producer, tended. The grid's live supply reads this.</summary>
-    public bool IsActive => IsBuilt && (!NeedsOperator || IsTended);
+    /// <summary>Enabled by the player (#143). Default true; a disabled node is inert and out of the grid math.</summary>
+    public bool Enabled => nodeEnabled;
+
+    /// <summary>Raised when Enabled changes, so views can repaint at once.</summary>
+    public event System.Action EnabledChanged;
+
+    /// <summary>The producer's own supply condition (#143: the furnace's paid burn), or null for none.</summary>
+    public IPowerSupplyGate SupplyGate { get; private set; }
+
+    /// <summary>
+    /// Active now: a built, enabled node, and for an operated producer, tended; for a gated one (the furnace), supplying.
+    /// The grid's live supply reads this.
+    /// </summary>
+    public bool IsActive => IsBuilt && nodeEnabled && (!NeedsOperator || IsTended) && (SupplyGate == null || SupplyGate.IsSupplying);
 
     /// <summary>This node as the grid math sees it.</summary>
-    public PowerGrid.NodeState State => new PowerGrid.NodeState(Tile, Role, Watts, IsActive);
+    public PowerGrid.NodeState State => new PowerGrid.NodeState(Tile, Role, Watts, IsActive, nodeEnabled);
 
     /// <summary>The marker badge's root (null until Initialize); active exactly while ShowsMarker.</summary>
     public GameObject Marker { get; private set; }
@@ -53,6 +80,21 @@ public class PowerNode : MonoBehaviour
         NeedsOperator = needsOperator;
         if (Marker == null) Marker = CreateMarker();
         RefreshMarker();
+    }
+
+    /// <summary>Sets the producer's supply condition (#143). PlacementManager wires the furnace's here at placement.</summary>
+    public void SetSupplyGate(IPowerSupplyGate gate) => SupplyGate = gate;
+
+    /// <summary>
+    /// Turns the node on or off (#143). Takes effect at once: supply and demand are live queries. An imp tending a wheel
+    /// that's switched off leaves it on its next tick.
+    /// </summary>
+    public void SetEnabled(bool value)
+    {
+        if (nodeEnabled == value) return;
+        nodeEnabled = value;
+        RefreshMarker();
+        EnabledChanged?.Invoke();
     }
 
     /// <summary>Placeable.CompleteConstruction calls this: the finished node joins its grid.</summary>
@@ -81,13 +123,14 @@ public class PowerNode : MonoBehaviour
 
     public bool IsConnected => Totals.Connected;
 
-    /// <summary>Connected and the grid covers its demand (PowerGrid.IsPowered). False with no grid.</summary>
+    /// <summary>Enabled, connected and the grid covers its demand (PowerGrid.IsNodePowered). False with no grid.</summary>
     public bool IsPowered
     {
         get
         {
+            if (!nodeEnabled) return false;
             PowerGrid.GridTotals totals = Totals;
-            return PowerGrid.IsPowered(totals.Connected, totals.Supply, totals.Demand);
+            return PowerGrid.IsNodePowered(nodeEnabled, totals.Connected, totals.Supply, totals.Demand);
         }
     }
 
@@ -96,16 +139,20 @@ public class PowerNode : MonoBehaviour
     /// (it's the pre-#142 trap and works as it always did), so it doesn't ask for power.
     /// </summary>
     public static bool ShowsUnpoweredMarker(bool built, PowerRole role, bool connected, bool powered) =>
-        built && role == PowerRole.Consumer && connected && !powered;
+        ShowsUnpoweredMarker(built, role, true, connected, powered);
+
+    /// <summary>The marker rule with the toggle (#143): a disabled consumer never shows it — off by choice isn't a fault.</summary>
+    public static bool ShowsUnpoweredMarker(bool built, PowerRole role, bool enabled, bool connected, bool powered) =>
+        built && enabled && role == PowerRole.Consumer && connected && !powered;
 
     /// <summary>Whether this node's marker shows right now.</summary>
     public bool ShowsMarker
     {
         get
         {
-            if (!IsBuilt || Role != PowerRole.Consumer) return false;
+            if (!IsBuilt || Role != PowerRole.Consumer || !nodeEnabled) return false;
             PowerGrid.GridTotals totals = Totals;
-            return ShowsUnpoweredMarker(true, Role, totals.Connected, PowerGrid.IsPowered(totals.Connected, totals.Supply, totals.Demand));
+            return ShowsUnpoweredMarker(true, Role, nodeEnabled, totals.Connected, PowerGrid.IsPowered(totals.Connected, totals.Supply, totals.Demand));
         }
     }
 

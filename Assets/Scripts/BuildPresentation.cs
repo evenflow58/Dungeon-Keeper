@@ -46,7 +46,10 @@ public enum BuildStat
     FoodCapacity, // Food a plot holds
     TrapDamage,
     PowerOutput,  // #142: a producer's watts, from the power table ("Output 40 W")
-    NeedsOperator // #142: "Needs an imp" for a producer an imp must tend
+    NeedsOperator, // #142: "Needs an imp" for a producer an imp must tend
+    PowerDraw,     // #143: a consumer's watts, from the power table ("Draw 20 W")
+    FuelUse,       // #143: a fueled producer's burn, from its power row ("Burns 1 mushroom per 12 s")
+    LampCoverage   // #143: the Grow-Lamp's reach and boost ("Plots within 2 tiles grow ×2")
 }
 
 /// <summary>
@@ -100,6 +103,12 @@ public static class BuildPresentation
         new Entry(PlaceableType.ImpWheel, BuildCategory.Power, "Imp Wheel",
             "A wheel an imp turns to power conduit. It stops whenever the imp leaves for other work.", new Color(0.95f, 0.80f, 0.30f, 1f),
             BuildStat.PowerOutput, BuildStat.NeedsOperator),
+        new Entry(PlaceableType.FurnaceGenerator, BuildCategory.Power, "Furnace Generator",
+            "Burns stored mushrooms for steady power, no imp needed. Its chimney breathes warm air.", new Color(0.95f, 0.55f, 0.25f, 1f),
+            BuildStat.PowerOutput, BuildStat.FuelUse),
+        new Entry(PlaceableType.GrowLamp, BuildCategory.Power, "Grow-Lamp",
+            "A warm lamp that speeds up nearby mushroom plots while it has power.", new Color(1.00f, 0.86f, 0.45f, 1f),
+            BuildStat.PowerDraw, BuildStat.LampCoverage),
     };
 
     /// <summary>A verb tile's presentation (#142).</summary>

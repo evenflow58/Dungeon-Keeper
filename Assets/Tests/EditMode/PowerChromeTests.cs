@@ -590,7 +590,8 @@ public class PowerChromeTests
         var targets = new List<string>();
         foreach (UnityEngine.UI.Graphic g in canvas.GetComponentsInChildren<UnityEngine.UI.Graphic>())
             if (g.raycastTarget) targets.Add(g.name);
-        CollectionAssert.AreEqual(new[] { "PowerSegment" }, targets, "The bar background stays dig-through");
+        // #145 migration: the mana segment is the bar's second click target (the Magic view's switch).
+        CollectionAssert.AreEqual(new[] { "PowerSegment", "MagicSegment" }, targets, "The bar background stays dig-through");
 
         var image = topBar.PowerSegment.GetComponent<UnityEngine.UI.Image>();
         Color idle = image.color;
@@ -601,7 +602,7 @@ public class PowerChromeTests
         Assert.AreEqual(ViewMode.Normal, boardRenderer.Mode);
         Assert.AreEqual(idle, image.color);
 
-        Assert.AreEqual(5, canvas.GetComponentsInChildren<UnityEngine.UI.Text>().Length, "Five readouts");
+        Assert.AreEqual(6, canvas.GetComponentsInChildren<UnityEngine.UI.Text>().Length, "Six readouts (#145: mana joined)");
     }
 
     [Test]

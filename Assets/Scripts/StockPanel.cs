@@ -15,6 +15,9 @@ using UnityEngine.UI;
 /// press the controller spent or the filter field took: a selected row clears first, then the panel closes.
 /// Built in code like the rest of the chrome (own overlay Canvas, no scene-authored UI); rows re-read the stockpile on
 /// open and on the 0.25 s unscaled rhythm while open.
+/// Mana (#145): discovered mana types follow the materials under a Mana header, one read-only row each (color chip, name,
+/// the global sum across every store); the filter applies to them too. Mana isn't a build material, so a mana row selects
+/// nothing.
 /// </summary>
 [DisallowMultipleComponent]
 public class StockPanel : MonoBehaviour
@@ -27,6 +30,7 @@ public class StockPanel : MonoBehaviour
     [SerializeField] private Stockpile stockpile;
     [SerializeField] private DetailCard detailCard;
     [SerializeField] private BuildRail buildRail; // Its flyout closes when the panel opens
+    [SerializeField] private ManaFlow manaFlow;   // #145: the mana rows' source; unwired, found at Start
 
     [Header("Layout")]
     [SerializeField] private float leftOffset = 54f;        // BuildRail.railWidth: the flyout position
@@ -69,6 +73,7 @@ public class StockPanel : MonoBehaviour
     public Stockpile Stockpile { get => stockpile; set => stockpile = value; }
     public DetailCard DetailCard { get => detailCard; set => detailCard = value; }
     public BuildRail BuildRail { get => buildRail; set => buildRail = value; }
+    public ManaFlow Mana { get => manaFlow; set => manaFlow = value; }
     public Color RowColor => rowColor;
     public Color RowSelectedColor => rowSelectedColor;
     public Color ZeroCountColor => zeroCountColor;
@@ -82,23 +87,30 @@ public class StockPanel : MonoBehaviour
     /// <summary>The filter text: rows whose name contains it, ignoring case. Empty shows every discovered material.</summary>
     public string Filter { get; private set; } = "";
 
-    /// <summary>One line of the list: a family header, or a material's row.</summary>
+    /// <summary>One line of the list: a family header, a material's row, or (#145) a mana type's read-only row.</summary>
     public readonly struct Row
     {
         public readonly bool isHeader;
         public readonly MaterialFamily family;
-        public readonly MaterialType material; // Meaningless for a header
+        public readonly MaterialType material; // Meaningless for a header or a mana row
         public readonly string name;           // The family's name for a header
         public readonly int count;             // 0 for a header
+        public readonly string manaType;       // #145: the mana type's id on a mana row; null otherwise
+        public readonly Color color;           // #145: a mana row's chip color
 
-        public Row(bool isHeader, MaterialFamily family, MaterialType material, string name, int count)
+        public Row(bool isHeader, MaterialFamily family, MaterialType material, string name, int count,
+            string manaType = null, Color color = default)
         {
             this.isHeader = isHeader;
             this.family = family;
             this.material = material;
             this.name = name;
             this.count = count;
+            this.manaType = manaType;
+            this.color = color;
         }
+
+        public bool IsMana => manaType != null;
     }
 
     // ---- input ----
@@ -176,6 +188,7 @@ public class StockPanel : MonoBehaviour
         stockpile ??= FindAnyObjectByType<Stockpile>();
         detailCard ??= FindAnyObjectByType<DetailCard>();
         buildRail ??= FindAnyObjectByType<BuildRail>();
+        manaFlow ??= FindAnyObjectByType<ManaFlow>();
 
         PlacementController.EnsureEventSystem();
         Build();
@@ -203,7 +216,7 @@ public class StockPanel : MonoBehaviour
     public Stockpile CurrentStockpile => stockpile != null ? stockpile : placementManager != null ? placementManager.Stockpile : null;
 
     /// <summary>The rows the panel shows now: Rows over the current stockpile and filter.</summary>
-    public List<Row> CurrentRows() => Rows(CurrentStockpile, Filter);
+    public List<Row> CurrentRows() => Rows(CurrentStockpile, manaFlow, Filter);
 
     /// <summary>
     /// The list (#126): one row per discovered catalog material whose display name contains the filter (ignoring case),
@@ -229,6 +242,28 @@ public class StockPanel : MonoBehaviour
                 headed = true;
                 rows.Add(new Row(false, family, d.type, name, stockpile.Count(d.type)));
             }
+        }
+        return rows;
+    }
+
+    /// <summary>
+    /// The list with mana (#145): the material rows, then one row per discovered mana type whose name contains the filter
+    /// (catalog order, the global sum as its count) under the Mana header. An undiscovered type has no row anywhere.
+    /// </summary>
+    public static List<Row> Rows(Stockpile stockpile, ManaFlow mana, string filter)
+    {
+        List<Row> rows = Rows(stockpile, filter);
+        if (mana == null) return rows;
+        string needle = (filter ?? "").Trim();
+        bool headed = false;
+        foreach (string type in mana.DiscoveredTypes())
+        {
+            string name = mana.DisplayName(type);
+            if (needle.Length > 0 && name.IndexOf(needle, System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+            MaterialFamily family = BuildPresentation.ManaFamily;
+            if (!headed) rows.Add(new Row(true, family, default, BuildPresentation.FamilyName(family), 0));
+            headed = true;
+            rows.Add(new Row(false, family, default, name, mana.TotalOf(type), type, mana.ColorOf(type)));
         }
         return rows;
     }
@@ -432,7 +467,8 @@ public class StockPanel : MonoBehaviour
                 view.count.text = rows[i].count.ToString();
                 view.count.color = zero ? zeroCountColor : Color.white;
             }
-            if (view.background != null) view.background.color = SelectedMaterial == rows[i].material ? rowSelectedColor : rowColor;
+            bool selected = !rows[i].IsMana && SelectedMaterial == rows[i].material;
+            if (view.background != null) view.background.color = selected ? rowSelectedColor : rowColor;
         }
 
         float contentHeight = Mathf.Max(0f, y - rowGap);
@@ -477,7 +513,8 @@ public class StockPanel : MonoBehaviour
     private static string Signature(List<Row> rows)
     {
         var parts = new string[rows.Count];
-        for (int i = 0; i < rows.Count; i++) parts[i] = rows[i].isHeader ? "#" + rows[i].family : rows[i].material.ToString();
+        for (int i = 0; i < rows.Count; i++)
+            parts[i] = rows[i].isHeader ? "#" + rows[i].family : rows[i].IsMana ? "~" + rows[i].manaType : rows[i].material.ToString();
         return string.Join("|", parts);
     }
 
@@ -497,22 +534,25 @@ public class StockPanel : MonoBehaviour
         var view = new RowView { material = row.material };
         MaterialType material = row.material;
 
-        var go = new GameObject(row.material + "Row");
+        var go = new GameObject(row.IsMana ? row.manaType + "ManaRow" : row.material + "Row");
         go.transform.SetParent(contentRect, false);
         view.background = go.AddComponent<Image>();
         view.rect = view.background.rectTransform;
         view.background.color = rowColor;
-        var button = go.AddComponent<Button>();
-        button.targetGraphic = view.background;
-        button.onClick.AddListener(() => SelectRow(material));
+        if (!row.IsMana) // #145: mana rows are read-only (mana isn't a build material)
+        {
+            var button = go.AddComponent<Button>();
+            button.targetGraphic = view.background;
+            button.onClick.AddListener(() => SelectRow(material));
+        }
 
         var swatchGo = new GameObject("Swatch");
         swatchGo.transform.SetParent(go.transform, false);
         var swatch = swatchGo.AddComponent<Image>();
         swatch.raycastTarget = false;
         Stockpile current = CurrentStockpile;
-        Color swatchColor = default;
-        swatch.enabled = current != null && current.TryGetColor(row.material, out swatchColor); // No catalog color, no swatch
+        Color swatchColor = row.color;
+        swatch.enabled = row.IsMana || (current != null && current.TryGetColor(row.material, out swatchColor)); // No catalog color, no swatch
         swatch.color = swatchColor;
         swatch.rectTransform.anchorMin = swatch.rectTransform.anchorMax = new Vector2(0f, 0.5f);
         swatch.rectTransform.pivot = new Vector2(0f, 0.5f);

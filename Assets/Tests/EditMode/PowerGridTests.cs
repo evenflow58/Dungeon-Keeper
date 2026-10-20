@@ -775,8 +775,8 @@ public class PowerGridTests
             BuildPresentation.TypesInCategory(BuildCategory.Power));
         Assert.AreEqual("Imp Wheel", BuildPresentation.DisplayName(PlaceableType.ImpWheel));
         Assert.AreEqual("POWER", BuildPresentation.RailLabel(BuildCategory.Power));
-        // Six, not seven: Magic is still empty and hidden. Rail7 is bound anyway, for the entry Magic will add.
-        Assert.AreEqual(6, BuildRail.VisibleEntries().Count, "DIG + Living, Farming, Defense, Power + STOCK");
+        // #145 migration: Magic now holds the mana buildings, so the rail has seven entries and Rail7 is in use.
+        Assert.AreEqual(7, BuildRail.VisibleEntries().Count, "DIG + Living, Farming, Defense, Power, Magic + STOCK");
         CollectionAssert.AreEqual(new[] { "Output 40 W", "Needs an imp" }, new[]
         {
             DetailCard.StatLine(BuildStat.PowerOutput, manager, PlaceableType.ImpWheel, MaterialType.Stone),

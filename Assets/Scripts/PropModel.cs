@@ -213,6 +213,68 @@ public static class PropModel
         };
     }
 
+    // ---- Accumulator (#145): a stone basin ringed by four prongs, a mana crystal hovering in its bowl ----
+
+    public static Part[] AccumulatorRecipe(float s, Color stone, Color crystal)
+    {
+        float p = 0.27f * s; // Prong offset from the centre
+        return new[]
+        {
+            // A cylinder is 2 units tall: scale.y is half its height.
+            new Part("Base",    Shape.Cylinder,   new Vector3(0f, 0.04f, 0f),  new Vector3(0.78f * s, 0.04f, 0.78f * s), stone),
+            new Part("Bowl",    Shape.Cylinder,   new Vector3(0f, 0.11f, 0f),  new Vector3(0.58f * s, 0.03f, 0.58f * s), Color.Lerp(stone, Color.black, 0.35f)),
+            new Part("Prong0",  Shape.Box,        new Vector3(p, 0.2f, p),     new Vector3(0.07f, 0.32f, 0.07f), stone, new Vector3(0f, 45f, 0f)),
+            new Part("Prong1",  Shape.Box,        new Vector3(-p, 0.2f, p),    new Vector3(0.07f, 0.32f, 0.07f), stone, new Vector3(0f, 45f, 0f)),
+            new Part("Prong2",  Shape.Box,        new Vector3(p, 0.2f, -p),    new Vector3(0.07f, 0.32f, 0.07f), stone, new Vector3(0f, 45f, 0f)),
+            new Part("Prong3",  Shape.Box,        new Vector3(-p, 0.2f, -p),   new Vector3(0.07f, 0.32f, 0.07f), stone, new Vector3(0f, 45f, 0f)),
+            new Part("Crystal", Shape.Octahedron, new Vector3(0f, 0.17f, 0f),  new Vector3(0.18f, 0.3f, 0.18f), crystal, new Vector3(0f, 45f, 0f)),
+        };
+    }
+
+    // ---- Mana Container (#145): a squat banded tank on a plinth, a glass gauge on its face ----
+
+    public static Part[] ManaContainerRecipe(float s, Color body, Color band, Color glass)
+    {
+        float front = -0.31f * s; // The tank's camera-facing (−Z) side
+        return new[]
+        {
+            new Part("Plinth", Shape.Box,      new Vector3(0f, 0.03f, 0f),            new Vector3(0.82f * s, 0.06f, 0.82f * s), band),
+            new Part("Tank",   Shape.Cylinder, new Vector3(0f, 0.3f, 0f),             new Vector3(0.62f * s, 0.24f, 0.62f * s), body),
+            new Part("Band0",  Shape.Cylinder, new Vector3(0f, 0.16f, 0f),            new Vector3(0.65f * s, 0.025f, 0.65f * s), band),
+            new Part("Band1",  Shape.Cylinder, new Vector3(0f, 0.44f, 0f),            new Vector3(0.65f * s, 0.025f, 0.65f * s), band),
+            new Part("Lid",    Shape.Cylinder, new Vector3(0f, 0.56f, 0f),            new Vector3(0.48f * s, 0.03f, 0.48f * s), band),
+            new Part("Gauge",  Shape.Box,      new Vector3(0f, 0.3f, front - 0.01f),  new Vector3(0.1f, 0.22f, 0.02f), glass),
+        };
+    }
+
+    /// <summary>Accumulator materials (#145): two cut stones, a crystal shard lying on its side, a crate.</summary>
+    public static Part[] AccumulatorMaterialsRecipe(float s, Color stone, Color crystal, Color crate) => new[]
+    {
+        new Part("Stone0",  Shape.Box,        new Vector3(-0.16f * s, 0.06f, -0.06f * s), new Vector3(0.28f * s, 0.12f, 0.24f * s), stone, new Vector3(0f, 12f, 0f)),
+        new Part("Stone1",  Shape.Box,        new Vector3(-0.12f * s, 0.17f, -0.04f * s), new Vector3(0.22f * s, 0.1f, 0.2f * s), stone, new Vector3(0f, -10f, 0f)),
+        new Part("Shard",   Shape.Octahedron, new Vector3(0.18f * s, 0.06f, 0.2f * s),    new Vector3(0.12f, 0.2f, 0.12f), crystal, new Vector3(0f, 30f, 80f)),
+        new Part("Crate",   Shape.Box,        new Vector3(0.26f * s, 0.09f, -0.22f * s),  new Vector3(0.18f, 0.18f, 0.18f), crate, new Vector3(0f, -14f, 0f)),
+    };
+
+    /// <summary>Container materials (#145): a stack of tank staves, a loose band, a crate.</summary>
+    public static Part[] ManaContainerMaterialsRecipe(float s, Color body, Color band, Color crate) => new[]
+    {
+        new Part("Stave0", Shape.Box,      new Vector3(-0.04f * s, 0.02f, -0.12f * s), new Vector3(0.8f * s, 0.04f, 0.1f * s), body, new Vector3(0f, 6f, 0f)),
+        new Part("Stave1", Shape.Box,      new Vector3(0.02f * s, 0.06f, -0.1f * s),   new Vector3(0.76f * s, 0.04f, 0.1f * s), body, new Vector3(0f, -7f, 0f)),
+        new Part("Band",   Shape.Cylinder, new Vector3(-0.14f * s, 0.015f, 0.18f * s), new Vector3(0.36f * s, 0.015f, 0.36f * s), band),
+        new Part("Crate",  Shape.Box,      new Vector3(0.26f * s, 0.1f, 0.2f * s),     new Vector3(0.2f, 0.2f, 0.2f), crate, new Vector3(0f, 16f, 0f)),
+    };
+
+    // ---- Fire Vent (#145): a cracked rock mound around a glowing fissure (the Ember part glows) ----
+
+    public static Part[] FireVentRecipe(Color rock, Color ember) => new[]
+    {
+        new Part("Mound", Shape.Sphere, new Vector3(0f, 0f, 0f),          new Vector3(0.86f, 0.26f, 0.86f), rock), // Half sunk
+        new Part("Lip0",  Shape.Box,    new Vector3(0.18f, 0.1f, 0.05f),  new Vector3(0.22f, 0.08f, 0.14f), rock, new Vector3(0f, 25f, 12f)),
+        new Part("Lip1",  Shape.Box,    new Vector3(-0.17f, 0.1f, -0.04f), new Vector3(0.2f, 0.08f, 0.15f), rock, new Vector3(0f, -20f, -14f)),
+        new Part("Ember", Shape.Box,    new Vector3(0f, 0.12f, 0f),       new Vector3(0.34f, 0.03f, 0.08f), ember, new Vector3(0f, 30f, 0f)),
+    };
+
     // ---- The Heart: a faceted crystal on a low stone plinth ----
 
     public static Part[] HeartRecipe(float height, float width, Color crystal, Color plinth, float plinthHeight) => new[]

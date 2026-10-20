@@ -30,6 +30,7 @@ public class PlacementManager : MonoBehaviour, IFuelStore
     [SerializeField] private BoardRenderer boardRenderer;
     [SerializeField] private Stockpile stockpile; // Pays for orders (#104); null = orders fund at once
     [SerializeField] private PowerGrid powerGrid; // #142: where built power nodes register; null = nodes never connect
+    [SerializeField] private ManaFlow manaFlow;   // #145: where built mana stores register; null = they never join a network
 
     [Header("Placeable Visuals (Placeholder Art)")]
     [SerializeField] private Color lairCotColor = new Color(0.40f, 0.60f, 0.90f, 1f);      // Blue
@@ -38,6 +39,8 @@ public class PlacementManager : MonoBehaviour, IFuelStore
     [SerializeField] private Color impWheelColor = new Color(0.62f, 0.44f, 0.26f, 1f);     // #142: worn wood
     [SerializeField] private Color furnaceColor = new Color(0.40f, 0.36f, 0.34f, 1f);      // #143: sooty stone body
     [SerializeField] private Color growLampColor = new Color(1.00f, 0.86f, 0.45f, 1f);     // #143: warm lamp glass
+    [SerializeField] private Color accumulatorColor = new Color(0.66f, 0.48f, 1.00f, 1f);  // #145: the mana crystal
+    [SerializeField] private Color manaContainerColor = new Color(0.34f, 0.30f, 0.44f, 1f); // #145: the tank's dark body
     [SerializeField] private float placeableSize = 0.8f;                                    // Fraction of a tile
 
     // Placeables are runtime-created (no Inspector presence), so their behavior config lives here.
@@ -51,6 +54,14 @@ public class PlacementManager : MonoBehaviour, IFuelStore
     [Header("Furnace Generator (#143)")]
     [SerializeField] private float furnaceRetrySeconds = 1f; // Out of fuel: how often it tries to buy the next unit
 
+    [Header("Accumulator (#145)")]
+    [SerializeField] private int accumulatorCapacity = 20;
+    [SerializeField] private float accumulatorCollectSeconds = 1f; // One collection cycle
+    [SerializeField] private int accumulatorCollectPerCycle = 1;   // Units taken from beside it per cycle
+
+    [Header("Mana Container (#145)")]
+    [SerializeField] private int manaContainerCapacity = 100;
+
     [Header("Grow-Lamp (#143)")]
     [SerializeField] private int lampRadius = 2;              // Chebyshev: plots within this many tiles, diagonals in
     [SerializeField] private float lampGrowthMultiplier = 2f; // Covered plots grow this much faster while it's lit
@@ -63,6 +74,8 @@ public class PlacementManager : MonoBehaviour, IFuelStore
     [SerializeField] private float impWheelBuildSeconds = 6f; // #142
     [SerializeField] private float furnaceBuildSeconds = 8f;  // #143
     [SerializeField] private float growLampBuildSeconds = 5f; // #143
+    [SerializeField] private float accumulatorBuildSeconds = 6f;   // #145
+    [SerializeField] private float manaContainerBuildSeconds = 6f; // #145
 
     // What an order costs (#104), per type AND material (#109): a type is orderable in a material exactly when a row
     // exists. Ships with every type in Stone, Glimmerstone (#114) and Deepstone (#111); later materials add rows, not fields.
@@ -87,6 +100,12 @@ public class PlacementManager : MonoBehaviour, IFuelStore
         new PlaceableCost(PlaceableType.GrowLamp, MaterialType.Stone, 4),            // #143
         new PlaceableCost(PlaceableType.GrowLamp, MaterialType.Glimmerstone, 4),
         new PlaceableCost(PlaceableType.GrowLamp, MaterialType.Deepstone, 4),
+        new PlaceableCost(PlaceableType.Accumulator, MaterialType.Stone, 5),          // #145
+        new PlaceableCost(PlaceableType.Accumulator, MaterialType.Glimmerstone, 5),
+        new PlaceableCost(PlaceableType.Accumulator, MaterialType.Deepstone, 5),
+        new PlaceableCost(PlaceableType.ManaContainer, MaterialType.Stone, 6),        // #145
+        new PlaceableCost(PlaceableType.ManaContainer, MaterialType.Glimmerstone, 6),
+        new PlaceableCost(PlaceableType.ManaContainer, MaterialType.Deepstone, 6),
     };
 
     // What each type does on a power grid (#142), the same row-table pattern as the costs: a type with no row has no role.
@@ -120,6 +139,13 @@ public class PlacementManager : MonoBehaviour, IFuelStore
     public float SpikeTrapBuildSeconds { get => spikeTrapBuildSeconds; set => spikeTrapBuildSeconds = value; }
     public Stockpile Stockpile { get => stockpile; set => stockpile = value; }
     public PowerGrid PowerGrid { get => powerGrid; set => powerGrid = value; }
+    public ManaFlow ManaFlow { get => manaFlow; set => manaFlow = value; }
+    public int AccumulatorCapacity { get => accumulatorCapacity; set => accumulatorCapacity = value; }
+    public float AccumulatorCollectSeconds { get => accumulatorCollectSeconds; set => accumulatorCollectSeconds = value; }
+    public int AccumulatorCollectPerCycle { get => accumulatorCollectPerCycle; set => accumulatorCollectPerCycle = value; }
+    public int ManaContainerCapacity { get => manaContainerCapacity; set => manaContainerCapacity = value; }
+    public float AccumulatorBuildSeconds { get => accumulatorBuildSeconds; set => accumulatorBuildSeconds = value; }
+    public float ManaContainerBuildSeconds { get => manaContainerBuildSeconds; set => manaContainerBuildSeconds = value; }
     public float ImpWheelBuildSeconds { get => impWheelBuildSeconds; set => impWheelBuildSeconds = value; }
     public float FurnaceBuildSeconds { get => furnaceBuildSeconds; set => furnaceBuildSeconds = value; }
     public float GrowLampBuildSeconds { get => growLampBuildSeconds; set => growLampBuildSeconds = value; }
@@ -262,6 +288,8 @@ public class PlacementManager : MonoBehaviour, IFuelStore
             case PlaceableType.ImpWheel: return impWheelBuildSeconds;
             case PlaceableType.FurnaceGenerator: return furnaceBuildSeconds;
             case PlaceableType.GrowLamp: return growLampBuildSeconds;
+            case PlaceableType.Accumulator: return accumulatorBuildSeconds;
+            case PlaceableType.ManaContainer: return manaContainerBuildSeconds;
             default: return 0f;
         }
     }
@@ -391,7 +419,7 @@ public class PlacementManager : MonoBehaviour, IFuelStore
         foreach (Placeable p in placed.Values)
         {
             if (p == null) continue;
-            p.SetSeeThrough(PowerOverlay.SeesThrough(mode, p.TryGetComponent(out PowerNode _)), alpha);
+            p.SetSeeThrough(PowerOverlay.SeesThrough(mode, p.TryGetComponent(out PowerNode _), p.TryGetComponent(out IManaPort _)), alpha);
         }
     }
 
@@ -439,6 +467,7 @@ public class PlacementManager : MonoBehaviour, IFuelStore
         dungeonBoard ??= GetComponent<DungeonBoard>() ?? FindAnyObjectByType<DungeonBoard>();
         boardRenderer ??= GetComponent<BoardRenderer>() ?? FindAnyObjectByType<BoardRenderer>();
         powerGrid ??= GetComponent<PowerGrid>();
+        manaFlow ??= GetComponent<ManaFlow>();
     }
 
     public bool IsOccupied(Vector2Int tile) => placed.ContainsKey(tile);
@@ -479,6 +508,12 @@ public class PlacementManager : MonoBehaviour, IFuelStore
 
     /// <summary>Built Lair Cots only, in scan order: the ones a goblin can claim.</summary>
     public List<Placeable> GetBuiltCots() => Collect<Placeable>(PlaceableType.LairCot, builtOnly: true);
+
+    /// <summary>All placed Accumulators (#145), sites included, in scan order.</summary>
+    public List<Accumulator> GetAccumulators() => Collect<Accumulator>(PlaceableType.Accumulator, builtOnly: false);
+
+    /// <summary>All placed Mana Containers (#145), sites included, in scan order.</summary>
+    public List<ManaContainer> GetManaContainers() => Collect<ManaContainer>(PlaceableType.ManaContainer, builtOnly: false);
 
     /// <summary>Built Imp Wheels' power nodes (#142), in scan order: the wheels an imp can operate.</summary>
     public List<PowerNode> GetBuiltWheels() => Collect<PowerNode>(PlaceableType.ImpWheel, builtOnly: true);
@@ -553,6 +588,10 @@ public class PlacementManager : MonoBehaviour, IFuelStore
             go.AddComponent<SpikeTrap>().Initialize(spikeDamage);
         else if (type == PlaceableType.GrowLamp)
             go.AddComponent<GrowLamp>();
+        else if (type == PlaceableType.Accumulator) // #145
+            go.AddComponent<Accumulator>().Initialize(manaFlow, accumulatorCapacity, accumulatorCollectSeconds, accumulatorCollectPerCycle);
+        else if (type == PlaceableType.ManaContainer)
+            go.AddComponent<ManaContainer>().Initialize(manaFlow, manaContainerCapacity);
         if (TryGetPower(type, out PlaceablePower powerRow) && powerRow.role != PowerRole.None)
         {
             var node = go.AddComponent<PowerNode>();
@@ -623,6 +662,8 @@ public class PlacementManager : MonoBehaviour, IFuelStore
             case PlaceableType.ImpWheel: return impWheelColor;
             case PlaceableType.FurnaceGenerator: return furnaceColor;
             case PlaceableType.GrowLamp: return growLampColor;
+            case PlaceableType.Accumulator: return accumulatorColor;
+            case PlaceableType.ManaContainer: return manaContainerColor;
             default: return Color.magenta;
         }
     }

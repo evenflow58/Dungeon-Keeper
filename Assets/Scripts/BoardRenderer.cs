@@ -37,6 +37,7 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private FogOfWar fogOfWar; // Optional (#131): unwired, everything renders as explored
     [SerializeField] private ImpDigger impDigger; // Optional (#132): the band seam rock is tinted by; unwired, all rock is rockColor
     [SerializeField] private PowerGrid powerGrid; // Optional (#142): the conduit layer drawn on the floor; unwired, none
+    [SerializeField] private ManaFlow manaFlow;   // Optional (#145): the vent, mana units and pipes; unwired, none (found on this object)
 
     [Header("Tile Shapes")]
     [SerializeField] private float rockHeight = 0.6f;     // Rock and designated blocks, in tiles
@@ -81,6 +82,29 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private float overlayRefreshSeconds = 0.25f; // Live-state repaint cadence while an overlay is on
     [SerializeField] private float overlayPropAlpha = 0.25f;      // Non-power placeables' opacity in the power overlay (conduit shows through)
 
+    [Header("Mana (#145)")]
+    [SerializeField] private float manaGlowSize = 0.26f;          // A mana unit's glow, in tiles
+    [SerializeField] private float manaGlowHeight = 0.2f;         // Its centre above the floor
+    [SerializeField] private float manaGlowIntensity = 2f;        // Emission: it glows past the lit surface
+    [SerializeField] private Color pipeColor = new Color(0.46f, 0.40f, 0.62f, 1f);           // Slate-violet pipe
+    [SerializeField] private Color pendingPipeColor = new Color(0.70f, 0.62f, 0.95f, 0.45f); // Ghost run: ordered, not built
+    [SerializeField] private float pipeWidth = 0.12f;
+    [SerializeField] private float pipeHeight = 0.07f;            // A raised tube, above conduit's flat inlay
+    [SerializeField] private float pipeLaneOffset = 0.2f;         // Toward the tile's back edge (+Z), so pipe and conduit sharing a tile both show
+    [SerializeField] private Color ventRockColor = new Color(0.16f, 0.13f, 0.12f, 1f);
+    [SerializeField] private Color ventEmberColor = new Color(1.00f, 0.45f, 0.12f, 1f);
+    [SerializeField] private Color ventDormantEmberColor = new Color(0.30f, 0.12f, 0.06f, 1f); // Dull while entombed or choked
+    [SerializeField] private float ventEmberIntensity = 2.5f;
+
+    [Header("Magic Overlay (#145)")]
+    [SerializeField] private Color pipeOverlayColor = new Color(0.80f, 0.72f, 1.00f, 1f);       // A built pipe network: one neutral tint
+    [SerializeField] private Color pendingPipeOverlayColor = new Color(0.85f, 0.85f, 0.85f, 0.45f);
+    [SerializeField] private Color storeEmptyOverlayColor = new Color(0.55f, 0.52f, 0.62f, 1f); // A store holding nothing
+    [SerializeField] private Color ventActiveOverlayColor = new Color(1.00f, 0.55f, 0.20f, 1f);
+    [SerializeField] private Color ventDormantOverlayColor = new Color(0.40f, 0.22f, 0.14f, 1f);
+    [SerializeField] private float manaTileTint = 0.6f;            // How far a mana tile's floor leans to its type's color
+    [SerializeField] private float pipeTileTint = 0.45f;           // How far the floor under built pipe leans to the pipe tint
+
     [Header("Door (Placeholder Art)")]
     [SerializeField] private float doorHeight = 0.9f;  // Taller than the rock so the entrance reads from afar
     [SerializeField] private float doorPostWidth = 0.12f;
@@ -102,6 +126,21 @@ public class BoardRenderer : MonoBehaviour
             powerGrid = value;
             if (isActiveAndEnabled) SubscribeGrid();
             RefreshAllConduit();
+        }
+    }
+
+    /// <summary>The mana service this view draws (#145). Setting it moves the subscriptions and redraws its views.</summary>
+    public ManaFlow Mana
+    {
+        get => manaFlow;
+        set
+        {
+            if (manaFlow == value) return;
+            UnsubscribeMana();
+            ClearManaViews();
+            manaFlow = value;
+            if (isActiveAndEnabled) SubscribeMana();
+            RefreshAllMana();
         }
     }
 
@@ -170,6 +209,9 @@ public class BoardRenderer : MonoBehaviour
     private GameObject[,] tileViews;
     private readonly Dictionary<Vector2Int, GameObject> doors = new Dictionary<Vector2Int, GameObject>();
     private readonly Dictionary<Vector2Int, GameObject> conduitViews = new Dictionary<Vector2Int, GameObject>();
+    private readonly Dictionary<Vector2Int, GameObject> pipeViews = new Dictionary<Vector2Int, GameObject>();
+    private readonly Dictionary<Vector2Int, GameObject> manaViews = new Dictionary<Vector2Int, GameObject>();
+    private GameObject ventView;
     private readonly Dictionary<Color, Material> materials = new Dictionary<Color, Material>();
     private Mesh boxMesh;
     private ViewMode viewMode = ViewMode.Normal;
@@ -188,6 +230,7 @@ public class BoardRenderer : MonoBehaviour
         }
         SubscribeFog();
         SubscribeGrid();
+        SubscribeMana();
     }
 
     private void OnDisable()
@@ -198,6 +241,27 @@ public class BoardRenderer : MonoBehaviour
         }
         UnsubscribeFog();
         UnsubscribeGrid();
+        UnsubscribeMana();
+    }
+
+    // Unsubscribe first so a repeated OnEnable never doubles the handlers (#139 posture).
+    private void SubscribeMana()
+    {
+        if (manaFlow == null) return;
+        manaFlow.ManaChanged -= RefreshMana;
+        manaFlow.ManaChanged += RefreshMana;
+        manaFlow.PipeChanged -= HandlePipeChanged;
+        manaFlow.PipeChanged += HandlePipeChanged;
+        manaFlow.VentChanged -= RefreshVent;
+        manaFlow.VentChanged += RefreshVent;
+    }
+
+    private void UnsubscribeMana()
+    {
+        if (manaFlow == null) return;
+        manaFlow.ManaChanged -= RefreshMana;
+        manaFlow.PipeChanged -= HandlePipeChanged;
+        manaFlow.VentChanged -= RefreshVent;
     }
 
     private void SubscribeGrid()
@@ -256,6 +320,7 @@ public class BoardRenderer : MonoBehaviour
     public void InitializeReferences()
     {
         dungeonBoard ??= GetComponent<DungeonBoard>() ?? FindAnyObjectByType<DungeonBoard>();
+        manaFlow ??= GetComponent<ManaFlow>(); // #145: the service lives on the DungeonManager beside this view
     }
 
     // ---- shapes and colors (pure: what each state looks like) ----
@@ -342,6 +407,7 @@ public class BoardRenderer : MonoBehaviour
             }
         }
         RefreshAllConduit();
+        RefreshAllMana();
     }
 
     public void RefreshTile(int x, int y)
@@ -399,6 +465,7 @@ public class BoardRenderer : MonoBehaviour
     // floor leaning toward the grid's hue; otherwise none (the tile dims).
     private Color? OverlayColorAt(Vector2Int tile, Color normal)
     {
+        if (viewMode == ViewMode.Magic) return MagicOverlayColorAt(tile, normal);
         if (viewMode != ViewMode.Power || powerGrid == null) return null;
         PowerNode node = powerGrid.NodeAt(tile);
         if (node != null) return NodeColor(LookOfNode(node));
@@ -455,8 +522,183 @@ public class BoardRenderer : MonoBehaviour
                 foreach (MeshRenderer part in entry.Value.GetComponentsInChildren<MeshRenderer>()) part.sharedMaterial = material;
             }
         }
+        if (manaFlow != null)
+        {
+            foreach (KeyValuePair<Vector2Int, GameObject> entry in pipeViews)
+            {
+                if (entry.Value == null) continue;
+                Material material = PipeMaterial(manaFlow.IsPipeBuilt(entry.Key));
+                foreach (MeshRenderer part in entry.Value.GetComponentsInChildren<MeshRenderer>()) part.sharedMaterial = material;
+            }
+        }
         OverlayRepainted?.Invoke();
     }
+
+    // ---- the magic overlay (#145) ----
+
+    // The magic overlay's override for an explored tile: the vent by its state; a store by what it holds; a mana tile
+    // leaning to its type's color; the floor under built pipe leaning to the pipe tint; otherwise none (the tile dims).
+    private Color? MagicOverlayColorAt(Vector2Int tile, Color normal)
+    {
+        if (manaFlow == null) return null;
+        if (manaFlow.IsVentTile(tile)) return manaFlow.VentDormant ? ventDormantOverlayColor : ventActiveOverlayColor;
+        IManaPort port = manaFlow.PortAt(tile);
+        if (port != null) return StoreOverlayColor(port.Store);
+        Color dimmed = PowerOverlay.Dim(normal, overlayDimFactor);
+        string type = manaFlow.TypeAt(tile);
+        if (type != null) return Color.Lerp(dimmed, manaFlow.ColorOf(type), manaTileTint);
+        if (manaFlow.IsPipeBuilt(tile)) return Color.Lerp(dimmed, pipeOverlayColor, pipeTileTint);
+        return null;
+    }
+
+    /// <summary>A store's magic-overlay color: its type's color while it holds mana, the neutral empty color otherwise.</summary>
+    public Color StoreOverlayColor(ManaStore store) =>
+        store != null && store.Type != null && manaFlow != null ? manaFlow.ColorOf(store.Type) : storeEmptyOverlayColor;
+
+    public Color PipeOverlayColor => pipeOverlayColor;
+    public Color VentActiveOverlayColor => ventActiveOverlayColor;
+    public Color VentDormantOverlayColor => ventDormantOverlayColor;
+    public float ManaTileTint => manaTileTint;
+
+    /// <summary>A pipe tile's color in the current mode: slate-violet or the pending ghost; in Magic, the network tint or a neutral ghost.</summary>
+    public Color PipeDisplayColor(bool built)
+    {
+        if (viewMode == ViewMode.Magic) return built ? pipeOverlayColor : pendingPipeOverlayColor;
+        return built ? pipeColor : pendingPipeColor;
+    }
+
+    private Material PipeMaterial(bool built)
+    {
+        Color color = PipeDisplayColor(built);
+        return built ? MaterialFor(color) : CreatureModel.GhostMaterialFor(color);
+    }
+
+    // ---- pipes (#145): a raised tube on its own lane, conduit's twin otherwise ----
+
+    /// <summary>A tile's pipe view (its tube or ghost run), or null when it shows none.</summary>
+    public GameObject GetPipeView(int x, int y) =>
+        pipeViews.TryGetValue(new Vector2Int(x, y), out GameObject view) && view != null && view.activeSelf ? view : null;
+
+    /// <summary>Whether the tile's pipe shows: it has pipe and it's explored.</summary>
+    public bool ShowsPipe(Vector2Int tile) => manaFlow != null && manaFlow.HasPipe(tile) && IsExplored(tile.x, tile.y);
+
+    private void HandlePipeChanged(Vector2Int tile)
+    {
+        RefreshPipe(tile);
+        foreach (Vector2Int d in ConduitNeighbors) RefreshPipe(tile + d); // Their arms toward this tile change too
+        if (viewMode == ViewMode.Magic) RepaintOverlay(); // The floor under the run changes tint
+    }
+
+    /// <summary>Rebuilds one tile's pipe view: built tube, pending ghost, or nothing.</summary>
+    public void RefreshPipe(Vector2Int tile)
+    {
+        if (dungeonBoard == null || !dungeonBoard.IsInBounds(tile.x, tile.y)) return;
+        if (pipeViews.TryGetValue(tile, out GameObject old))
+        {
+            pipeViews.Remove(tile);
+            if (old != null) DestroyRuntimeObject(old);
+        }
+        if (!ShowsPipe(tile)) return;
+
+        bool built = manaFlow.IsPipeBuilt(tile);
+        Material material = PipeMaterial(built);
+        Vector3 center = GetTileCenterWorldPosition(tile.x, tile.y);
+        var view = new GameObject(built ? "Pipe" : "PipePending");
+        view.transform.SetParent(ViewRootOrSelf(), false);
+        view.transform.position = new Vector3(center.x, 0f, center.z + pipeLaneOffset);
+
+        float y = pipeHeight * 0.5f;
+        AddConduitPart(view, "Joint", material, new Vector3(0f, y, 0f), new Vector3(pipeWidth * 1.3f, pipeHeight * 1.2f, pipeWidth * 1.3f));
+        foreach (Vector2Int d in ConduitNeighbors)
+        {
+            if (!manaFlow.HasPipe(tile + d)) continue;
+            Vector3 dir = new Vector3(d.x, 0f, d.y);
+            Vector3 scale = d.x != 0 ? new Vector3(0.5f, pipeHeight, pipeWidth) : new Vector3(pipeWidth, pipeHeight, 0.5f);
+            AddConduitPart(view, "Arm" + d.x + d.y, material, dir * 0.25f + new Vector3(0f, y, 0f), scale);
+        }
+        pipeViews[tile] = view;
+    }
+
+    // ---- mana units and the vent (#145) ----
+
+    /// <summary>A tile's mana glow, or null when it shows none.</summary>
+    public GameObject GetManaView(int x, int y) =>
+        manaViews.TryGetValue(new Vector2Int(x, y), out GameObject view) && view != null && view.activeSelf ? view : null;
+
+    /// <summary>The vent's model (null with no vent, or while its tile is unexplored).</summary>
+    public GameObject VentView => ventView != null && ventView.activeSelf ? ventView : null;
+
+    /// <summary>Rebuilds one tile's mana glow: a small glowing orb in the type's color, explored tiles only.</summary>
+    public void RefreshMana(Vector2Int tile)
+    {
+        if (dungeonBoard == null || !dungeonBoard.IsInBounds(tile.x, tile.y)) return;
+        string type = manaFlow != null && IsExplored(tile.x, tile.y) ? manaFlow.TypeAt(tile) : null;
+        manaViews.TryGetValue(tile, out GameObject view);
+        if (type == null)
+        {
+            if (view != null) view.SetActive(false);
+            if (viewMode == ViewMode.Magic && tileViews != null) RefreshTile(tile.x, tile.y);
+            return;
+        }
+        if (view == null)
+        {
+            view = new GameObject("Mana");
+            view.transform.SetParent(ViewRootOrSelf(), false);
+            view.AddComponent<MeshFilter>().sharedMesh = CreatureModel.MeshFor(CreatureModel.Shape.Sphere);
+            var meshRenderer = view.AddComponent<MeshRenderer>();
+            meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; // Light, not a body
+            manaViews[tile] = view;
+        }
+        Vector3 center = GetTileCenterWorldPosition(tile.x, tile.y);
+        view.transform.position = new Vector3(center.x, manaGlowHeight, center.z);
+        view.transform.localScale = Vector3.one * manaGlowSize;
+        view.GetComponent<MeshRenderer>().sharedMaterial = CreatureModel.EmissiveMaterialFor(manaFlow.ColorOf(type), manaGlowIntensity, 0.3f);
+        view.SetActive(true);
+        if (viewMode == ViewMode.Magic && tileViews != null) RefreshTile(tile.x, tile.y);
+    }
+
+    /// <summary>Shows the vent on its tile once explored: a cracked mound whose fissure glows while it emits, dull while dormant.</summary>
+    public void RefreshVent()
+    {
+        bool shows = manaFlow != null && manaFlow.HasVent && dungeonBoard != null
+            && dungeonBoard.IsInBounds(manaFlow.VentTile.x, manaFlow.VentTile.y) && IsExplored(manaFlow.VentTile.x, manaFlow.VentTile.y);
+        if (!shows)
+        {
+            if (ventView != null) ventView.SetActive(false);
+            return;
+        }
+        if (ventView == null)
+            ventView = CreatureModel.Build(ViewRootOrSelf(), "FireVent", PropModel.FireVentRecipe(ventRockColor, ventEmberColor), surfaceSmoothness);
+        ventView.transform.position = GetTileCenterWorldPosition(manaFlow.VentTile.x, manaFlow.VentTile.y);
+        Transform ember = ventView.transform.Find("Ember");
+        if (ember != null)
+            ember.GetComponent<MeshRenderer>().sharedMaterial = manaFlow.VentDormant
+                ? CreatureModel.MaterialFor(ventDormantEmberColor, surfaceSmoothness)
+                : CreatureModel.EmissiveMaterialFor(ventEmberColor, ventEmberIntensity, surfaceSmoothness);
+        ventView.SetActive(true);
+        if (viewMode == ViewMode.Magic && tileViews != null) RefreshTile(manaFlow.VentTile.x, manaFlow.VentTile.y);
+    }
+
+    private void RefreshAllMana()
+    {
+        ClearManaViews();
+        if (manaFlow == null) return;
+        foreach (Vector2Int tile in manaFlow.BuiltPipeTiles()) RefreshPipe(tile);
+        foreach (Vector2Int tile in manaFlow.PendingPipeTiles()) RefreshPipe(tile);
+        foreach (Vector2Int tile in manaFlow.OccupiedTiles()) RefreshMana(tile);
+        RefreshVent();
+    }
+
+    private void ClearManaViews()
+    {
+        foreach (GameObject view in pipeViews.Values) if (view != null) DestroyRuntimeObject(view);
+        pipeViews.Clear();
+        foreach (GameObject view in manaViews.Values) if (view != null) DestroyRuntimeObject(view);
+        manaViews.Clear();
+        if (ventView != null) DestroyRuntimeObject(ventView);
+        ventView = null;
+    }
+
 
     /// <summary>
     /// A conduit tile's color in the current mode: copper or the pending ghost in Normal; its grid's color or the
@@ -509,12 +751,16 @@ public class BoardRenderer : MonoBehaviour
     private void HandleTileChanged(int x, int y, TileState newState)
     {
         RefreshTile(x, y);
+        if (manaFlow != null && manaFlow.IsVentTile(new Vector2Int(x, y))) RefreshVent(); // #145: the vent's tile was carved
     }
 
     private void HandleTileRevealed(Vector2Int tile)
     {
         RefreshTile(tile.x, tile.y);
         RefreshConduit(tile); // Explored only: a reveal may show conduit that was there all along
+        RefreshPipe(tile);    // #145: and pipe, mana and the vent likewise
+        RefreshMana(tile);
+        if (manaFlow != null && manaFlow.IsVentTile(tile)) RefreshVent();
     }
 
     private void HandleConduitChanged(Vector2Int tile)

@@ -9,7 +9,8 @@ using UnityEngine;
 public enum ViewMode
 {
     Normal,
-    Power
+    Power,
+    Magic // #145: mana by type, the vent, pipes and stores
 }
 
 /// <summary>How a built power node reads in the power overlay (#144).</summary>
@@ -61,7 +62,14 @@ public static class PowerOverlay
     /// Whether a placeable goes see-through: in the power overlay, everything that isn't a power node (a cot, a plot), so
     /// the conduit under it shows. Power nodes stay solid; their tiles carry their state. Normal mode never changes models.
     /// </summary>
-    public static bool SeesThrough(ViewMode mode, bool isPowerNode) => mode == ViewMode.Power && !isPowerNode;
+    public static bool SeesThrough(ViewMode mode, bool isPowerNode) => SeesThrough(mode, isPowerNode, false);
+
+    /// <summary>
+    /// The see-through rule across overlays (#145): in Power everything but power nodes goes see-through; in Magic
+    /// everything but mana stores (so pipe under a cot shows). Normal never changes models.
+    /// </summary>
+    public static bool SeesThrough(ViewMode mode, bool isPowerNode, bool isManaStore) =>
+        mode == ViewMode.Power ? !isPowerNode : mode == ViewMode.Magic && !isManaStore;
 
     /// <summary>
     /// A tile's displayed color. Normal mode is the identity: the normal color, always. In an overlay an unexplored tile

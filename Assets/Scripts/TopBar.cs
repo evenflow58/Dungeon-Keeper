@@ -12,6 +12,8 @@ using UnityEngine.UI;
 /// Power (#144): "⚡ supply/demand" summed across every grid (a node on no grid counts nowhere), in the warning color
 /// while any grid is browned out. The segment is the power overlay's switch: clicking it, or the rebindable
 /// TogglePowerView key, flips the board renderer's view mode, and the segment is tinted while the overlay is on.
+/// Mana (#145): a sixth segment, "✦ total" — every mana type across every store — is the Magic view's switch the same way
+/// (click, or ToggleMagicView). The two views replace each other; they never stack.
 /// Updates after the simulation each frame (execution order), so a poll never catches a half-updated frame,
 /// e.g. the route opening before the spawner has spawned the hero it unlocks.
 /// </summary>
@@ -28,6 +30,7 @@ public class TopBar : MonoBehaviour
     [SerializeField] private Stockpile stockpile;     // The materials summary's source (#102)
     [SerializeField] private PowerGrid powerGrid;     // #144: the power readout's source; unwired, "⚡ 0/0"
     [SerializeField] private BoardRenderer boardRenderer; // #144: holds the view mode the power segment toggles
+    [SerializeField] private ManaFlow manaFlow;       // #145: the mana readout's source; unwired, "✦ 0"
 
     [Header("Appearance")]
     [SerializeField] private int fontSize = 20;                                    // Persistent HUD: larger than the build chrome's
@@ -52,11 +55,13 @@ public class TopBar : MonoBehaviour
     // #144: the fifth readout. Shares are weights over their sum, so the four above (also serialized in the scene) keep
     // their proportions and power takes about 12% of the width ("⚡ 140/160" is about as wide as "Food: 15").
     [SerializeField] private float powerShare = 0.136f;
+    [SerializeField] private float magicShare = 0.1f; // #145: "✦ 120", a little narrower than power
 
     [Header("Power (#144)")]
     [SerializeField] private Color powerWarningColor = new Color(1f, 0.38f, 0.32f, 1f);     // Any grid browned out
     [SerializeField] private Color segmentIdleColor = new Color(1f, 1f, 1f, 0f);            // Invisible, still clickable
     [SerializeField] private Color segmentActiveColor = new Color(0.35f, 0.65f, 1f, 0.35f); // The overlay is on
+    [SerializeField] private Color magicSegmentActiveColor = new Color(0.66f, 0.48f, 1f, 0.35f); // #145: the Magic view is on
 
     [Header("Refresh")]
     [SerializeField] private float pollIntervalSeconds = 0.25f;
@@ -68,6 +73,7 @@ public class TopBar : MonoBehaviour
     public PowerGrid PowerGrid { get => powerGrid; set => powerGrid = value; }
     public BoardRenderer BoardRenderer { get => boardRenderer; set => boardRenderer = value; }
     public Color PowerWarningColor => powerWarningColor;
+    public ManaFlow ManaFlow { get => manaFlow; set => manaFlow = value; }
     public int FontSize { get => fontSize; set => fontSize = value; }
     public int MinFontSize { get => minFontSize; set => minFontSize = value; }
     public float BarHeight => barHeight;
@@ -91,6 +97,12 @@ public class TopBar : MonoBehaviour
     /// <summary>The power segment's click target (null until the bar is built).</summary>
     public Button PowerSegment => powerButton;
 
+    /// <summary>The mana readout as of the last Refresh (#145): "✦ 12".</summary>
+    public string MagicText { get; private set; } = "";
+
+    /// <summary>The mana segment's click target (#145; null until the bar is built).</summary>
+    public Button MagicSegment => magicButton;
+
     private Text goblinLabel;
     private Text foodLabel;
     private Text materialLabel;
@@ -98,6 +110,9 @@ public class TopBar : MonoBehaviour
     private Text powerLabel;
     private Image powerSegmentImage;
     private Button powerButton;
+    private Text magicLabel;
+    private Image magicSegmentImage;
+    private Button magicButton;
     private float pollTimer;
     private InputConfig.Actions input; // Bindings come from InputConfig (rebindable); enabled with this component
     // #137: true once the segment's click listener is wired in the current domain. NonSerialized, so a domain reload
@@ -115,7 +130,7 @@ public class TopBar : MonoBehaviour
     {
         EnsureInput();
         input.Enable();
-        if (powerButton != null && !segmentWired) WireSegment();
+        if ((powerButton != null || magicButton != null) && !segmentWired) WireSegment();
     }
 
     private void OnDisable()
@@ -137,6 +152,7 @@ public class TopBar : MonoBehaviour
         gameManager ??= FindAnyObjectByType<GameManager>();
         stockpile ??= FindAnyObjectByType<Stockpile>();
         powerGrid ??= FindAnyObjectByType<PowerGrid>();
+        manaFlow ??= FindAnyObjectByType<ManaFlow>();
         boardRenderer ??= FindAnyObjectByType<BoardRenderer>();
 
         PlacementController.EnsureEventSystem(); // The power segment takes clicks
@@ -148,6 +164,7 @@ public class TopBar : MonoBehaviour
     {
         // #126: V types into a focused field; it doesn't flip the overlay.
         if (!TextInputFocus.IsTyping && (input?.TogglePowerView.WasPressedThisFrame() ?? false)) TogglePowerOverlay();
+        if (!TextInputFocus.IsTyping && (input?.ToggleMagicView.WasPressedThisFrame() ?? false)) ToggleMagicOverlay(); // #145
 
         pollTimer += Time.unscaledDeltaTime; // Keeps refreshing while paused (e.g. a building placed mid-pause)
         if (pollTimer < pollIntervalSeconds) return;
@@ -167,6 +184,7 @@ public class TopBar : MonoBehaviour
         PowerSummary power = SummarizePower(powerGrid != null ? powerGrid.AllGridTotals() : null);
         PowerText = PowerReadout(power.Supply, power.Demand);
         PowerWarning = power.Brownout;
+        MagicText = MagicReadout(manaFlow != null ? manaFlow.TotalAll() : 0); // Unity null check: unwired reads "✦ 0"
 
         if (goblinLabel != null) goblinLabel.text = GoblinText;
         if (foodLabel != null) foodLabel.text = FoodText;
@@ -177,6 +195,7 @@ public class TopBar : MonoBehaviour
             powerLabel.text = PowerText;
             powerLabel.color = PowerWarning ? powerWarningColor : Color.white;
         }
+        if (magicLabel != null) magicLabel.text = MagicText;
         RefreshSegmentTint();
         FitLabels();
     }
@@ -223,6 +242,20 @@ public class TopBar : MonoBehaviour
     /// <summary>The power readout: "⚡ 140/160" (watts produced / demanded across all grids).</summary>
     public static string PowerReadout(int supply, int demand) => $"⚡ {supply}/{demand}";
 
+    /// <summary>The mana readout (#145): "✦ 120", every type across every store.</summary>
+    public static string MagicReadout(int total) => $"✦ {total}";
+
+    /// <summary>
+    /// Flips the Magic view (#145: the mana segment's click and the ToggleMagicView key). Like the power overlay it changes
+    /// only the view mode, and it replaces the power view rather than stacking on it.
+    /// </summary>
+    public void ToggleMagicOverlay()
+    {
+        if (boardRenderer == null) return;
+        boardRenderer.ToggleViewMode(ViewMode.Magic);
+        RefreshSegmentTint();
+    }
+
     /// <summary>
     /// Flips the power overlay (the segment's click and the TogglePowerView key). It changes only the board's view mode:
     /// the tool, the selection and the STOCK panel are untouched, and Esc doesn't close it.
@@ -236,17 +269,24 @@ public class TopBar : MonoBehaviour
 
     private void RefreshSegmentTint()
     {
-        if (powerSegmentImage == null) return;
-        bool on = boardRenderer != null && boardRenderer.Mode == ViewMode.Power;
-        powerSegmentImage.color = on ? segmentActiveColor : segmentIdleColor;
+        ViewMode mode = boardRenderer != null ? boardRenderer.Mode : ViewMode.Normal;
+        if (powerSegmentImage != null) powerSegmentImage.color = mode == ViewMode.Power ? segmentActiveColor : segmentIdleColor;
+        if (magicSegmentImage != null) magicSegmentImage.color = mode == ViewMode.Magic ? magicSegmentActiveColor : segmentIdleColor;
     }
 
     // Wires exactly once whether CreateBar or a reload calls it.
     private void WireSegment()
     {
-        if (powerButton == null) return;
-        powerButton.onClick.RemoveAllListeners();
-        powerButton.onClick.AddListener(OnSegmentClicked);
+        if (powerButton != null)
+        {
+            powerButton.onClick.RemoveAllListeners();
+            powerButton.onClick.AddListener(OnSegmentClicked);
+        }
+        if (magicButton != null)
+        {
+            magicButton.onClick.RemoveAllListeners();
+            magicButton.onClick.AddListener(OnMagicSegmentClicked);
+        }
         segmentWired = true;
     }
 
@@ -254,6 +294,17 @@ public class TopBar : MonoBehaviour
     private void OnSegmentClicked()
     {
         TogglePowerOverlay();
+        ReleaseFocus();
+    }
+
+    private void OnMagicSegmentClicked()
+    {
+        ToggleMagicOverlay();
+        ReleaseFocus();
+    }
+
+    private static void ReleaseFocus()
+    {
         EventSystem eventSystem = EventSystem.current;
         if (eventSystem != null) eventSystem.SetSelectedGameObject(null);
     }
@@ -275,8 +326,8 @@ public class TopBar : MonoBehaviour
     // also follows a resized view.
     private void FitLabels()
     {
-        if (goblinLabel == null || powerLabel == null) return;
-        Text[] labels = { goblinLabel, foodLabel, powerLabel, materialLabel, nextHeroLabel };
+        if (goblinLabel == null || powerLabel == null || magicLabel == null) return;
+        Text[] labels = { goblinLabel, foodLabel, powerLabel, magicLabel, materialLabel, nextHeroLabel };
         FittedFontSize = FitFontSize(fontSize, minFontSize, size =>
         {
             foreach (Text label in labels)
@@ -403,17 +454,22 @@ public class TopBar : MonoBehaviour
         readoutsRect.offsetMax = new Vector2(-RightReserve, 0f);
 
         Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        float[] shares = NormalizedShares(goblinShare, foodShare, powerShare, materialShare, heroShare);
+        float[] shares = NormalizedShares(goblinShare, foodShare, powerShare, magicShare, materialShare, heroShare);
         float x = 0f;
         goblinLabel = CreateLabel(readoutsRect, "GoblinReadout", font, x, shares[0], TextAnchor.MiddleLeft, sidePadding, slotGap);
         x += shares[0];
         foodLabel = CreateLabel(readoutsRect, "FoodReadout", font, x, shares[1], TextAnchor.MiddleCenter, slotGap, slotGap);
         x += shares[1];
-        powerLabel = CreatePowerSegment(readoutsRect, font, x, shares[2]);
+        powerLabel = CreateViewSegment(readoutsRect, "PowerSegment", "PowerReadout", font, x, shares[2],
+            out powerSegmentImage, out powerButton);
         x += shares[2];
-        materialLabel = CreateLabel(readoutsRect, "MaterialReadout", font, x, shares[3], TextAnchor.MiddleCenter, slotGap, slotGap);
+        magicLabel = CreateViewSegment(readoutsRect, "MagicSegment", "MagicReadout", font, x, shares[3], // #145
+            out magicSegmentImage, out magicButton);
         x += shares[3];
-        nextHeroLabel = CreateLabel(readoutsRect, "NextHeroReadout", font, x, shares[4], TextAnchor.MiddleRight, slotGap, 0f);
+        materialLabel = CreateLabel(readoutsRect, "MaterialReadout", font, x, shares[4], TextAnchor.MiddleCenter, slotGap, slotGap);
+        x += shares[4];
+        nextHeroLabel = CreateLabel(readoutsRect, "NextHeroReadout", font, x, shares[5], TextAnchor.MiddleRight, slotGap, 0f);
+        WireSegment();
     }
 
     /// <summary>
@@ -430,25 +486,25 @@ public class TopBar : MonoBehaviour
         return shares;
     }
 
-    // The power readout in a clickable slot (#144): the slot's Image is the bar's only raycast target, the label on it
-    // raycasts nothing.
-    private Text CreatePowerSegment(Transform parent, Font font, float xMin, float width)
+    // A readout in a clickable slot (#144 power, #145 mana): the slot's Image is one of the bar's only raycast targets,
+    // the label on it raycasts nothing.
+    private Text CreateViewSegment(Transform parent, string segmentName, string readoutName, Font font, float xMin, float width,
+        out Image image, out Button button)
     {
-        var go = new GameObject("PowerSegment");
+        var go = new GameObject(segmentName);
         go.transform.SetParent(parent, false);
-        powerSegmentImage = go.AddComponent<Image>();
-        powerSegmentImage.color = segmentIdleColor;
-        powerSegmentImage.raycastTarget = true;
-        powerButton = go.AddComponent<Button>();
-        powerButton.targetGraphic = powerSegmentImage;
-        powerButton.transition = Selectable.Transition.None; // The tint shows the overlay's state, not hover or press
+        image = go.AddComponent<Image>();
+        image.color = segmentIdleColor;
+        image.raycastTarget = true;
+        button = go.AddComponent<Button>();
+        button.targetGraphic = image;
+        button.transition = Selectable.Transition.None; // The tint shows the overlay's state, not hover or press
         var rect = go.GetComponent<RectTransform>();
         rect.anchorMin = new Vector2(xMin, 0f);
         rect.anchorMax = new Vector2(xMin + width, 1f);
         rect.offsetMin = new Vector2(slotGap, 0f);
         rect.offsetMax = new Vector2(-slotGap, 0f);
-        WireSegment();
-        return CreateLabel(go.transform, "PowerReadout", font, 0f, 1f, TextAnchor.MiddleCenter, 0f, 0f);
+        return CreateLabel(go.transform, readoutName, font, 0f, 1f, TextAnchor.MiddleCenter, 0f, 0f);
     }
 
     // A label filling width (a fraction of the readout area) from xMin, inset by leftPad / rightPad.

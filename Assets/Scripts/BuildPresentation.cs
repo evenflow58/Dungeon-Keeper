@@ -28,14 +28,16 @@ public enum BuildIconShape
 /// </summary>
 public enum BuildVerb
 {
-    LayConduit
+    LayConduit,
+    LayPipe // #145: the Magic flyout's verb, arms Pipe mode
 }
 
 /// <summary>A material family (#126): the STOCK panel groups its rows under these, in this order.</summary>
 public enum MaterialFamily
 {
     Stones,
-    Other // Where a material with no declared family falls, so it never vanishes from the panel
+    Other, // Where a material with no declared family falls, so it never vanishes from the panel
+    Mana   // #145: discovered mana types, read-only rows with their global sums
 }
 
 /// <summary>A stat line the detail card can show for a type (#125). DetailCard.StatLine reads each from PlacementManager.</summary>
@@ -49,7 +51,9 @@ public enum BuildStat
     NeedsOperator, // #142: "Needs an imp" for a producer an imp must tend
     PowerDraw,     // #143: a consumer's watts, from the power table ("Draw 20 W")
     FuelUse,       // #143: a fueled producer's burn, from its power row ("Burns 1 mushroom per 12 s")
-    LampCoverage   // #143: the Grow-Lamp's reach and boost ("Plots within 2 tiles grow ×2")
+    LampCoverage,  // #143: the Grow-Lamp's reach and boost ("Plots within 2 tiles grow ×2")
+    ManaCapacity,  // #145: a store's capacity ("Holds up to 20 mana")
+    ManaCollection // #145: the accumulator's cycle ("Collects 1 mana per 1 s from beside it")
 }
 
 /// <summary>
@@ -109,6 +113,12 @@ public static class BuildPresentation
         new Entry(PlaceableType.GrowLamp, BuildCategory.Power, "Grow-Lamp",
             "A warm lamp that speeds up nearby mushroom plots while it has power.", new Color(1.00f, 0.86f, 0.45f, 1f),
             BuildStat.PowerDraw, BuildStat.LampCoverage),
+        new Entry(PlaceableType.Accumulator, BuildCategory.Magic, "Accumulator",
+            "Draws loose mana off the tiles beside it into its buffer. Pipe it to a container to store the overflow.",
+            new Color(0.66f, 0.48f, 1.00f, 1f), BuildStat.ManaCapacity, BuildStat.ManaCollection),
+        new Entry(PlaceableType.ManaContainer, BuildCategory.Magic, "Mana Container",
+            "Bulk mana storage for one type at a time. It only fills and drains through pipes.",
+            new Color(0.55f, 0.50f, 0.80f, 1f), BuildStat.ManaCapacity),
     };
 
     /// <summary>A verb tile's presentation (#142).</summary>
@@ -138,6 +148,9 @@ public static class BuildPresentation
         new VerbEntry(BuildVerb.LayConduit, BuildCategory.Power, "Lay conduit",
             "Drag over explored floor to order conduit; imps wire it. Grids carry power from producers to consumers.",
             "Imp time only", new Color(0.85f, 0.55f, 0.25f, 1f)),
+        new VerbEntry(BuildVerb.LayPipe, BuildCategory.Magic, "Lay pipe",
+            "Drag over explored floor to order pipe; imps build it. A building joins a pipe through its own tile only.",
+            "Imp time only", new Color(0.62f, 0.52f, 0.90f, 1f)),
     };
 
     /// <summary>One material's presentation (#126). Its name and color stay the Stockpile catalog's.</summary>
@@ -159,6 +172,9 @@ public static class BuildPresentation
 
     /// <summary>The STOCK panel's family order, top to bottom.</summary>
     public static readonly MaterialFamily[] FamilyOrder = { MaterialFamily.Stones, MaterialFamily.Other };
+
+    /// <summary>Where the STOCK panel lists mana (#145): after every material family.</summary>
+    public const MaterialFamily ManaFamily = MaterialFamily.Mana;
 
     // First-pass copy, Evan-retunable.
     private static readonly MaterialEntry[] MaterialEntries =

@@ -13,6 +13,7 @@ public class TileHover : MonoBehaviour
     [SerializeField] private ImpDigger impDigger; // Optional (#132): names rock's material; unwired, labels as before
     [SerializeField] private Stockpile stockpile; // Optional (#132): the catalog's display names; unwired, enum names
     [SerializeField] private PowerGrid powerGrid; // Optional (#144): the conduit line; unwired, found at Start (none in a scene without power)
+    [SerializeField] private ManaFlow manaFlow;   // Optional (#145): vent, mana and pipe lines; unwired, found at Start
 
     [Header("Highlight")]
     [SerializeField] private Color highlightColor = new Color(1f, 1f, 1f, 0.35f);
@@ -29,6 +30,7 @@ public class TileHover : MonoBehaviour
     public ImpDigger Digger { get => impDigger; set => impDigger = value; }
     public Stockpile Stockpile { get => stockpile; set => stockpile = value; }
     public PowerGrid Grid { get => powerGrid; set => powerGrid = value; }
+    public ManaFlow Mana { get => manaFlow; set => manaFlow = value; }
 
     private SpriteRenderer highlightSprite;
     private Canvas tooltipCanvas;
@@ -60,6 +62,7 @@ public class TileHover : MonoBehaviour
     private void Start()
     {
         powerGrid ??= FindAnyObjectByType<PowerGrid>();
+        manaFlow ??= FindAnyObjectByType<ManaFlow>();
         CreateHighlight();
         CreateTooltipUI();
     }
@@ -170,7 +173,7 @@ public class TileHover : MonoBehaviour
 
         // Unexplored (#131): the highlight still marks the position, but no tooltip, so hovering can't probe the fog.
         string label = TooltipLabel(fogOfWar, TileIdentity.Of(dungeonBoard, impDigger, coords), coords, stockpile,
-            ConduitLine(powerGrid, coords));
+            ConduitLine(powerGrid, coords), VentLine(manaFlow, coords), ManaLine(manaFlow, coords), PipeLine(manaFlow, coords));
         if (label == null)
         {
             tooltipCanvas?.gameObject.SetActive(false);
@@ -195,16 +198,43 @@ public class TileHover : MonoBehaviour
         TooltipLabel(fog, identity, tile, stockpile, null);
 
     /// <summary>
-    /// The hover tooltip with a conduit line (#144): the tile label, then the conduit line beneath it when there is one.
-    /// Fog suppresses the whole tooltip, conduit included, exactly as for every other fact.
+    /// The hover tooltip with extra lines (#144 conduit, #145 vent, mana and pipe): the tile label, then each non-null line
+    /// beneath it in order. Fog suppresses the whole tooltip, every line included, exactly as for every other fact.
     /// </summary>
     public static string TooltipLabel(FogOfWar fog, TileIdentity identity, Vector2Int tile, Stockpile stockpile,
-        string conduitLine)
+        params string[] extraLines)
     {
         if (!FogOfWar.IsSeen(fog, tile)) return null;
         string label = FormatTileLabel(identity, tile.x, tile.y, stockpile);
-        return conduitLine != null ? label + "\n" + conduitLine : label;
+        if (extraLines == null) return label;
+        foreach (string line in extraLines)
+            if (!string.IsNullOrEmpty(line)) label += "\n" + line;
+        return label;
     }
+
+    /// <summary>The vent's line (#145): "Fire Vent · Emitting" or "Fire Vent · Dormant".</summary>
+    public static string VentLine(string type, bool dormant) => $"{type} Vent · {(dormant ? "Dormant" : "Emitting")}";
+
+    /// <summary>The vent's line for a tile from a live service, or null when the tile isn't the vent's.</summary>
+    public static string VentLine(ManaFlow mana, Vector2Int tile) =>
+        mana != null && mana.IsVentTile(tile) ? VentLine(mana.VentManaType, mana.VentDormant) : null;
+
+    /// <summary>A mana tile's line (#145): its type ("Fire mana"), with a count past one.</summary>
+    public static string ManaLine(string type, int units) =>
+        type == null || units <= 0 ? null : units == 1 ? $"{type} mana" : $"{type} mana ×{units}";
+
+    public static string ManaLine(ManaFlow mana, Vector2Int tile) =>
+        mana != null ? ManaLine(mana.TypeAt(tile), mana.UnitsAt(tile)) : null;
+
+    /// <summary>
+    /// The pipe line (#145): "Pipe" or "Pipe (planned)"; none on a store's tile (the building is what the tile is, as for
+    /// conduit under a power node) or with no pipe.
+    /// </summary>
+    public static string PipeLine(bool hasPipe, bool built, bool hasStore) =>
+        !hasPipe || hasStore ? null : built ? "Pipe" : "Pipe (planned)";
+
+    public static string PipeLine(ManaFlow mana, Vector2Int tile) =>
+        mana != null ? PipeLine(mana.HasPipe(tile), mana.IsPipeBuilt(tile), mana.PortAt(tile) != null) : null;
 
     /// <summary>
     /// The conduit line for a tile (#144), or null for none: built conduit reads its grid's live totals ("Conduit — grid:

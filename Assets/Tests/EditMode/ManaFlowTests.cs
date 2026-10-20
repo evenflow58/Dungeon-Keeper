@@ -6,7 +6,8 @@ using Object = UnityEngine.Object;
 
 /// <summary>
 /// #145: the mana simulation. Occupancy (walls, the cap, one type per tile, the vent's own tile closed), the flow rule
-/// (least crowded neighbor, tie order, wandering, flow-around, a vacated tile reused the same tick), the vent (entombed, emitting, saturated, resuming), stores (adopt,
+/// (a pressure model: crowded units step to the least crowded neighbor, tie order, the vent's push, resting when sparse,
+/// flow-around, a vacated tile reused the same tick), the vent (entombed, emitting, saturated, resuming), stores (adopt,
 /// accept, forget, clamps), discovery and global totals, accumulator collection, the transfer pass (overflow above the
 /// reserve, adopt/skip, the throughput budget with its exact carry, own-tile attachment, independent networks,
 /// conservation), and the pipe layer with the imp building it.
@@ -170,32 +171,95 @@ public class ManaFlowTests
     // ---- 2. the flow rule ----
 
     [Test]
-    public void ChooseMove_FewestNeighbors_TiesRightUpLeftDown_StaysOnlyWhenWalledIn()
+    public void ChooseMove_OnlyWhenCrowded_ToTheLeastCrowded_TiesRightUpLeftDown_PushesThrough()
     {
         var units = new Dictionary<Vector2Int, int>();
         Func<Vector2Int, int> at = t => units.TryGetValue(t, out int n) ? n : 0;
+        Func<Vector2Int, bool> free = t => at(t) == 0;
 
-        units[T(5, 5)] = 1; // Alone in the open: every neighbor ties at 0
-        Assert.IsTrue(ManaFlow.ChooseMove(T(5, 5), t => at(t) == 0, at, out Vector2Int to), "A lone unit wanders");
-        Assert.AreEqual(T(6, 5), to, "Ties break right first");
-
-        units[T(7, 5)] = 1; // Now right's neighborhood holds a unit: up (0) is less crowded
-        Assert.IsTrue(ManaFlow.ChooseMove(T(5, 5), t => at(t) == 0, at, out to));
-        Assert.AreEqual(T(5, 6), to, "The least crowded free neighbor");
-        units.Remove(T(7, 5));
-        units[T(5, 6)] = 1; // Up taken: right, left and down tie again
-        Assert.IsTrue(ManaFlow.ChooseMove(T(5, 5), t => at(t) == 0, at, out to));
-        Assert.AreEqual(T(6, 5), to, "Ties break right first");
-
-        Assert.IsTrue(ManaFlow.ChooseMove(T(5, 5), t => at(t) == 0 && t != T(6, 5), at, out to));
-        Assert.AreEqual(T(4, 5), to, "Right walled: up is taken, so left");
-
-        units[T(3, 5)] = 1; // Now left is crowded too (its neighbor (3,5)): down is the least crowded
-        Assert.IsTrue(ManaFlow.ChooseMove(T(5, 5), t => at(t) == 0 && t != T(6, 5), at, out to));
-        Assert.AreEqual(T(5, 4), to);
-
-        Assert.IsFalse(ManaFlow.ChooseMove(T(5, 5), t => false, at, out to), "Walled in: stays");
+        units[T(5, 5)] = 1; // Alone in the open: nothing crowds it
+        Assert.IsFalse(ManaFlow.ChooseMove(T(5, 5), free, at, out Vector2Int to), "An uncrowded unit rests");
         Assert.AreEqual(T(5, 5), to);
+
+        units[T(5, 6)] = 1; // A neighbor above crowds it; right, left and down are all uncrowded
+        Assert.IsTrue(ManaFlow.ChooseMove(T(5, 5), free, at, out to));
+        Assert.AreEqual(T(6, 5), to, "Ties break right first");
+
+        units[T(7, 5)] = 1; // Now right's neighborhood holds a unit: left is the least crowded
+        Assert.IsTrue(ManaFlow.ChooseMove(T(5, 5), free, at, out to));
+        Assert.AreEqual(T(4, 5), to);
+        Assert.IsTrue(ManaFlow.ChooseMove(T(5, 5), t => free(t) && t != T(4, 5), at, out to));
+        Assert.AreEqual(T(5, 4), to, "Then down");
+
+        // A crowded unit moves on even into a more crowded tile, so a push is never stuck behind a busier hall.
+        units.Clear();
+        units[T(5, 5)] = 1;
+        units[T(5, 6)] = 1;
+        units[T(7, 5)] = 1;
+        units[T(6, 4)] = 1;
+        Assert.IsTrue(ManaFlow.ChooseMove(T(5, 5), t => t == T(6, 5), at, out to), "Right's crowd (2) is more than here (1): it goes anyway");
+        Assert.AreEqual(T(6, 5), to);
+
+        // A source pushes: a lone unit beside the vent is crowded by it.
+        units.Clear();
+        units[T(5, 5)] = 1;
+        Func<Vector2Int, bool> vent = t => t == T(5, 4);
+        Assert.IsTrue(ManaFlow.ChooseMove(T(5, 5), t => free(t) && t != T(5, 4), at, vent, out to), "The vent's push moves it");
+        Assert.AreEqual(T(6, 5), to);
+
+        // Pushed along a one-wide tunnel: a unit beside the vent steps up even toward a unit beyond,
+        // which is how the push passes along. (5,5) has the vent below; its only free neighbor (5,6) has a unit beyond.
+        units[T(5, 7)] = 1;
+        Assert.IsTrue(ManaFlow.ChooseMove(T(5, 5), t => t == T(5, 6), at, vent, out to));
+        Assert.AreEqual(T(5, 6), to);
+
+        Assert.IsFalse(ManaFlow.ChooseMove(T(5, 5), t => false, at, vent, out to), "Walled in: stays");
+        Assert.AreEqual(T(5, 5), to);
+    }
+
+    [Test]
+    public void ChooseMove_WithADistance_NeverStepsBackTowardTheSource()
+    {
+        var units = new Dictionary<Vector2Int, int> { [T(5, 5)] = 1, [T(6, 5)] = 1 };
+        Func<Vector2Int, int> at = t => units.TryGetValue(t, out int n) ? n : 0;
+        Func<Vector2Int, int> distance = t => t.y; // The source lies below: y is the distance from it
+        // (5,5) is crowded by (6,5). Without a direction, down (5,4) ties first-best with up and left; with one, down is
+        // nearer the source and never taken, so it goes up or left (up first in the tie order).
+        Assert.IsTrue(ManaFlow.ChooseMove(T(5, 5), t => at(t) == 0 && t != T(5, 6) && t != T(4, 5), at, null, out Vector2Int to));
+        Assert.AreEqual(T(5, 4), to, "No direction: down is fine");
+        Assert.IsFalse(ManaFlow.ChooseMove(T(5, 5), t => at(t) == 0 && t != T(5, 6) && t != T(4, 5), at, null, distance, out to),
+            "With a direction: only down is free, and it's back toward the source");
+        Assert.IsTrue(ManaFlow.ChooseMove(T(5, 5), t => at(t) == 0, at, null, distance, out to));
+        Assert.AreEqual(T(5, 6), to, "Away from the source");
+
+        var field = new int[3, 3];
+        field[1, 1] = int.MaxValue;
+        Assert.AreEqual(-1, ManaFlow.DistanceIn(field, T(1, 1)), "Unreachable reads -1");
+        Assert.AreEqual(-1, ManaFlow.DistanceIn(field, T(5, 5)), "Off the field");
+        Assert.AreEqual(-1, ManaFlow.DistanceIn(null, T(0, 0)), "No field");
+    }
+
+    [Test]
+    public void Vent_FillsWhatItReachesLikeAReservoir_ThenGoesDormant()
+    {
+        // The vent at (24,11), dug out into the cavern by (24,12): 36 cavern tiles plus the mouth are all it reaches.
+        mana.HasVent = true;
+        mana.VentTile = T(24, 11);
+        mana.CarveVent();
+        board.SetTile(24, 12, TileState.Floor);
+        int[,] field = mana.VentDistanceField();
+        Assert.AreEqual(1, ManaFlow.DistanceIn(field, T(24, 12)));
+        Assert.AreEqual(2, ManaFlow.DistanceIn(field, T(24, 13)));
+        Assert.AreEqual(-1, ManaFlow.DistanceIn(field, T(10, 10)), "Rock: unreachable");
+
+        for (int i = 0; i < 6000; i++) mana.Tick(Dt); // 120 s: room for 37 units at one per 2 s, with margin
+        Assert.AreEqual(37, mana.UnitCount, "Every reachable tile holds a unit");
+        Assert.IsTrue(mana.VentDormant, "Full: dormant");
+        foreach (Vector2Int t in mana.OccupiedTiles()) Assert.AreEqual(1, mana.UnitsAt(t));
+
+        Assert.IsTrue(mana.TryTakeUnit(T(21, 18), out _), "Room made at the far corner");
+        for (int i = 0; i < 300; i++) mana.Tick(Dt); // 6 s: the push refills it and the vent tops up
+        Assert.AreEqual(37, mana.UnitCount, "Refilled from the vent");
     }
 
     [Test]
@@ -262,7 +326,8 @@ public class ManaFlowTests
 
         mana.FlowStep();
 
-        // Scan order: u1 at (11,10) leaves for (10,10); then u2 at (12,10), crowded by u3 and u5, takes the tile u1 just left.
+        // Scan order: u1 at (11,10), crowded by u2, leaves for (10,10); then u2 at (12,10), crowded by u3 and u5, takes the
+        // tile u1 just left (crowd 1 there against 2 where it stands).
         Assert.AreEqual(1, mana.UnitsAt(T(10, 10)), "u1 moved out to (10,10)");
         Assert.AreEqual(1, mana.UnitsAt(T(11, 10)), "u2 moved into the tile u1 vacated this tick");
         Assert.AreEqual(4, mana.UnitCount);

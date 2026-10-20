@@ -618,7 +618,7 @@ MonoBehaviour:
   overlayPropAlpha: 0.25
   manaGlowSize: 0.26
   manaGlowHeight: 0.2
-  manaGlowIntensity: 2
+  manaGlowIntensity: 0.6
   pipeColor: {r: 0.46, g: 0.4, b: 0.62, a: 1}
   pendingPipeColor: {r: 0.7, g: 0.62, b: 0.95, a: 0.45}
   pipeWidth: 0.12
@@ -964,18 +964,18 @@ MonoBehaviour:
   boardRenderer: {fileID: 0}
   manaFlow: {fileID: 565044539}
   fontSize: 20
-  minFontSize: 12
+  minFontSize: 10
   barHeight: 36
   sidePadding: 16
   slotGap: 4
   panelColor: {r: 0, g: 0, b: 0, a: 0.6}
   speedClusterWidth: 220
-  goblinShare: 0.1885
-  foodShare: 0.133
-  materialShare: 0.38
-  heroShare: 0.2985
-  powerShare: 0.136
-  magicShare: 0.1
+  goblinShare: 0.151
+  foodShare: 0.103
+  materialShare: 0.285
+  heroShare: 0.248
+  powerShare: 0.132
+  magicShare: 0.081
   powerWarningColor: {r: 1, g: 0.38, b: 0.32, a: 1}
   segmentIdleColor: {r: 1, g: 1, b: 1, a: 0}
   segmentActiveColor: {r: 0.35, g: 0.65, b: 1, a: 0.35}

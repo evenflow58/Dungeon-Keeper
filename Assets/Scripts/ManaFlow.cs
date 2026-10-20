@@ -81,9 +81,11 @@ public interface IManaPort
 /// are walls (placeables and creatures never block). Fog never gates the simulation.
 /// The Fire Vent is a world feature on ventTile (carved to Floor at setup, entombed in rock until dug out): every
 /// ventEmitSeconds it puts one unit of its type on a free 4-neighbor (board scan order), or is dormant while none is free,
-/// resuming on its own. Flow: every flowTickSeconds each unit, in scan order and seeing moves already made this tick, steps
-/// to the free 4-neighbor whose neighborhood holds the fewest other units (ties: right, up, left, down). A unit with any
-/// free neighbor moves, so mana wanders the open halls and drains away from the vent; it only stays when walled in.
+/// resuming on its own. Flow is a pressure model: every flowTickSeconds each unit, in scan order and seeing moves already
+/// made this tick, that is crowded (units beside it, or the vent beside it pushing) steps to the free 4-neighbor whose
+/// neighborhood holds the fewest other units (ties: right, up, left, down), never one nearer the vent (by walking
+/// distance). So the vent pushes mana out along its tunnels, the halls fill from their far side back toward it like a
+/// reservoir, and the vent goes dormant when everything it reaches is full, resuming as soon as something makes room.
 /// Stores register here (the PowerNode pattern): TotalOf sums a type across them and a type is discovered, for the
 /// session, the first time any store holds it. Accumulators collect from beside them on their own cycle, driven by this
 /// clock. Pipes are conduit's twin (pending / built, imp-built over pipeSecondsPerTile, explored Floor only); a network is
@@ -391,6 +393,8 @@ public class ManaFlow : MonoBehaviour
     public void FlowStep()
     {
         if (dungeonBoard == null || cells.Count == 0) return;
+        int[,] field = VentDistanceField(); // Rebuilt each tick: cheap at this size, and it follows every dig
+        Func<Vector2Int, int> distance = t => DistanceIn(field, t);
         var moved = new HashSet<Vector2Int>(); // Tiles that received a unit this tick: their newcomer rests
         foreach (Vector2Int from in ScanOrdered(cells.Keys))
         {
@@ -401,7 +405,7 @@ public class ManaFlow : MonoBehaviour
             {
                 string type = TypeAt(from);
                 if (type == null) break;
-                if (!ChooseMove(from, t => CanAccept(t, type), UnitsAt, out Vector2Int to)) break;
+                if (!ChooseMove(from, t => CanAccept(t, type), UnitsAt, IsVentTile, distance, out Vector2Int to)) break;
                 TryTakeUnit(from, out _);
                 TryAddUnit(to, type);
                 moved.Add(to);
@@ -410,19 +414,73 @@ public class ManaFlow : MonoBehaviour
     }
 
     /// <summary>
-    /// The movement rule (a static seam): among the 4-neighbors canEnter allows, the one whose 4-neighborhood holds the
-    /// fewest units (not counting the mover, who leaves from), ties broken right, up, left, down. A unit always moves when
-    /// it has a free neighbor — mana wanders the halls — so it stays only when walled in. False when it stays.
+    /// Walking distance from the vent through open tiles (the vent's tile is 0), int.MaxValue where it can't reach; null
+    /// with no vent. The flow's sense of direction: a pushed unit never steps back toward its source.
     /// </summary>
-    public static bool ChooseMove(Vector2Int from, Func<Vector2Int, bool> canEnter, Func<Vector2Int, int> unitsAt, out Vector2Int to)
+    public int[,] VentDistanceField()
+    {
+        if (!hasVent || dungeonBoard == null || !dungeonBoard.IsInBounds(ventTile.x, ventTile.y)) return null;
+        var field = new int[dungeonBoard.Width, dungeonBoard.Height];
+        for (int x = 0; x < dungeonBoard.Width; x++)
+            for (int y = 0; y < dungeonBoard.Height; y++)
+                field[x, y] = int.MaxValue;
+        var queue = new Queue<Vector2Int>();
+        field[ventTile.x, ventTile.y] = 0;
+        queue.Enqueue(ventTile);
+        while (queue.Count > 0)
+        {
+            Vector2Int tile = queue.Dequeue();
+            foreach (Vector2Int d in Neighbors)
+            {
+                Vector2Int n = tile + d;
+                if (!dungeonBoard.IsInBounds(n.x, n.y) || field[n.x, n.y] != int.MaxValue) continue;
+                if (!IsOpenState(dungeonBoard.GetTile(n.x, n.y))) continue;
+                field[n.x, n.y] = field[tile.x, tile.y] + 1;
+                queue.Enqueue(n);
+            }
+        }
+        return field;
+    }
+
+    /// <summary>A tile's distance in a field, or -1 for none (no field, off the board, or unreachable from the vent).</summary>
+    public static int DistanceIn(int[,] field, Vector2Int tile)
+    {
+        if (field == null || tile.x < 0 || tile.y < 0 || tile.x >= field.GetLength(0) || tile.y >= field.GetLength(1)) return -1;
+        int d = field[tile.x, tile.y];
+        return d == int.MaxValue ? -1 : d;
+    }
+
+    /// <summary>The movement rule with no sources and no direction (see the full overload).</summary>
+    public static bool ChooseMove(Vector2Int from, Func<Vector2Int, bool> canEnter, Func<Vector2Int, int> unitsAt, out Vector2Int to) =>
+        ChooseMove(from, canEnter, unitsAt, null, null, out to);
+
+    /// <summary>The movement rule with sources but no direction (see the full overload).</summary>
+    public static bool ChooseMove(Vector2Int from, Func<Vector2Int, bool> canEnter, Func<Vector2Int, int> unitsAt,
+        Func<Vector2Int, bool> isSource, out Vector2Int to) =>
+        ChooseMove(from, canEnter, unitsAt, isSource, null, out to);
+
+    /// <summary>
+    /// The movement rule, a pressure model (a static seam). A tile's crowd is the units on its 4-neighbors (the mover's own
+    /// unit excluded: it is leaving) plus one for each neighboring source (the vent pushes what's beside it). A unit with
+    /// no crowd rests — mana spreads out and then settles. A crowded unit steps to the least crowded free neighbor
+    /// canEnter allows (ties right, up, left, down) — never back toward its source: with a distance (from the vent; -1 for
+    /// none), a candidate nearer the source than the unit is never taken, so a push travels down a tunnel and out into a
+    /// hall instead of sloshing back. It stays when no allowed neighbor is free. False when it stays.
+    /// </summary>
+    public static bool ChooseMove(Vector2Int from, Func<Vector2Int, bool> canEnter, Func<Vector2Int, int> unitsAt,
+        Func<Vector2Int, bool> isSource, Func<Vector2Int, int> distance, out Vector2Int to)
     {
         to = from;
+        int here = Crowd(from, from, unitsAt, isSource);
+        if (here == 0) return false;
+        int fromDistance = distance?.Invoke(from) ?? -1;
         int best = int.MaxValue;
         foreach (Vector2Int d in Neighbors)
         {
             Vector2Int candidate = from + d;
             if (!canEnter(candidate)) continue;
-            int crowd = Crowd(candidate, from, unitsAt);
+            if (fromDistance >= 0 && distance(candidate) < fromDistance) continue; // Never back toward the source
+            int crowd = Crowd(candidate, from, unitsAt, isSource);
             if (crowd >= best) continue;
             best = crowd;
             to = candidate;
@@ -430,8 +488,9 @@ public class ManaFlow : MonoBehaviour
         return best != int.MaxValue;
     }
 
-    // Units on a tile's 4-neighbors, the mover's own unit excluded (it is leaving `mover`).
-    private static int Crowd(Vector2Int tile, Vector2Int mover, Func<Vector2Int, int> unitsAt)
+    // A tile's crowd: units on its 4-neighbors (the mover's own unit excluded: it is leaving `mover`), plus one per
+    // neighboring source.
+    private static int Crowd(Vector2Int tile, Vector2Int mover, Func<Vector2Int, int> unitsAt, Func<Vector2Int, bool> isSource)
     {
         int n = 0;
         foreach (Vector2Int d in Neighbors)
@@ -440,6 +499,7 @@ public class ManaFlow : MonoBehaviour
             int units = unitsAt(t);
             if (t == mover) units = Mathf.Max(0, units - 1);
             n += units;
+            if (isSource != null && isSource(t)) n++;
         }
         return n;
     }

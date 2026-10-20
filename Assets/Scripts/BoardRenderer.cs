@@ -85,7 +85,7 @@ public class BoardRenderer : MonoBehaviour
     [Header("Mana (#145)")]
     [SerializeField] private float manaGlowSize = 0.26f;          // A mana unit's glow, in tiles
     [SerializeField] private float manaGlowHeight = 0.2f;         // Its centre above the floor
-    [SerializeField] private float manaGlowIntensity = 2f;        // Emission: it glows past the lit surface
+    [SerializeField] private float manaGlowIntensity = 0.6f;      // Emission: enough to glow, low enough to keep the type's color (2 read cream)
     [SerializeField] private Color pipeColor = new Color(0.46f, 0.40f, 0.62f, 1f);           // Slate-violet pipe
     [SerializeField] private Color pendingPipeColor = new Color(0.70f, 0.62f, 0.95f, 0.45f); // Ghost run: ordered, not built
     [SerializeField] private float pipeWidth = 0.12f;

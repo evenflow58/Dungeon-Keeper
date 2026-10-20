@@ -34,7 +34,7 @@ public class TopBar : MonoBehaviour
 
     [Header("Appearance")]
     [SerializeField] private int fontSize = 20;                                    // Persistent HUD: larger than the build chrome's
-    [SerializeField] private int minFontSize = 12;                                 // #111: the readouts shrink together to fit a narrow view, never below this
+    [SerializeField] private int minFontSize = 10;                                 // #111: the readouts shrink together to fit a narrow view, never below this (#145: 12 → 10 for six readouts)
     [SerializeField] private float barHeight = 36f;   // GameSpeed.stripHeight and BuildRail.topOffset agree with this
     [SerializeField] private float sidePadding = 16f; // At the bar's outer edges; GameSpeed.barInset agrees with this
     [SerializeField] private float slotGap = 4f;      // Between readouts (#114)
@@ -44,18 +44,16 @@ public class TopBar : MonoBehaviour
     // Kept free at the bar's right end, inside sidePadding, for GameSpeed's buttons: its panel (GameSpeed.PanelWidth,
     // 216) plus a slotGap to the next-hero readout.
     [SerializeField] private float speedClusterWidth = 220f;
-    // Each readout's share of the width left of that reserve. At a 732 px view that is 496 px, where these shares fit
-    // the longest contents ("Goblins: 10", "Food: 15", "Materials: 3 kinds · 123 total", "Hero in the dungeon") at
-    // size 14: 72 + 57 + 179 + 130 px of text plus 40 px of padding. "Next hero: needs a route" (158 px at 14) fits at
-    // 13 there. From about 1000 px wide everything fits at the full size 20.
-    [SerializeField] private float goblinShare = 0.1885f;
-    [SerializeField] private float foodShare = 0.133f;
-    [SerializeField] private float materialShare = 0.38f;
-    [SerializeField] private float heroShare = 0.2985f;
-    // #144: the fifth readout. Shares are weights over their sum, so the four above (also serialized in the scene) keep
-    // their proportions and power takes about 12% of the width ("⚡ 140/160" is about as wide as "Food: 15").
-    [SerializeField] private float powerShare = 0.136f;
-    [SerializeField] private float magicShare = 0.1f; // #145: "✦ 120", a little narrower than power
+    // Each readout's share of the width left of that reserve: weights over their sum (#144). #145 retuned all six to the
+    // measured widths of their longest contents plus each slot's padding, at size 10 ("Goblins: 10" 53+20, "Food: 15"
+    // 42+8, "⚡ 140/160" 56+8, "✦ 120" 31+8, "Materials: 3 kinds · 123 total" 130+8, "Next hero: needs a route" 116+4 px:
+    // 484 of a 732 px view's 495), so the bar fits there at size 10. From about 1000 px wide it fits at the full 20.
+    [SerializeField] private float goblinShare = 0.151f;
+    [SerializeField] private float foodShare = 0.103f;
+    [SerializeField] private float materialShare = 0.285f;
+    [SerializeField] private float heroShare = 0.248f;
+    [SerializeField] private float powerShare = 0.132f; // #144: the fifth readout
+    [SerializeField] private float magicShare = 0.081f; // #145: the sixth, "✦ 120"
 
     [Header("Power (#144)")]
     [SerializeField] private Color powerWarningColor = new Color(1f, 0.38f, 0.32f, 1f);     // Any grid browned out

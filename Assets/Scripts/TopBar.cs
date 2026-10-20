@@ -368,8 +368,10 @@ public class TopBar : MonoBehaviour
 
     // ---- UI (code-built, display-only) ----
 
-    private void CreateBar()
+    /// <summary>Builds the bar's UI once. Start calls this; public so tests can build it without Play.</summary>
+    public void CreateBar()
     {
+        if (goblinLabel != null) return;
         var canvasGo = new GameObject("TopBarCanvas");
         var canvas = canvasGo.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;

@@ -7,7 +7,7 @@ using UnityEngine.InputSystem;
 
 /// <summary>
 /// The one place player-facing bindings are defined (ticket #30). Consumers (CameraController, TileHover,
-/// DigDesignator, PlacementController, BuildRail, GameSpeed) call CreateActions() for their own set — created per consumer so each
+/// DigDesignator, PlacementController, BuildRail, GameSpeed, TopBar) call CreateActions() for their own set — created per consumer so each
 /// keeps its own enable/disable lifecycle — and never hardcode a binding path or read a device directly.
 ///
 /// Overrides use the Input System's own format (SaveBindingOverridesAsJson / LoadBindingOverridesFromJson),
@@ -35,6 +35,7 @@ public static class InputConfig
     public const string Rail5 = "Rail5";
     public const string Rail6 = "Rail6";
     public const string Rail7 = "Rail7";
+    public const string TogglePowerView = "TogglePowerView";
 
     private const string MapName = "Player";
 
@@ -60,6 +61,7 @@ public static class InputConfig
         public InputAction Rail5 => Map[InputConfig.Rail5];                     // Button: 5 (build rail entry 5, #123)
         public InputAction Rail6 => Map[InputConfig.Rail6];                     // Button: 6 (build rail entry 6, #123)
         public InputAction Rail7 => Map[InputConfig.Rail7];                     // Button: 7 (build rail entry 7, #142: the Power category made seven)
+        public InputAction TogglePowerView => Map[InputConfig.TogglePowerView]; // Button: V (power overlay on / off, #144)
 
         internal Actions(InputActionMap map) { Map = map; }
 
@@ -133,6 +135,7 @@ public static class InputConfig
         AddSingle(map.AddAction(Rail5, InputActionType.Button), "<Keyboard>/5");
         AddSingle(map.AddAction(Rail6, InputActionType.Button), "<Keyboard>/6");
         AddSingle(map.AddAction(Rail7, InputActionType.Button), "<Keyboard>/7");
+        AddSingle(map.AddAction(TogglePowerView, InputActionType.Button), "<Keyboard>/v");
 
         return map;
     }

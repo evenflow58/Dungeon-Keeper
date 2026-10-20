@@ -17,6 +17,12 @@ using UnityEngine;
 /// Conduit (#142): with a PowerGrid wired, each conduit tile draws on the floor: built conduit as a copper inlay (a centre
 /// plate plus an arm toward each 4-neighbor that has conduit), pending conduit as the same run in a translucent ghost.
 /// Explored only: conduit under fog doesn't render.
+/// View modes (#144): the renderer holds the board's ViewMode. Every tile color is resolved through PowerOverlay.Resolve,
+/// which leaves Normal untouched; in Power mode explored tiles off the network dim, built conduit takes its grid's hue
+/// (the warning hue while that grid is browned out), and a built node's tile takes its state color. Fog wins over every
+/// overlay: unexplored tiles render exactly as in Normal. The mode only overrides at resolution time, so switching back
+/// to Normal restores the normal colors exactly. While an overlay is on it repaints when the network changes shape and on
+/// a short cadence for live state (tending, fuel, toggles); in Normal it doesn't poll.
 /// </summary>
 public class BoardRenderer : MonoBehaviour
 {
@@ -51,6 +57,26 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private Color pendingConduitColor = new Color(0.95f, 0.70f, 0.40f, 0.45f);    // Ghost run: ordered, not wired
     [SerializeField] private float conduitWidth = 0.16f;     // Of the centre plate and the arms, in tiles
     [SerializeField] private float conduitThickness = 0.012f; // Raised this far above the floor's top
+
+    [Header("Power Overlay (#144)")]
+    [SerializeField] private List<Color> gridPalette = new List<Color>
+    {
+        new Color(0.25f, 0.55f, 1.00f, 1f), // Blue
+        new Color(0.30f, 0.85f, 0.40f, 1f), // Green
+        new Color(0.80f, 0.40f, 0.95f, 1f), // Violet
+        new Color(0.20f, 0.80f, 0.80f, 1f), // Teal
+    }; // Grid hues by grid id; no reds or yellows, which belong to faults and producers
+    [SerializeField] private Color brownoutGridColor = new Color(1.00f, 0.35f, 0.15f, 1f);      // A grid whose supply is short
+    [SerializeField] private Color pendingOverlayColor = new Color(0.80f, 0.80f, 0.80f, 0.45f); // Planned conduit: a neutral ghost
+    [SerializeField] private Color activeProducerColor = new Color(1.00f, 0.88f, 0.30f, 1f);    // Making watts now: bright
+    [SerializeField] private Color idleProducerColor = new Color(0.55f, 0.48f, 0.25f, 1f);      // Connected, not producing
+    [SerializeField] private Color poweredConsumerColor = new Color(0.55f, 0.90f, 1.00f, 1f);   // Lit
+    [SerializeField] private Color unpoweredConsumerColor = new Color(0.95f, 0.15f, 0.12f, 1f); // The fault red
+    [SerializeField] private Color disabledNodeColor = new Color(0.45f, 0.45f, 0.45f, 1f);      // Switched off: grey
+    [SerializeField] private Color unconnectedNodeColor = new Color(0.20f, 0.20f, 0.22f, 1f);   // On no grid: dim
+    [SerializeField] private float overlayDimFactor = 0.35f;      // Off-network explored tiles keep this much brightness
+    [SerializeField] private float conduitTileTint = 0.5f;        // How far the floor under a built run leans to its grid hue
+    [SerializeField] private float overlayRefreshSeconds = 0.25f; // Live-state repaint cadence while an overlay is on
 
     [Header("Door (Placeholder Art)")]
     [SerializeField] private float doorHeight = 0.9f;  // Taller than the rock so the entrance reads from afar
@@ -101,6 +127,18 @@ public class BoardRenderer : MonoBehaviour
         }
     }
 
+    /// <summary>The board's view mode (#144). Normal unless an overlay is on.</summary>
+    public ViewMode Mode => viewMode;
+
+    /// <summary>Raised after the view mode changes, with the new mode.</summary>
+    public event System.Action<ViewMode> ViewModeChanged;
+
+    public float OverlayDimFactor => overlayDimFactor;
+    public float OverlayRefreshSeconds { get => overlayRefreshSeconds; set => overlayRefreshSeconds = value; }
+    public IReadOnlyList<Color> GridPalette => gridPalette;
+    public Color BrownoutGridColor => brownoutGridColor;
+    public Color PendingOverlayColor => pendingOverlayColor;
+
     public float RockHeight { get => rockHeight; set => rockHeight = value; }
     public float FloorThickness => floorThickness;
     public float OverlayLift => overlayLift;
@@ -127,6 +165,8 @@ public class BoardRenderer : MonoBehaviour
     private readonly Dictionary<Vector2Int, GameObject> conduitViews = new Dictionary<Vector2Int, GameObject>();
     private readonly Dictionary<Color, Material> materials = new Dictionary<Color, Material>();
     private Mesh boxMesh;
+    private ViewMode viewMode = ViewMode.Normal;
+    private float overlayTimer;
 
     private void Awake()
     {
@@ -158,11 +198,26 @@ public class BoardRenderer : MonoBehaviour
         if (powerGrid == null) return;
         powerGrid.ConduitChanged -= HandleConduitChanged;
         powerGrid.ConduitChanged += HandleConduitChanged;
+        powerGrid.NetworkChanged -= HandleNetworkChanged;
+        powerGrid.NetworkChanged += HandleNetworkChanged;
     }
 
     private void UnsubscribeGrid()
     {
-        if (powerGrid != null) powerGrid.ConduitChanged -= HandleConduitChanged;
+        if (powerGrid == null) return;
+        powerGrid.ConduitChanged -= HandleConduitChanged;
+        powerGrid.NetworkChanged -= HandleNetworkChanged;
+    }
+
+    // Live state (a wheel tended or left, a furnace's burn lapsing, a toggle) has no event: an overlay polls it on the
+    // cadence. Unscaled, so the overlay keeps up while paused. Normal mode never polls.
+    private void Update()
+    {
+        if (viewMode == ViewMode.Normal) return;
+        overlayTimer += Time.unscaledDeltaTime;
+        if (overlayTimer < overlayRefreshSeconds) return;
+        overlayTimer = 0f;
+        RepaintOverlay();
     }
 
     // Unsubscribe first so a repeated OnEnable (or a Fog set while enabled) never doubles the handler.
@@ -295,13 +350,124 @@ public class BoardRenderer : MonoBehaviour
         GameObject view = tileViews[x, y];
         view.transform.position = new Vector3(center.x, shape.CenterY, center.z);
         view.transform.localScale = shape.Scale;
-        view.GetComponent<MeshRenderer>().sharedMaterial = MaterialFor(ColorFor(IdentityAt(x, y), explored));
+        view.GetComponent<MeshRenderer>().sharedMaterial = MaterialFor(DisplayColorAt(x, y));
 
         // The door is built on first sight of an explored Entrance and only shown while it is one.
         Vector2Int tile = new Vector2Int(x, y);
         bool showsDoor = ShowsDoor(state, explored);
         if (showsDoor && !doors.ContainsKey(tile)) doors[tile] = CreateDoor(center);
         if (doors.TryGetValue(tile, out GameObject door)) door.SetActive(showsDoor);
+    }
+
+    // ---- view modes (#144) ----
+
+    /// <summary>Switches the view mode and repaints the board. No-op for the current mode.</summary>
+    public void SetViewMode(ViewMode mode)
+    {
+        if (viewMode == mode) return;
+        viewMode = mode;
+        overlayTimer = 0f;
+        if (tileViews != null) RenderFullBoard();
+        ViewModeChanged?.Invoke(mode);
+    }
+
+    /// <summary>Turns an overlay on, or back to Normal when it's already the one showing.</summary>
+    public void ToggleViewMode(ViewMode mode) => SetViewMode(viewMode == mode ? ViewMode.Normal : mode);
+
+    /// <summary>
+    /// The color a tile displays in the current mode: its normal color in Normal mode (and under fog in every mode),
+    /// otherwise the overlay's override, else its normal color dimmed. A designation keeps its amber in every mode.
+    /// </summary>
+    public Color DisplayColorAt(int x, int y)
+    {
+        bool explored = IsExplored(x, y);
+        Color normal = ColorFor(IdentityAt(x, y), explored);
+        if (viewMode == ViewMode.Normal || dungeonBoard == null) return normal;
+        bool dimmed = dungeonBoard.GetTile(x, y) != TileState.Designated;
+        return PowerOverlay.Resolve(viewMode, explored, normal, OverlayColorAt(new Vector2Int(x, y), normal), dimmed,
+            overlayDimFactor);
+    }
+
+    // The power overlay's override for an explored tile: a built node's state color; under built conduit, the dimmed
+    // floor leaning toward the grid's hue; otherwise none (the tile dims).
+    private Color? OverlayColorAt(Vector2Int tile, Color normal)
+    {
+        if (viewMode != ViewMode.Power || powerGrid == null) return null;
+        PowerNode node = powerGrid.NodeAt(tile);
+        if (node != null) return NodeColor(LookOfNode(node));
+        if (powerGrid.IsBuilt(tile))
+            return Color.Lerp(PowerOverlay.Dim(normal, overlayDimFactor), GridColor(powerGrid.GridAt(tile)), conduitTileTint);
+        return null;
+    }
+
+    /// <summary>A grid's overlay color: the warning hue while it's browned out, else its palette hue.</summary>
+    public Color GridColor(int grid)
+    {
+        if (powerGrid != null && PowerGrid.IsBrownout(powerGrid.TotalsOfGrid(grid))) return brownoutGridColor;
+        return PowerOverlay.GridHue(gridPalette, grid, conduitColor);
+    }
+
+    /// <summary>A live node's look in the power overlay.</summary>
+    public static NodeLook LookOfNode(PowerNode node)
+    {
+        PowerGrid.GridTotals totals = node.Totals;
+        bool powered = PowerGrid.IsNodePowered(node.Enabled, totals.Connected, totals.Supply, totals.Demand);
+        return PowerOverlay.LookOf(node.Role, node.Enabled, totals.Connected, node.IsActive, powered);
+    }
+
+    /// <summary>The overlay color for a node look.</summary>
+    public Color NodeColor(NodeLook look)
+    {
+        switch (look)
+        {
+            case NodeLook.ActiveProducer:    return activeProducerColor;
+            case NodeLook.IdleProducer:      return idleProducerColor;
+            case NodeLook.PoweredConsumer:   return poweredConsumerColor;
+            case NodeLook.UnpoweredConsumer: return unpoweredConsumerColor;
+            case NodeLook.Disabled:          return disabledNodeColor;
+            default:                         return unconnectedNodeColor;
+        }
+    }
+
+    /// <summary>
+    /// Recolors the board for the current overlay without rebuilding anything: every tile's material and every conduit
+    /// view's. The cadence and network changes call it; a no-op in Normal mode and before the views exist.
+    /// </summary>
+    public void RepaintOverlay()
+    {
+        if (viewMode == ViewMode.Normal || dungeonBoard == null || tileViews == null) return;
+        for (int x = 0; x < dungeonBoard.Width; x++)
+            for (int y = 0; y < dungeonBoard.Height; y++)
+                tileViews[x, y].GetComponent<MeshRenderer>().sharedMaterial = MaterialFor(DisplayColorAt(x, y));
+        if (powerGrid == null) return;
+        foreach (KeyValuePair<Vector2Int, GameObject> entry in conduitViews)
+        {
+            if (entry.Value == null) continue;
+            Material material = ConduitMaterial(entry.Key, powerGrid.IsBuilt(entry.Key));
+            foreach (MeshRenderer part in entry.Value.GetComponentsInChildren<MeshRenderer>()) part.sharedMaterial = material;
+        }
+    }
+
+    /// <summary>
+    /// A conduit tile's color in the current mode: copper or the pending ghost in Normal; its grid's color or the
+    /// neutral ghost in Power.
+    /// </summary>
+    public Color ConduitDisplayColor(Vector2Int tile, bool built)
+    {
+        if (viewMode == ViewMode.Power && powerGrid != null)
+            return built ? GridColor(powerGrid.GridAt(tile)) : pendingOverlayColor;
+        return built ? conduitColor : pendingConduitColor;
+    }
+
+    private Material ConduitMaterial(Vector2Int tile, bool built)
+    {
+        Color color = ConduitDisplayColor(tile, built);
+        return built ? MaterialFor(color) : CreatureModel.GhostMaterialFor(color);
+    }
+
+    private void HandleNetworkChanged()
+    {
+        if (viewMode != ViewMode.Normal) RepaintOverlay(); // Grid ids and membership may have moved: repaint at once
     }
 
     /// <summary>The tile's view object (its box), or null before RenderFullBoard / out of bounds.</summary>
@@ -373,7 +539,7 @@ public class BoardRenderer : MonoBehaviour
         if (!ShowsConduit(tile)) return;
 
         bool built = powerGrid.IsBuilt(tile);
-        Material material = built ? MaterialFor(conduitColor) : CreatureModel.GhostMaterialFor(pendingConduitColor);
+        Material material = ConduitMaterial(tile, built);
         Vector3 center = GetTileCenterWorldPosition(tile.x, tile.y);
         var view = new GameObject(built ? "Conduit" : "ConduitPending");
         view.transform.SetParent(ViewRootOrSelf(), false);

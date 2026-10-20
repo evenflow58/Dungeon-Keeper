@@ -24,6 +24,9 @@ public enum PowerRole
 /// powered). Toggles (#143): a disabled node is inert and left out of the math entirely — it supplies nothing, draws
 /// nothing and is never powered; the topology doesn't change. The math lives in static helpers over plain data so tests
 /// drive it without a scene.
+/// Read seams for the power chrome (#144): every grid's totals (the TopBar segment, the overlay's brownout hue), the node
+/// standing on a tile (the overlay and tooltips), and NetworkChanged, raised when built conduit or the node set changes so
+/// the overlay can repaint at once. Presentation only reads these; none of them changes grid behavior.
 /// </summary>
 [DisallowMultipleComponent]
 public class PowerGrid : MonoBehaviour
@@ -43,12 +46,21 @@ public class PowerGrid : MonoBehaviour
     /// <summary>Raised when a tile's conduit changes (laid, built or removed), so the board view restyles it.</summary>
     public event Action<Vector2Int> ConduitChanged;
 
+    /// <summary>
+    /// Raised when the network changes shape (#144): built conduit is completed or removed, or a node joins or leaves.
+    /// Grid ids and membership may have moved, so a view showing them repaints. Pending conduit doesn't raise it.
+    /// </summary>
+    public event Action NetworkChanged;
+
     private readonly HashSet<Vector2Int> pending = new HashSet<Vector2Int>();
     private readonly HashSet<Vector2Int> built = new HashSet<Vector2Int>();
     private readonly Dictionary<Vector2Int, float> progress = new Dictionary<Vector2Int, float>();
     private readonly List<PowerNode> nodes = new List<PowerNode>();
     private Dictionary<Vector2Int, int> components = new Dictionary<Vector2Int, int>();
+    private int gridCount;
     private bool topologyDirty;
+    private readonly Dictionary<Vector2Int, PowerNode> nodesByTile = new Dictionary<Vector2Int, PowerNode>();
+    private bool nodeIndexDirty = true;
 
     // Progress is a sum of deltaTime / seconds steps; absorb float rounding so a tile lands on its full duration.
     private const float CompleteTolerance = 1e-4f;
@@ -151,6 +163,7 @@ public class PowerGrid : MonoBehaviour
         built.Add(tile);
         topologyDirty = true;
         ConduitChanged?.Invoke(tile);
+        NetworkChanged?.Invoke();
         return true;
     }
 
@@ -163,6 +176,7 @@ public class PowerGrid : MonoBehaviour
         if (!wasPending && !wasBuilt) return false;
         if (wasBuilt) topologyDirty = true;
         ConduitChanged?.Invoke(tile);
+        if (wasBuilt) NetworkChanged?.Invoke();
         return true;
     }
 
@@ -173,10 +187,67 @@ public class PowerGrid : MonoBehaviour
     {
         if (node == null || nodes.Contains(node)) return;
         nodes.Add(node);
+        nodeIndexDirty = true;
+        NetworkChanged?.Invoke();
     }
 
     /// <summary>A node leaves the service (destroyed). Idempotent.</summary>
-    public void Unregister(PowerNode node) => nodes.Remove(node);
+    public void Unregister(PowerNode node)
+    {
+        if (!nodes.Remove(node)) return;
+        nodeIndexDirty = true;
+        NetworkChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// The registered (built) node standing on this tile, or null (#144). Nodes never move, so the tile index is rebuilt
+    /// only when the node set changes.
+    /// </summary>
+    public PowerNode NodeAt(Vector2Int tile)
+    {
+        if (nodeIndexDirty)
+        {
+            nodesByTile.Clear();
+            nodes.RemoveAll(n => n == null);
+            foreach (PowerNode n in nodes) nodesByTile[n.Tile] = n;
+            nodeIndexDirty = false;
+        }
+        return nodesByTile.TryGetValue(tile, out PowerNode node) && node != null ? node : null;
+    }
+
+    /// <summary>How many grids exist now (#144): grid ids run 0 … GridCount − 1.</summary>
+    public int GridCount
+    {
+        get
+        {
+            Topology();
+            return gridCount;
+        }
+    }
+
+    /// <summary>One grid's live totals by id (#144); unconnected (all zero) for an id that isn't a grid.</summary>
+    public GridTotals TotalsOfGrid(int grid)
+    {
+        Dictionary<Vector2Int, int> topology = Topology();
+        if (grid < 0 || grid >= gridCount) return new GridTotals(false, 0, 0);
+        Sum(LiveStates(), topology, grid, out int supply, out int demand);
+        return new GridTotals(true, supply, demand);
+    }
+
+    /// <summary>Every grid's live totals, indexed by grid id (#144: the TopBar segment sums these).</summary>
+    public List<GridTotals> AllGridTotals()
+    {
+        Dictionary<Vector2Int, int> topology = Topology();
+        return TotalsPerGrid(LiveStates(), topology, gridCount);
+    }
+
+    private List<NodeState> LiveStates()
+    {
+        nodes.RemoveAll(n => n == null);
+        var states = new List<NodeState>(nodes.Count);
+        foreach (PowerNode n in nodes) states.Add(n.State);
+        return states;
+    }
 
     public int NodeCount
     {
@@ -198,10 +269,7 @@ public class PowerGrid : MonoBehaviour
         int grid = GridAt(topology, node.Tile);
         if (grid < 0) return new GridTotals(false, 0, 0);
 
-        nodes.RemoveAll(n => n == null);
-        var states = new List<NodeState>(nodes.Count);
-        foreach (PowerNode n in nodes) states.Add(n.State);
-        Sum(states, topology, grid, out int supply, out int demand);
+        Sum(LiveStates(), topology, grid, out int supply, out int demand);
         return new GridTotals(true, supply, demand);
     }
 
@@ -222,6 +290,7 @@ public class PowerGrid : MonoBehaviour
     {
         if (!topologyDirty) return components;
         components = Components(built);
+        gridCount = CountGrids(components);
         topologyDirty = false;
         return components;
     }
@@ -326,6 +395,34 @@ public class PowerGrid : MonoBehaviour
             else if (node.Role == PowerRole.Consumer) demand += node.Watts;
         }
     }
+
+    /// <summary>How many grids a labelling holds: ids are 0 … n − 1, so the highest id plus one (0 for none).</summary>
+    public static int CountGrids(IReadOnlyDictionary<Vector2Int, int> components)
+    {
+        int count = 0;
+        foreach (int id in components.Values) count = Mathf.Max(count, id + 1);
+        return count;
+    }
+
+    /// <summary>Each grid's totals for grids 0 … gridCount − 1, all connected (#144). Nodes on no grid count nowhere.</summary>
+    public static List<GridTotals> TotalsPerGrid(IEnumerable<NodeState> nodeStates,
+        IReadOnlyDictionary<Vector2Int, int> components, int gridCount)
+    {
+        var list = new List<GridTotals>(gridCount);
+        var states = new List<NodeState>(nodeStates);
+        for (int grid = 0; grid < gridCount; grid++)
+        {
+            Sum(states, components, grid, out int supply, out int demand);
+            list.Add(new GridTotals(true, supply, demand));
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// Brownout (#144): a connected grid whose supply falls short of its demand. Equality is not a brownout, and an
+    /// unconnected node's "grid" never is.
+    /// </summary>
+    public static bool IsBrownout(GridTotals totals) => totals.Connected && totals.Supply < totals.Demand;
 
     /// <summary>The powered rule: connected, and supply covers demand (equality is powered).</summary>
     public static bool IsPowered(bool connected, int supply, int demand) => connected && supply >= demand;

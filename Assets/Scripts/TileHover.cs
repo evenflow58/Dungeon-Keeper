@@ -12,6 +12,7 @@ public class TileHover : MonoBehaviour
     [SerializeField] private FogOfWar fogOfWar; // Optional (#131): unwired, every tile counts as seen
     [SerializeField] private ImpDigger impDigger; // Optional (#132): names rock's material; unwired, labels as before
     [SerializeField] private Stockpile stockpile; // Optional (#132): the catalog's display names; unwired, enum names
+    [SerializeField] private PowerGrid powerGrid; // Optional (#144): the conduit line; unwired, found at Start (none in a scene without power)
 
     [Header("Highlight")]
     [SerializeField] private Color highlightColor = new Color(1f, 1f, 1f, 0.35f);
@@ -19,6 +20,7 @@ public class TileHover : MonoBehaviour
     [Header("Tooltip")]
     [SerializeField] private Vector2 tooltipOffset = new Vector2(15f, -30f);
     [SerializeField] private float tooltipMinWidth = 160f; // Grows past this to fit longer labels (#132: "Designated — Glimmerstone (x, y)")
+    [SerializeField] private float tooltipMinHeight = 28f; // One line; grows to fit a second (#144: the conduit line)
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
@@ -26,6 +28,7 @@ public class TileHover : MonoBehaviour
     public FogOfWar Fog { get => fogOfWar; set => fogOfWar = value; }
     public ImpDigger Digger { get => impDigger; set => impDigger = value; }
     public Stockpile Stockpile { get => stockpile; set => stockpile = value; }
+    public PowerGrid Grid { get => powerGrid; set => powerGrid = value; }
 
     private SpriteRenderer highlightSprite;
     private Canvas tooltipCanvas;
@@ -56,6 +59,7 @@ public class TileHover : MonoBehaviour
 
     private void Start()
     {
+        powerGrid ??= FindAnyObjectByType<PowerGrid>();
         CreateHighlight();
         CreateTooltipUI();
     }
@@ -105,7 +109,7 @@ public class TileHover : MonoBehaviour
         tooltipRect = panelGo.GetComponent<RectTransform>();
         tooltipRect.anchorMin = tooltipRect.anchorMax = new Vector2(0f, 0f);
         tooltipRect.pivot = new Vector2(0f, 1f);
-        tooltipRect.sizeDelta = new Vector2(tooltipMinWidth, 28f);
+        tooltipRect.sizeDelta = new Vector2(tooltipMinWidth, tooltipMinHeight);
 
         var textGo = new GameObject("TooltipText");
         textGo.transform.SetParent(panelGo.transform, false);
@@ -114,7 +118,8 @@ public class TileHover : MonoBehaviour
         tooltipText.fontSize = 13;
         tooltipText.color = Color.white;
         tooltipText.alignment = TextAnchor.MiddleCenter;
-        tooltipText.horizontalOverflow = HorizontalWrapMode.Overflow; // One line; the panel is sized to it
+        tooltipText.horizontalOverflow = HorizontalWrapMode.Overflow; // No wrapping; the panel is sized to the text
+        tooltipText.verticalOverflow = VerticalWrapMode.Overflow;     // #144: a second line (conduit) never clips
         var textRect = textGo.GetComponent<RectTransform>();
         textRect.anchorMin = Vector2.zero;
         textRect.anchorMax = Vector2.one;
@@ -164,7 +169,8 @@ public class TileHover : MonoBehaviour
         highlightSprite.enabled = true;
 
         // Unexplored (#131): the highlight still marks the position, but no tooltip, so hovering can't probe the fog.
-        string label = TooltipLabel(fogOfWar, TileIdentity.Of(dungeonBoard, impDigger, coords), coords, stockpile);
+        string label = TooltipLabel(fogOfWar, TileIdentity.Of(dungeonBoard, impDigger, coords), coords, stockpile,
+            ConduitLine(powerGrid, coords));
         if (label == null)
         {
             tooltipCanvas?.gameObject.SetActive(false);
@@ -186,17 +192,52 @@ public class TileHover : MonoBehaviour
     /// menus, not what a seen tile is called.
     /// </summary>
     public static string TooltipLabel(FogOfWar fog, TileIdentity identity, Vector2Int tile, Stockpile stockpile) =>
-        FogOfWar.IsSeen(fog, tile) ? FormatTileLabel(identity, tile.x, tile.y, stockpile) : null;
+        TooltipLabel(fog, identity, tile, stockpile, null);
 
-    // The label's width changes with the material name, so the panel follows the text (never narrower than before).
+    /// <summary>
+    /// The hover tooltip with a conduit line (#144): the tile label, then the conduit line beneath it when there is one.
+    /// Fog suppresses the whole tooltip, conduit included, exactly as for every other fact.
+    /// </summary>
+    public static string TooltipLabel(FogOfWar fog, TileIdentity identity, Vector2Int tile, Stockpile stockpile,
+        string conduitLine)
+    {
+        if (!FogOfWar.IsSeen(fog, tile)) return null;
+        string label = FormatTileLabel(identity, tile.x, tile.y, stockpile);
+        return conduitLine != null ? label + "\n" + conduitLine : label;
+    }
+
+    /// <summary>
+    /// The conduit line for a tile (#144), or null for none: built conduit reads its grid's live totals ("Conduit — grid:
+    /// 40 produced · 10 demanded"; a bare run truthfully reads 0 · 0), pending conduit "Conduit (planned)". A tile with a
+    /// built power node shows none: the node is what the tile is, and its placed card carries the grid detail.
+    /// </summary>
+    public static string ConduitLine(bool hasConduit, bool built, bool hasNode, int supply, int demand)
+    {
+        if (!hasConduit || hasNode) return null;
+        return built ? $"Conduit — grid: {supply} produced · {demand} demanded" : "Conduit (planned)";
+    }
+
+    /// <summary>The conduit line for a tile from a live grid (Unity null check: no grid, no line).</summary>
+    public static string ConduitLine(PowerGrid grid, Vector2Int tile)
+    {
+        if (grid == null || !grid.HasConduit(tile)) return null;
+        bool built = grid.IsBuilt(tile);
+        PowerGrid.GridTotals totals = built ? grid.TotalsOfGrid(grid.GridAt(tile)) : default;
+        return ConduitLine(true, built, grid.NodeAt(tile) != null, totals.Supply, totals.Demand);
+    }
+
+    // The label's size changes with the material name and the conduit line, so the panel follows the text (never smaller
+    // than before).
     private void SetTooltipText(string label)
     {
         if (tooltipText == null) return;
         tooltipText.text = label;
         if (tooltipRect == null) return;
-        float textInsets = -tooltipText.rectTransform.offsetMax.x + tooltipText.rectTransform.offsetMin.x;
-        tooltipRect.sizeDelta = new Vector2(Mathf.Max(tooltipMinWidth, tooltipText.preferredWidth + textInsets),
-            tooltipRect.sizeDelta.y);
+        RectTransform textRect = tooltipText.rectTransform;
+        float widthInsets = -textRect.offsetMax.x + textRect.offsetMin.x;
+        float heightInsets = -textRect.offsetMax.y + textRect.offsetMin.y;
+        tooltipRect.sizeDelta = new Vector2(Mathf.Max(tooltipMinWidth, tooltipText.preferredWidth + widthInsets),
+            Mathf.Max(tooltipMinHeight, tooltipText.preferredHeight + heightInsets));
     }
 
     private void SetHoverActive(bool active)

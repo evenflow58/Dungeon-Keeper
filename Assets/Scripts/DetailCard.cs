@@ -387,7 +387,7 @@ public class DetailCard : MonoBehaviour
                     : type == PlaceableType.ManaContainer ? $"Holds up to {manager.ManaContainerCapacity} mana of one type"
                     : null;
             case BuildStat.ManaCollection: // #145
-                return $"Collects {manager.AccumulatorCollectPerCycle} mana per {Number(manager.AccumulatorCollectSeconds, "0.#")} s from beside it";
+                return $"Collects {manager.AccumulatorCollectPerCycle} mana per {Number(manager.AccumulatorCollectSeconds, "0.#")} s from beside it · draws mana within {manager.AccumulatorPullRadius} tiles";
             default:
                 return null;
         }

@@ -81,11 +81,14 @@ public interface IManaPort
 /// are walls (placeables and creatures never block). Fog never gates the simulation.
 /// The Fire Vent is a world feature on ventTile (carved to Floor at setup, entombed in rock until dug out): every
 /// ventEmitSeconds it puts one unit of its type on a free 4-neighbor (board scan order), or is dormant while none is free,
-/// resuming on its own. Flow is a pressure model: every flowTickSeconds each unit, in scan order and seeing moves already
-/// made this tick, that is crowded (units beside it, or the vent beside it pushing) steps to the free 4-neighbor whose
-/// neighborhood holds the fewest other units (ties: right, up, left, down), never one nearer the vent (by walking
-/// distance). So the vent pushes mana out along its tunnels, the halls fill from their far side back toward it like a
-/// reservoir, and the vent goes dormant when everything it reaches is full, resuming as soon as something makes room.
+/// resuming on its own. Flow is gas-like: a tile's pressure is how full its surroundings are (Density: units over open
+/// tiles within densityRadius, nearer tiles weighted more), plus the vent's push (ventPressure at its mouth, carried along
+/// the passages it reaches and fading by e every ventReach tiles walked — rock stops it), minus the pull of each
+/// accumulator that has room (its suction, fading to nothing past its pull radius). Every
+/// flowTickSeconds each unit, in scan order and seeing moves already made, steps to its lowest-pressure free 4-neighbor
+/// if that is lower by more than moveThreshold (ties: right, up, left, down), else it rests. So mana flows from full to
+/// empty: out of the vent's tunnel, through the halls, and toward accumulators, which only pull within their radius —
+/// beyond it, the emptier patch they leave draws mana in on its own.
 /// Stores register here (the PowerNode pattern): TotalOf sums a type across them and a type is discovered, for the
 /// session, the first time any store holds it. Accumulators collect from beside them on their own cycle, driven by this
 /// clock. Pipes are conduit's twin (pending / built, imp-built over pipeSecondsPerTile, explored Floor only); a network is
@@ -116,12 +119,16 @@ public class ManaFlow : MonoBehaviour
     [Header("Occupancy and Flow")]
     [SerializeField] private int maxManaPerTile = 1;
     [SerializeField] private float flowTickSeconds = 0.5f;
+    [SerializeField] private int densityRadius = 2;          // How far around a tile its density looks (Manhattan)
+    [SerializeField] private float moveThreshold = 0.01f;    // A step must lower the pressure by more than this: no twitching on near-ties
 
     [Header("Fire Vent")]
     [SerializeField] private bool hasVent = true;
     [SerializeField] private Vector2Int ventTile = new Vector2Int(24, 5); // Deep in the rock south of the starter cavern
     [SerializeField] private string ventManaType = FireId;
     [SerializeField] private float ventEmitSeconds = 2f;
+    [SerializeField] private float ventPressure = 1.5f;      // The vent's push at its mouth (density runs 0–1)
+    [SerializeField] private float ventReach = 8f;           // The push fades by e every this many tiles walked through open floor
 
     [Header("Pipes")]
     [SerializeField] private float pipeSecondsPerTile = 0.5f;      // Imp work to build one pending pipe tile
@@ -132,6 +139,10 @@ public class ManaFlow : MonoBehaviour
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public int MaxManaPerTile { get => maxManaPerTile; set => maxManaPerTile = Mathf.Max(1, value); }
     public float FlowTickSeconds { get => flowTickSeconds; set => flowTickSeconds = value; }
+    public int DensityRadius { get => densityRadius; set => densityRadius = Mathf.Max(0, value); }
+    public float MoveThreshold { get => moveThreshold; set => moveThreshold = value; }
+    public float VentPressure { get => ventPressure; set => ventPressure = value; }
+    public float VentReach { get => ventReach; set => ventReach = value; }
     public bool HasVent { get => hasVent; set => hasVent = value; }
     public Vector2Int VentTile { get => ventTile; set => ventTile = value; }
     public string VentManaType { get => ventManaType; set => ventManaType = value; }
@@ -387,35 +398,71 @@ public class ManaFlow : MonoBehaviour
     }
 
     /// <summary>
-    /// One flow tick: each unit, in board scan order, may step once (ChooseMove). Occupancy updates as units move, so a
-    /// tile vacated earlier this tick can be entered; a unit that moved doesn't move again this tick.
+    /// One flow tick: each unit, in board scan order, may step once (ChooseMove over PressureAt). Occupancy updates as units
+    /// move, so a tile vacated earlier this tick can be entered and pressures see the moves already made; a unit that moved
+    /// doesn't move again this tick. The vent's push and the accumulators' pull are gathered once per tick.
     /// </summary>
     public void FlowStep()
     {
         if (dungeonBoard == null || cells.Count == 0) return;
-        int[,] field = VentDistanceField(); // Rebuilt each tick: cheap at this size, and it follows every dig
-        Func<Vector2Int, int> distance = t => DistanceIn(field, t);
-        var moved = new HashSet<Vector2Int>(); // Tiles that received a unit this tick: their newcomer rests
-        foreach (Vector2Int from in ScanOrdered(cells.Keys))
+        ventField = VentDistanceField(); // Rebuilt each tick: cheap at this size, and it follows every dig
+        pulls.Clear();
+        foreach (Accumulator a in Accumulators())
+            if (a.IsPulling) pulls.Add((a.Tile, a.PullRadius, a.Suction));
+        try
         {
-            int units = UnitsAt(from);
-            if (units == 0) continue;
-            if (moved.Contains(from)) units--; // The newcomer stays put; the tile's earlier units may still move
-            for (int i = 0; i < units; i++)
+            var moved = new HashSet<Vector2Int>(); // Tiles that received a unit this tick: their newcomer rests
+            foreach (Vector2Int from in ScanOrdered(cells.Keys))
             {
-                string type = TypeAt(from);
-                if (type == null) break;
-                if (!ChooseMove(from, t => CanAccept(t, type), UnitsAt, IsVentTile, distance, out Vector2Int to)) break;
-                TryTakeUnit(from, out _);
-                TryAddUnit(to, type);
-                moved.Add(to);
+                int units = UnitsAt(from);
+                if (units == 0) continue;
+                if (moved.Contains(from)) units--; // The newcomer stays put; the tile's earlier units may still move
+                for (int i = 0; i < units; i++)
+                {
+                    string type = TypeAt(from);
+                    if (type == null) break;
+                    if (!ChooseMove(from, t => CanAccept(t, type), PressureAt, moveThreshold, out Vector2Int to)) break;
+                    TryTakeUnit(from, out _);
+                    TryAddUnit(to, type);
+                    moved.Add(to);
+                }
             }
+        }
+        finally
+        {
+            ventField = null; // The tick's snapshot: a read outside a tick computes fresh
+            pulls.Clear();
         }
     }
 
+    private readonly List<(Vector2Int tile, int radius, float strength)> pulls = new List<(Vector2Int, int, float)>();
+    private int[,] ventField;
+
+    /// <summary>
+    /// The pressure a unit leaving mover would feel at tile: the local density (Density, the mover not counted), plus the
+    /// vent's push (VentPush: carried along the passages it reaches, fading with the walk), minus each pulling accumulator's
+    /// suction (strongest at it, gone past its pull radius). Pass a tile no unit stands on as mover to read a tile's own
+    /// pressure. Outside a flow tick the vent's walking distances are read fresh.
+    /// </summary>
+    public float PressureAt(Vector2Int tile, Vector2Int mover)
+    {
+        float p = Density(tile, mover, densityRadius, IsOpen, UnitsAt);
+        p += VentPush(DistanceIn(ventField ?? VentDistanceField(), tile), ventPressure, ventReach);
+        foreach (var pull in pulls) p -= Falloff(tile, pull.tile, pull.radius, pull.strength);
+        return p;
+    }
+
+    /// <summary>
+    /// A source's push at a walking distance (a static seam): strength at its mouth, fading by e every reach tiles walked,
+    /// never quite 0 along a passage it reaches; 0 where it can't reach (distance −1). Because every step away lowers it, a
+    /// pushed unit never ties with the tile ahead of it in a tunnel, so the push carries all the way down.
+    /// </summary>
+    public static float VentPush(int walkDistance, float strength, float reach) =>
+        walkDistance < 0 || reach <= 0f ? 0f : strength * Mathf.Exp(-(walkDistance - 1) / reach);
+
     /// <summary>
     /// Walking distance from the vent through open tiles (the vent's tile is 0), int.MaxValue where it can't reach; null
-    /// with no vent. The flow's sense of direction: a pushed unit never steps back toward its source.
+    /// with no vent. The vent's push follows these passages: rock stops it.
     /// </summary>
     public int[,] VentDistanceField()
     {
@@ -450,58 +497,64 @@ public class ManaFlow : MonoBehaviour
         return d == int.MaxValue ? -1 : d;
     }
 
-    /// <summary>The movement rule with no sources and no direction (see the full overload).</summary>
-    public static bool ChooseMove(Vector2Int from, Func<Vector2Int, bool> canEnter, Func<Vector2Int, int> unitsAt, out Vector2Int to) =>
-        ChooseMove(from, canEnter, unitsAt, null, null, out to);
+    /// <summary>
+    /// How full the area around a tile is (a static seam): the units within Manhattan radius over the open tiles there, each
+    /// weighted by closeness (radius + 1 − distance), the mover's own unit left out. 0 with nothing open. Weighting by
+    /// closeness is what lets two units side by side feel each other and drift apart, and dividing by the open tiles is what
+    /// makes a packed tunnel read fuller than a half-empty hall (a plain neighbor count says the opposite: a tunnel tile has
+    /// fewer neighbors, so it always looked emptier and mana sloshed back into it).
+    /// </summary>
+    public static float Density(Vector2Int tile, Vector2Int mover, int radius, Func<Vector2Int, bool> isOpen, Func<Vector2Int, int> unitsAt)
+    {
+        float units = 0f, open = 0f;
+        for (int dx = -radius; dx <= radius; dx++)
+        {
+            for (int dy = -radius; dy <= radius; dy++)
+            {
+                int d = Mathf.Abs(dx) + Mathf.Abs(dy);
+                if (d > radius) continue;
+                var t = new Vector2Int(tile.x + dx, tile.y + dy);
+                if (t != tile && !isOpen(t)) continue; // The tile itself always counts: it's where the unit would stand
+                float w = radius + 1 - d;
+                open += w;
+                int n = unitsAt(t);
+                if (t == mover) n = Mathf.Max(0, n - 1);
+                units += w * n;
+            }
+        }
+        return open > 0f ? units / open : 0f;
+    }
 
-    /// <summary>The movement rule with sources but no direction (see the full overload).</summary>
-    public static bool ChooseMove(Vector2Int from, Func<Vector2Int, bool> canEnter, Func<Vector2Int, int> unitsAt,
-        Func<Vector2Int, bool> isSource, out Vector2Int to) =>
-        ChooseMove(from, canEnter, unitsAt, isSource, null, out to);
+    /// <summary>A source's (or sink's) strength at a tile: full at its own tile, falling off linearly to 0 past radius (Manhattan).</summary>
+    public static float Falloff(Vector2Int tile, Vector2Int source, int radius, float strength)
+    {
+        int d = Mathf.Abs(tile.x - source.x) + Mathf.Abs(tile.y - source.y);
+        return d > radius ? 0f : strength * (radius + 1 - d) / (radius + 1);
+    }
 
     /// <summary>
-    /// The movement rule, a pressure model (a static seam). A tile's crowd is the units on its 4-neighbors (the mover's own
-    /// unit excluded: it is leaving) plus one for each neighboring source (the vent pushes what's beside it). A unit with
-    /// no crowd rests — mana spreads out and then settles. A crowded unit steps to the least crowded free neighbor
-    /// canEnter allows (ties right, up, left, down) — never back toward its source: with a distance (from the vent; -1 for
-    /// none), a candidate nearer the source than the unit is never taken, so a push travels down a tunnel and out into a
-    /// hall instead of sloshing back. It stays when no allowed neighbor is free. False when it stays.
+    /// The movement rule, gas-like (a static seam): a unit steps to the free neighbor canEnter allows with the lowest
+    /// pressure, if that is lower than its own tile's by more than threshold; ties go right, up, left, down. Otherwise it
+    /// rests — so mana flows from full to empty, away from the vent and toward a pulling accumulator, and settles once the
+    /// pressure is even. pressure(tile, mover) is read with the mover's own unit left out. False when it stays.
     /// </summary>
-    public static bool ChooseMove(Vector2Int from, Func<Vector2Int, bool> canEnter, Func<Vector2Int, int> unitsAt,
-        Func<Vector2Int, bool> isSource, Func<Vector2Int, int> distance, out Vector2Int to)
+    public static bool ChooseMove(Vector2Int from, Func<Vector2Int, bool> canEnter, Func<Vector2Int, Vector2Int, float> pressure,
+        float threshold, out Vector2Int to)
     {
         to = from;
-        int here = Crowd(from, from, unitsAt, isSource);
-        if (here == 0) return false;
-        int fromDistance = distance?.Invoke(from) ?? -1;
-        int best = int.MaxValue;
+        float best = pressure(from, from) - threshold;
+        bool found = false;
         foreach (Vector2Int d in Neighbors)
         {
             Vector2Int candidate = from + d;
             if (!canEnter(candidate)) continue;
-            if (fromDistance >= 0 && distance(candidate) < fromDistance) continue; // Never back toward the source
-            int crowd = Crowd(candidate, from, unitsAt, isSource);
-            if (crowd >= best) continue;
-            best = crowd;
+            float p = pressure(candidate, from);
+            if (p >= best) continue;
+            best = p;
             to = candidate;
+            found = true;
         }
-        return best != int.MaxValue;
-    }
-
-    // A tile's crowd: units on its 4-neighbors (the mover's own unit excluded: it is leaving `mover`), plus one per
-    // neighboring source.
-    private static int Crowd(Vector2Int tile, Vector2Int mover, Func<Vector2Int, int> unitsAt, Func<Vector2Int, bool> isSource)
-    {
-        int n = 0;
-        foreach (Vector2Int d in Neighbors)
-        {
-            Vector2Int t = tile + d;
-            int units = unitsAt(t);
-            if (t == mover) units = Mathf.Max(0, units - 1);
-            n += units;
-            if (isSource != null && isSource(t)) n++;
-        }
-        return n;
+        return found;
     }
 
     // ---- stores, totals, discovery ----

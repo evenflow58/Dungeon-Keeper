@@ -58,6 +58,8 @@ public class PlacementManager : MonoBehaviour, IFuelStore
     [SerializeField] private int accumulatorCapacity = 20;
     [SerializeField] private float accumulatorCollectSeconds = 1f; // One collection cycle
     [SerializeField] private int accumulatorCollectPerCycle = 1;   // Units taken from beside it per cycle
+    [SerializeField] private int accumulatorPullRadius = 4;        // Its suction reaches this many tiles (Manhattan), no farther
+    [SerializeField] private float accumulatorSuction = 1f;        // The pull at the accumulator (density runs 0–1), fading out by the radius
 
     [Header("Mana Container (#145)")]
     [SerializeField] private int manaContainerCapacity = 100;
@@ -144,6 +146,8 @@ public class PlacementManager : MonoBehaviour, IFuelStore
     public float AccumulatorCollectSeconds { get => accumulatorCollectSeconds; set => accumulatorCollectSeconds = value; }
     public int AccumulatorCollectPerCycle { get => accumulatorCollectPerCycle; set => accumulatorCollectPerCycle = value; }
     public int ManaContainerCapacity { get => manaContainerCapacity; set => manaContainerCapacity = value; }
+    public int AccumulatorPullRadius { get => accumulatorPullRadius; set => accumulatorPullRadius = value; }
+    public float AccumulatorSuction { get => accumulatorSuction; set => accumulatorSuction = value; }
     public float AccumulatorBuildSeconds { get => accumulatorBuildSeconds; set => accumulatorBuildSeconds = value; }
     public float ManaContainerBuildSeconds { get => manaContainerBuildSeconds; set => manaContainerBuildSeconds = value; }
     public float ImpWheelBuildSeconds { get => impWheelBuildSeconds; set => impWheelBuildSeconds = value; }
@@ -589,7 +593,8 @@ public class PlacementManager : MonoBehaviour, IFuelStore
         else if (type == PlaceableType.GrowLamp)
             go.AddComponent<GrowLamp>();
         else if (type == PlaceableType.Accumulator) // #145
-            go.AddComponent<Accumulator>().Initialize(manaFlow, accumulatorCapacity, accumulatorCollectSeconds, accumulatorCollectPerCycle);
+            go.AddComponent<Accumulator>().Initialize(manaFlow, accumulatorCapacity, accumulatorCollectSeconds, accumulatorCollectPerCycle,
+                accumulatorPullRadius, accumulatorSuction);
         else if (type == PlaceableType.ManaContainer)
             go.AddComponent<ManaContainer>().Initialize(manaFlow, manaContainerCapacity);
         if (TryGetPower(type, out PlaceablePower powerRow) && powerRow.role != PowerRole.None)

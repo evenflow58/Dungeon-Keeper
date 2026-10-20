@@ -314,9 +314,11 @@ public class PowerGridTests
         grid.ApplyRect(null, new RectInt(25, 14, 1, 1), PowerGrid.ConduitMode.Lay);
         Assert.IsTrue(grid.IsPending(T(25, 14)));
 
-        Assert.AreEqual(2, grid.ApplyRect(null, new RectInt(23, 14, 3, 1), PowerGrid.ConduitMode.Remove), "Pending and built, no refund");
+        Assert.AreEqual(3, grid.ApplyRect(null, new RectInt(23, 14, 3, 1), PowerGrid.ConduitMode.Remove),
+            "Pending and built (the link and the run under the trap), no refund");
         Assert.IsFalse(grid.HasConduit(T(25, 14)));
         Assert.IsFalse(grid.HasConduit(LinkTile));
+        Assert.IsFalse(grid.HasConduit(TrapTile));
         Assert.IsFalse(trap.IsPowered, "The topology recomputed: no grid");
     }
 

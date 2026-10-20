@@ -358,6 +358,43 @@ public class PlacementManager : MonoBehaviour, IFuelStore
         if (awaitingFunding.Count > 0) RunFundingPass(); // Every frame while anything waits: funds within a frame of affording
     }
 
+    // #144: follow the board's view mode. Subscribed in OnEnable (a mid-Play reload re-runs OnEnable, not Awake), and
+    // unsubscribed first so a repeat never doubles the handlers.
+    private void OnEnable()
+    {
+        boardRenderer ??= GetComponent<BoardRenderer>() ?? FindAnyObjectByType<BoardRenderer>();
+        if (boardRenderer == null) return;
+        boardRenderer.ViewModeChanged -= HandleViewModeChanged;
+        boardRenderer.ViewModeChanged += HandleViewModeChanged;
+        boardRenderer.OverlayRepainted -= RefreshSeeThrough;
+        boardRenderer.OverlayRepainted += RefreshSeeThrough;
+    }
+
+    private void OnDisable()
+    {
+        if (boardRenderer == null) return;
+        boardRenderer.ViewModeChanged -= HandleViewModeChanged;
+        boardRenderer.OverlayRepainted -= RefreshSeeThrough;
+    }
+
+    private void HandleViewModeChanged(ViewMode mode) => RefreshSeeThrough();
+
+    /// <summary>
+    /// Applies the view mode's model look to every placeable (#144): in the power overlay non-power placeables go
+    /// see-through (PowerOverlay.SeesThrough) so conduit under them shows; otherwise every model is restored. Runs on a
+    /// mode change, on each overlay repaint (catching parts created since, like a funded order's pile) and on placement.
+    /// </summary>
+    public void RefreshSeeThrough()
+    {
+        ViewMode mode = boardRenderer != null ? boardRenderer.Mode : ViewMode.Normal;
+        float alpha = boardRenderer != null ? boardRenderer.OverlayPropAlpha : 1f;
+        foreach (Placeable p in placed.Values)
+        {
+            if (p == null) continue;
+            p.SetSeeThrough(PowerOverlay.SeesThrough(mode, p.TryGetComponent(out PowerNode _)), alpha);
+        }
+    }
+
     /// <summary>
     /// Funds waiting orders, one line per material (#120): walking the orders in placement order, each is paid in full
     /// via Stockpile.TrySpend (all or nothing) and released to the build queue, until its material's stock can't cover
@@ -539,6 +576,7 @@ public class PlacementManager : MonoBehaviour, IFuelStore
             awaitingFunding.Add(placeable);
             RunFundingPass();
         }
+        if (boardRenderer != null && boardRenderer.Mode != ViewMode.Normal) RefreshSeeThrough(); // Placed mid-overlay
         return true;
     }
 

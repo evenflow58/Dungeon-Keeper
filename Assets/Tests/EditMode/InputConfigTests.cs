@@ -67,6 +67,30 @@ public class InputConfigTests
     }
 
     [Test]
+    public void TogglePowerView_ExistsByName_DefaultsToV_WithAStableId_AndRebinds()
+    {
+        Assert.AreEqual("TogglePowerView", InputConfig.TogglePowerView);
+        using (var a = InputConfig.CreateActions())
+        using (var b = InputConfig.CreateActions())
+        {
+            Assert.AreSame(a.Map[InputConfig.TogglePowerView], a.TogglePowerView);
+            Assert.AreEqual(UnityEngine.InputSystem.InputActionType.Button, a.TogglePowerView.type);
+            CollectionAssert.AreEqual(new[] { "<Keyboard>/v" }, InputConfig.EffectivePaths(a.TogglePowerView));
+            Assert.AreEqual(a.TogglePowerView.bindings[0].id, b.TogglePowerView.bindings[0].id, "Same id in both builds");
+            Assert.AreNotEqual(a.TogglePowerView.bindings[0].id, a.TogglePause.bindings[0].id);
+            foreach (UnityEngine.InputSystem.InputAction other in a.Map.actions)
+            {
+                if (other == a.TogglePowerView) continue;
+                CollectionAssert.DoesNotContain(InputConfig.EffectivePaths(other), "<Keyboard>/v", $"{other.name} doesn't share V");
+            }
+        }
+
+        InputConfig.SetOverride(InputConfig.TogglePowerView, "<Keyboard>/p");
+        using (var a = InputConfig.CreateActions())
+            CollectionAssert.AreEqual(new[] { "<Keyboard>/p" }, InputConfig.EffectivePaths(a.TogglePowerView));
+    }
+
+    [Test]
     public void RailDigits_ExistByName_WithStableDistinctIds_AndRebindLikeAnyOther()
     {
         string[] names = { InputConfig.Rail1, InputConfig.Rail2, InputConfig.Rail3, InputConfig.Rail4, InputConfig.Rail5, InputConfig.Rail6 };

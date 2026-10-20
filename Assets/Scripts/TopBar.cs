@@ -1,13 +1,17 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 /// <summary>
-/// The top bar (DESIGN §A.7): living goblins, food stock, a materials summary (#124: kinds and total, so the bar no
-/// longer grows with the catalog), and the next-hero state, polled every pollIntervalSeconds. Built in code like the
-/// rest of the chrome (own overlay Canvas, no scene-authored UI) and display-only: no raycaster and raycastTarget off
-/// on everything, so it never blocks board input — the player digs right under it (the door column). The speed
+/// The top bar (DESIGN §A.7): living goblins, food stock, power (#144), a materials summary (#124: kinds and total, so
+/// the bar no longer grows with the catalog), and the next-hero state, polled every pollIntervalSeconds. Built in code
+/// like the rest of the chrome (own overlay Canvas, no scene-authored UI). raycastTarget is off on everything but the
+/// power segment, so the bar never blocks board input — the player digs right under it (the door column). The speed
 /// buttons at its right end are GameSpeed's, on GameSpeed's canvas; the readouts leave that width free.
+/// Power (#144): "⚡ supply/demand" summed across every grid (a node on no grid counts nowhere), in the warning color
+/// while any grid is browned out. The segment is the power overlay's switch: clicking it, or the rebindable
+/// TogglePowerView key, flips the board renderer's view mode, and the segment is tinted while the overlay is on.
 /// Updates after the simulation each frame (execution order), so a poll never catches a half-updated frame,
 /// e.g. the route opening before the spawner has spawned the hero it unlocks.
 /// </summary>
@@ -22,6 +26,8 @@ public class TopBar : MonoBehaviour
     [SerializeField] private HeroSpawner heroSpawner;
     [SerializeField] private GameManager gameManager; // Optional: once the game has ended, the hero readout shows a dash
     [SerializeField] private Stockpile stockpile;     // The materials summary's source (#102)
+    [SerializeField] private PowerGrid powerGrid;     // #144: the power readout's source; unwired, "⚡ 0/0"
+    [SerializeField] private BoardRenderer boardRenderer; // #144: holds the view mode the power segment toggles
 
     [Header("Appearance")]
     [SerializeField] private int fontSize = 20;                                    // Persistent HUD: larger than the build chrome's
@@ -43,6 +49,14 @@ public class TopBar : MonoBehaviour
     [SerializeField] private float foodShare = 0.133f;
     [SerializeField] private float materialShare = 0.38f;
     [SerializeField] private float heroShare = 0.2985f;
+    // #144: the fifth readout. Shares are weights over their sum, so the four above (also serialized in the scene) keep
+    // their proportions and power takes about 12% of the width ("⚡ 140/160" is about as wide as "Food: 15").
+    [SerializeField] private float powerShare = 0.136f;
+
+    [Header("Power (#144)")]
+    [SerializeField] private Color powerWarningColor = new Color(1f, 0.38f, 0.32f, 1f);     // Any grid browned out
+    [SerializeField] private Color segmentIdleColor = new Color(1f, 1f, 1f, 0f);            // Invisible, still clickable
+    [SerializeField] private Color segmentActiveColor = new Color(0.35f, 0.65f, 1f, 0.35f); // The overlay is on
 
     [Header("Refresh")]
     [SerializeField] private float pollIntervalSeconds = 0.25f;
@@ -51,6 +65,9 @@ public class TopBar : MonoBehaviour
     public HeroSpawner HeroSpawner { get => heroSpawner; set => heroSpawner = value; }
     public GameManager GameManager { get => gameManager; set => gameManager = value; }
     public Stockpile Stockpile { get => stockpile; set => stockpile = value; }
+    public PowerGrid PowerGrid { get => powerGrid; set => powerGrid = value; }
+    public BoardRenderer BoardRenderer { get => boardRenderer; set => boardRenderer = value; }
+    public Color PowerWarningColor => powerWarningColor;
     public int FontSize { get => fontSize; set => fontSize = value; }
     public int MinFontSize { get => minFontSize; set => minFontSize = value; }
     public float BarHeight => barHeight;
@@ -66,12 +83,52 @@ public class TopBar : MonoBehaviour
     public string FoodText { get; private set; } = "";
     public string MaterialText { get; private set; } = "";
     public string NextHeroText { get; private set; } = "";
+    public string PowerText { get; private set; } = "";
+
+    /// <summary>True while any grid is browned out as of the last Refresh: the power readout shows the warning color.</summary>
+    public bool PowerWarning { get; private set; }
+
+    /// <summary>The power segment's click target (null until the bar is built).</summary>
+    public Button PowerSegment => powerButton;
 
     private Text goblinLabel;
     private Text foodLabel;
     private Text materialLabel;
     private Text nextHeroLabel;
+    private Text powerLabel;
+    private Image powerSegmentImage;
+    private Button powerButton;
     private float pollTimer;
+    private InputConfig.Actions input; // Bindings come from InputConfig (rebindable); enabled with this component
+    // #137: true once the segment's click listener is wired in the current domain. NonSerialized, so a domain reload
+    // resets it while the button reference survives (the listener, added in code, doesn't).
+    [System.NonSerialized] private bool segmentWired;
+
+    private void Awake()
+    {
+        EnsureInput();
+    }
+
+    // #137: a domain reload mid-Play re-runs OnEnable but not Awake or Start, so the input is ensured here and a segment
+    // that outlived the reload gets its listener back.
+    private void OnEnable()
+    {
+        EnsureInput();
+        input.Enable();
+        if (powerButton != null && !segmentWired) WireSegment();
+    }
+
+    private void OnDisable()
+    {
+        input?.Disable();
+    }
+
+    private void OnDestroy()
+    {
+        input?.Dispose();
+    }
+
+    private void EnsureInput() => input ??= InputConfig.CreateActions();
 
     private void Start()
     {
@@ -79,13 +136,19 @@ public class TopBar : MonoBehaviour
         heroSpawner ??= FindAnyObjectByType<HeroSpawner>();
         gameManager ??= FindAnyObjectByType<GameManager>();
         stockpile ??= FindAnyObjectByType<Stockpile>();
+        powerGrid ??= FindAnyObjectByType<PowerGrid>();
+        boardRenderer ??= FindAnyObjectByType<BoardRenderer>();
 
+        PlacementController.EnsureEventSystem(); // The power segment takes clicks
         CreateBar();
         Refresh();
     }
 
     private void Update()
     {
+        // #126: V types into a focused field; it doesn't flip the overlay.
+        if (!TextInputFocus.IsTyping && (input?.TogglePowerView.WasPressedThisFrame() ?? false)) TogglePowerOverlay();
+
         pollTimer += Time.unscaledDeltaTime; // Keeps refreshing while paused (e.g. a building placed mid-pause)
         if (pollTimer < pollIntervalSeconds) return;
         pollTimer = 0f;
@@ -100,12 +163,99 @@ public class TopBar : MonoBehaviour
         // Unity null check, not ?.: an unwired bar degrades to "0 kinds · 0 total" like the food readout.
         MaterialText = MaterialsSummary(CatalogCounts(stockpile));
         NextHeroText = NextHeroReadout(heroSpawner, gameManager);
+        // Unity null check, not ?.: an unwired bar reads "⚡ 0/0", neutral.
+        PowerSummary power = SummarizePower(powerGrid != null ? powerGrid.AllGridTotals() : null);
+        PowerText = PowerReadout(power.Supply, power.Demand);
+        PowerWarning = power.Brownout;
 
         if (goblinLabel != null) goblinLabel.text = GoblinText;
         if (foodLabel != null) foodLabel.text = FoodText;
         if (materialLabel != null) materialLabel.text = MaterialText;
         if (nextHeroLabel != null) nextHeroLabel.text = NextHeroText;
+        if (powerLabel != null)
+        {
+            powerLabel.text = PowerText;
+            powerLabel.color = PowerWarning ? powerWarningColor : Color.white;
+        }
+        RefreshSegmentTint();
         FitLabels();
+    }
+
+    // ---- power (#144) ----
+
+    /// <summary>All grids' totals together: summed supply and demand, and whether any grid is browned out.</summary>
+    public readonly struct PowerSummary
+    {
+        public readonly int Supply;
+        public readonly int Demand;
+        public readonly bool Brownout;
+
+        public PowerSummary(int supply, int demand, bool brownout)
+        {
+            Supply = supply;
+            Demand = demand;
+            Brownout = brownout;
+        }
+    }
+
+    /// <summary>
+    /// Sums every grid's supply and demand; Brownout is true when any one grid is short (PowerGrid.IsBrownout: equality is
+    /// not a brownout). Grids are summed, not netted, so a surplus on one grid never hides a shortfall on another. No grids
+    /// (or null) is 0/0, neutral.
+    /// </summary>
+    public static PowerSummary SummarizePower(IEnumerable<PowerGrid.GridTotals> grids)
+    {
+        int supply = 0;
+        int demand = 0;
+        bool brownout = false;
+        if (grids != null)
+        {
+            foreach (PowerGrid.GridTotals grid in grids)
+            {
+                supply += grid.Supply;
+                demand += grid.Demand;
+                brownout |= PowerGrid.IsBrownout(grid);
+            }
+        }
+        return new PowerSummary(supply, demand, brownout);
+    }
+
+    /// <summary>The power readout: "⚡ 140/160" (watts produced / demanded across all grids).</summary>
+    public static string PowerReadout(int supply, int demand) => $"⚡ {supply}/{demand}";
+
+    /// <summary>
+    /// Flips the power overlay (the segment's click and the TogglePowerView key). It changes only the board's view mode:
+    /// the tool, the selection and the STOCK panel are untouched, and Esc doesn't close it.
+    /// </summary>
+    public void TogglePowerOverlay()
+    {
+        if (boardRenderer == null) return;
+        boardRenderer.ToggleViewMode(ViewMode.Power);
+        RefreshSegmentTint();
+    }
+
+    private void RefreshSegmentTint()
+    {
+        if (powerSegmentImage == null) return;
+        bool on = boardRenderer != null && boardRenderer.Mode == ViewMode.Power;
+        powerSegmentImage.color = on ? segmentActiveColor : segmentIdleColor;
+    }
+
+    // Wires exactly once whether CreateBar or a reload calls it.
+    private void WireSegment()
+    {
+        if (powerButton == null) return;
+        powerButton.onClick.RemoveAllListeners();
+        powerButton.onClick.AddListener(OnSegmentClicked);
+        segmentWired = true;
+    }
+
+    // A clicked Button stays selected and would take keyboard submits; the segment never keeps focus.
+    private void OnSegmentClicked()
+    {
+        TogglePowerOverlay();
+        EventSystem eventSystem = EventSystem.current;
+        if (eventSystem != null) eventSystem.SetSelectedGameObject(null);
     }
 
     /// <summary>
@@ -121,12 +271,12 @@ public class TopBar : MonoBehaviour
         return floor;
     }
 
-    // Layout only: one shared size for all four readouts, so the bar stays even. Re-fitted on each refresh, which
+    // Layout only: one shared size for all five readouts, so the bar stays even. Re-fitted on each refresh, which
     // also follows a resized view.
     private void FitLabels()
     {
-        if (goblinLabel == null) return;
-        Text[] labels = { goblinLabel, foodLabel, materialLabel, nextHeroLabel };
+        if (goblinLabel == null || powerLabel == null) return;
+        Text[] labels = { goblinLabel, foodLabel, powerLabel, materialLabel, nextHeroLabel };
         FittedFontSize = FitFontSize(fontSize, minFontSize, size =>
         {
             foreach (Text label in labels)
@@ -218,13 +368,17 @@ public class TopBar : MonoBehaviour
 
     // ---- UI (code-built, display-only) ----
 
-    private void CreateBar()
+    /// <summary>Builds the bar's UI once. Start calls this; public so tests can build it without Play.</summary>
+    public void CreateBar()
     {
+        if (goblinLabel != null) return;
         var canvasGo = new GameObject("TopBarCanvas");
         var canvas = canvasGo.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvasGo.AddComponent<CanvasScaler>();
-        // No GraphicRaycaster: the bar is display-only and must never take input from the board under it.
+        // #144: a raycaster for the power segment only. Every other graphic has raycastTarget off, so the rest of the bar
+        // still never takes input from the board under it.
+        canvasGo.AddComponent<GraphicRaycaster>();
 
         var barGo = new GameObject("TopBar");
         barGo.transform.SetParent(canvasGo.transform, false);
@@ -249,14 +403,52 @@ public class TopBar : MonoBehaviour
         readoutsRect.offsetMax = new Vector2(-RightReserve, 0f);
 
         Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        float[] shares = NormalizedShares(goblinShare, foodShare, powerShare, materialShare, heroShare);
         float x = 0f;
-        goblinLabel = CreateLabel(readoutsRect, "GoblinReadout", font, x, goblinShare, TextAnchor.MiddleLeft, sidePadding, slotGap);
-        x += goblinShare;
-        foodLabel = CreateLabel(readoutsRect, "FoodReadout", font, x, foodShare, TextAnchor.MiddleCenter, slotGap, slotGap);
-        x += foodShare;
-        materialLabel = CreateLabel(readoutsRect, "MaterialReadout", font, x, materialShare, TextAnchor.MiddleCenter, slotGap, slotGap);
-        x += materialShare;
-        nextHeroLabel = CreateLabel(readoutsRect, "NextHeroReadout", font, x, heroShare, TextAnchor.MiddleRight, slotGap, 0f);
+        goblinLabel = CreateLabel(readoutsRect, "GoblinReadout", font, x, shares[0], TextAnchor.MiddleLeft, sidePadding, slotGap);
+        x += shares[0];
+        foodLabel = CreateLabel(readoutsRect, "FoodReadout", font, x, shares[1], TextAnchor.MiddleCenter, slotGap, slotGap);
+        x += shares[1];
+        powerLabel = CreatePowerSegment(readoutsRect, font, x, shares[2]);
+        x += shares[2];
+        materialLabel = CreateLabel(readoutsRect, "MaterialReadout", font, x, shares[3], TextAnchor.MiddleCenter, slotGap, slotGap);
+        x += shares[3];
+        nextHeroLabel = CreateLabel(readoutsRect, "NextHeroReadout", font, x, shares[4], TextAnchor.MiddleRight, slotGap, 0f);
+    }
+
+    /// <summary>
+    /// The readouts' shares as fractions of the readout width: each weight over their sum (#144), so adding a readout
+    /// never overflows the bar. Negative weights count as 0; all-zero weights split the width evenly.
+    /// </summary>
+    public static float[] NormalizedShares(params float[] weights)
+    {
+        var shares = new float[weights.Length];
+        float sum = 0f;
+        foreach (float w in weights) sum += Mathf.Max(0f, w);
+        for (int i = 0; i < weights.Length; i++)
+            shares[i] = sum > 0f ? Mathf.Max(0f, weights[i]) / sum : 1f / weights.Length;
+        return shares;
+    }
+
+    // The power readout in a clickable slot (#144): the slot's Image is the bar's only raycast target, the label on it
+    // raycasts nothing.
+    private Text CreatePowerSegment(Transform parent, Font font, float xMin, float width)
+    {
+        var go = new GameObject("PowerSegment");
+        go.transform.SetParent(parent, false);
+        powerSegmentImage = go.AddComponent<Image>();
+        powerSegmentImage.color = segmentIdleColor;
+        powerSegmentImage.raycastTarget = true;
+        powerButton = go.AddComponent<Button>();
+        powerButton.targetGraphic = powerSegmentImage;
+        powerButton.transition = Selectable.Transition.None; // The tint shows the overlay's state, not hover or press
+        var rect = go.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(xMin, 0f);
+        rect.anchorMax = new Vector2(xMin + width, 1f);
+        rect.offsetMin = new Vector2(slotGap, 0f);
+        rect.offsetMax = new Vector2(-slotGap, 0f);
+        WireSegment();
+        return CreateLabel(go.transform, "PowerReadout", font, 0f, 1f, TextAnchor.MiddleCenter, 0f, 0f);
     }
 
     // A label filling width (a fraction of the readout area) from xMin, inset by leftPad / rightPad.

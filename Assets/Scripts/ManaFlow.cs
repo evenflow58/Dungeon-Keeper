@@ -82,8 +82,8 @@ public interface IManaPort
 /// The Fire Vent is a world feature on ventTile (carved to Floor at setup, entombed in rock until dug out): every
 /// ventEmitSeconds it puts one unit of its type on a free 4-neighbor (board scan order), or is dormant while none is free,
 /// resuming on its own. Flow: every flowTickSeconds each unit, in scan order and seeing moves already made this tick, steps
-/// to the free 4-neighbor whose neighborhood holds the fewest other units (ties: right, up, left, down) — but only when
-/// that is strictly less crowded than where it stands, so mana spreads out from a source and then settles.
+/// to the free 4-neighbor whose neighborhood holds the fewest other units (ties: right, up, left, down). A unit with any
+/// free neighbor moves, so mana wanders the open halls and drains away from the vent; it only stays when walled in.
 /// Stores register here (the PowerNode pattern): TotalOf sums a type across them and a type is discovered, for the
 /// session, the first time any store holds it. Accumulators collect from beside them on their own cycle, driven by this
 /// clock. Pipes are conduit's twin (pending / built, imp-built over pipeSecondsPerTile, explored Floor only); a network is
@@ -262,9 +262,13 @@ public class ManaFlow : MonoBehaviour
 
     // ---- occupancy ----
 
-    /// <summary>Open to mana: in-bounds Floor or Entrance. Rock and Designated are walls; placeables never block.</summary>
+    /// <summary>
+    /// Open to mana: in-bounds Floor or Entrance. Rock and Designated are walls; placeables never block. The vent's own tile
+    /// is never open: the vent stands there and emits beside it.
+    /// </summary>
     public bool IsOpen(Vector2Int tile) =>
-        dungeonBoard != null && dungeonBoard.IsInBounds(tile.x, tile.y) && IsOpenState(dungeonBoard.GetTile(tile.x, tile.y));
+        dungeonBoard != null && dungeonBoard.IsInBounds(tile.x, tile.y) && !IsVentTile(tile)
+        && IsOpenState(dungeonBoard.GetTile(tile.x, tile.y));
 
     public static bool IsOpenState(TileState state) => state == TileState.Floor || state == TileState.Entrance;
 
@@ -407,13 +411,12 @@ public class ManaFlow : MonoBehaviour
 
     /// <summary>
     /// The movement rule (a static seam): among the 4-neighbors canEnter allows, the one whose 4-neighborhood holds the
-    /// fewest units (not counting the mover, who leaves from), ties broken right, up, left, down; the unit moves there only
-    /// when that is strictly fewer than around its own tile. False when it stays.
+    /// fewest units (not counting the mover, who leaves from), ties broken right, up, left, down. A unit always moves when
+    /// it has a free neighbor — mana wanders the halls — so it stays only when walled in. False when it stays.
     /// </summary>
     public static bool ChooseMove(Vector2Int from, Func<Vector2Int, bool> canEnter, Func<Vector2Int, int> unitsAt, out Vector2Int to)
     {
         to = from;
-        int here = Crowd(from, from, unitsAt);
         int best = int.MaxValue;
         foreach (Vector2Int d in Neighbors)
         {
@@ -424,7 +427,7 @@ public class ManaFlow : MonoBehaviour
             best = crowd;
             to = candidate;
         }
-        return best < here;
+        return best != int.MaxValue;
     }
 
     // Units on a tile's 4-neighbors, the mover's own unit excluded (it is leaving `mover`).

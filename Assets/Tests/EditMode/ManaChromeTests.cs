@@ -48,7 +48,7 @@ public class ManaChromeTests
         boardRenderer.Board = board;
         mana = managerGo.AddComponent<ManaFlow>();
         mana.Board = board;
-        mana.HasVent = false;
+        mana.ClearPointsOfInterest();
         manager = managerGo.AddComponent<PlacementManager>();
         manager.Board = board;
         manager.Renderer = boardRenderer;
@@ -196,8 +196,8 @@ public class ManaChromeTests
     [Test]
     public void MagicOverlay_ManaTypeStorePipeAndVentColors_NormalUntouched_FogWins()
     {
-        mana.HasVent = true;
-        mana.VentTile = T(22, 13); // In the cavern's edge: explored, with free neighbors
+        mana.AddPointOfInterest(ManaFlow.FireVentName, T(22, 13), Fire, 2f); // In the cavern's edge: explored, with free neighbors
+        mana.AddPointOfInterest(ManaFlow.SpringName, T(25, 13), Water, 2f);
         Assert.IsTrue(mana.TryAddUnit(T(24, 15), Fire));
         FakePort tank = HeldPort(Water, 3, T(25, 16));
         var emptyTank = new FakePort { Tile = T(21, 16) };
@@ -221,7 +221,10 @@ public class ManaChromeTests
         Assert.AreEqual(boardRenderer.StoreOverlayColor(emptyTank.Store), boardRenderer.DisplayColorAt(21, 16));
         Assert.AreNotEqual(mana.ColorOf(Water), boardRenderer.DisplayColorAt(21, 16), "An empty store reads neutral");
         Assert.AreNotEqual(dimmed, boardRenderer.DisplayColorAt(22, 17), "Built pipe tints the floor under it");
-        Assert.AreEqual(boardRenderer.VentActiveOverlayColor, boardRenderer.DisplayColorAt(22, 13), "The vent, emitting");
+        Assert.AreEqual(boardRenderer.SourceOverlayColor(Fire, false), boardRenderer.DisplayColorAt(22, 13), "The vent, emitting");
+        Assert.AreEqual(boardRenderer.SourceOverlayColor(Water, false), boardRenderer.DisplayColorAt(25, 13), "The Spring, emitting");
+        Assert.AreNotEqual(boardRenderer.SourceOverlayColor(Fire, false), boardRenderer.SourceOverlayColor(Water, false),
+            "Each in its own type's colours");
         Assert.AreEqual(fogged, boardRenderer.DisplayColorAt(30, 15), "Fog wins: no mana peeks through");
 
         tank.Store.Withdraw(3);
@@ -233,23 +236,27 @@ public class ManaChromeTests
     }
 
     [Test]
-    public void MagicOverlay_DormantVentReadsDull()
+    public void MagicOverlay_DormantPointsReadDull()
     {
-        mana.HasVent = true;
-        mana.VentTile = T(20, 15); // In the cavern's west wall: its only open neighbor is (21,15)
-        board.SetTile(20, 15, TileState.Floor);
-        Assert.IsTrue(mana.TryAddUnit(T(21, 15), Water), "A unit of another type blocks the only free neighbor");
-        Assert.IsTrue(mana.VentDormant);
+        ManaPointOfInterest vent = mana.AddPointOfInterest(ManaFlow.FireVentName, T(20, 15), Fire, 2f); // In the cavern's west wall: its only open neighbor is (21,15)
+        ManaPointOfInterest spring = mana.AddPointOfInterest(ManaFlow.SpringName, T(20, 17), Water, 2f); // Likewise: only (21,17)
+        mana.CarvePointsOfInterest();
+        Assert.IsTrue(mana.TryAddUnit(T(21, 15), Water), "A unit of another type blocks the vent's only free neighbor");
+        Assert.IsTrue(mana.TryAddUnit(T(21, 17), Fire), "...and the Spring's");
+        Assert.IsTrue(mana.IsDormant(vent));
+        Assert.IsTrue(mana.IsDormant(spring));
         boardRenderer.SetViewMode(ViewMode.Magic);
-        Assert.AreEqual(boardRenderer.VentDormantOverlayColor, boardRenderer.DisplayColorAt(20, 15));
+        Assert.AreEqual(boardRenderer.SourceOverlayColor(Fire, true), boardRenderer.DisplayColorAt(20, 15));
+        Assert.AreEqual(boardRenderer.SourceOverlayColor(Water, true), boardRenderer.DisplayColorAt(20, 17));
+        Assert.AreNotEqual(boardRenderer.SourceOverlayColor(Water, false), boardRenderer.SourceOverlayColor(Water, true), "Dull, not bright");
     }
 
     [Test]
-    public void BoardViews_ManaGlowsPipesAndTheVent_ExploredOnly()
+    public void BoardViews_ManaGlowsPipesAndThePoints_ExploredOnly()
     {
-        mana.HasVent = true;
-        mana.VentTile = T(24, 11); // Sealed below the cavern: unexplored (the reveal reaches y 12)
-        mana.CarveVent();
+        mana.AddPointOfInterest(ManaFlow.FireVentName, T(24, 11), Fire, 2f); // Sealed below the cavern: unexplored (the reveal reaches y 12)
+        mana.AddPointOfInterest(ManaFlow.SpringName, T(22, 20), Water, 2f);  // Sealed above it: unexplored too (to y 18)
+        mana.CarvePointsOfInterest();
         Assert.IsTrue(mana.TryAddUnit(T(23, 15), Fire));
         board.SetTile(30, 15, TileState.Floor);
         Assert.IsTrue(mana.TryAddUnit(T(30, 15), Fire));
@@ -262,11 +269,16 @@ public class ManaChromeTests
         Assert.AreEqual("Pipe", boardRenderer.GetPipeView(22, 14)?.name);
         Assert.AreEqual("PipePending", boardRenderer.GetPipeView(24, 14)?.name);
         Assert.IsNotNull(boardRenderer.GetPipeView(22, 14).transform.Find("Arm10"), "Joined toward its neighbor");
-        Assert.IsNull(boardRenderer.VentView, "The vent is under fog");
+        Assert.IsNull(boardRenderer.PointOfInterestView(T(24, 11)), "The vent is under fog");
+        Assert.IsNull(boardRenderer.PointOfInterestView(T(22, 20)), "The Spring is under fog");
 
         fog.RevealAround(T(24, 9));
-        boardRenderer.RefreshVent();
-        Assert.IsNotNull(boardRenderer.VentView, "Seen: the vent shows");
+        fog.RevealAround(T(22, 22));
+        boardRenderer.RefreshPointsOfInterest();
+        Assert.AreEqual("FireVent", boardRenderer.PointOfInterestView(T(24, 11))?.name, "Seen: the vent shows");
+        Assert.AreEqual("Spring", boardRenderer.PointOfInterestView(T(22, 20))?.name, "Seen: the Spring shows, its own model");
+        Assert.IsNotNull(boardRenderer.PointOfInterestView(T(22, 20)).transform.Find(PropModel.SpringGlowPart), "The pool that glows");
+        Assert.IsNull(boardRenderer.PointOfInterestView(T(23, 15)), "No point there");
 
         Assert.IsTrue(mana.TryTakeUnit(T(23, 15), out _));
         boardRenderer.RefreshMana(T(23, 15));
@@ -297,10 +309,13 @@ public class ManaChromeTests
     // ---- tooltips ----
 
     [Test]
-    public void TooltipLines_VentManaPipe_AndTheirComposition()
+    public void TooltipLines_PointOfInterestManaPipe_AndTheirComposition()
     {
-        Assert.AreEqual("Fire Vent · Emitting", TileHover.VentLine(Fire, false));
-        Assert.AreEqual("Fire Vent · Dormant", TileHover.VentLine(Fire, true));
+        Assert.AreEqual("Fire Vent · Emitting", TileHover.PointOfInterestLine(ManaFlow.FireVentName, false));
+        Assert.AreEqual("Fire Vent · Dormant", TileHover.PointOfInterestLine(ManaFlow.FireVentName, true));
+        Assert.AreEqual("Spring · Emitting", TileHover.PointOfInterestLine(ManaFlow.SpringName, false));
+        Assert.AreEqual("Spring · Dormant", TileHover.PointOfInterestLine(ManaFlow.SpringName, true));
+        Assert.AreEqual("Water mana ×3", TileHover.ManaLine(Water, 3));
         Assert.AreEqual("Fire mana", TileHover.ManaLine(Fire, 1));
         Assert.AreEqual("Fire mana ×2", TileHover.ManaLine(Fire, 2));
         Assert.IsNull(TileHover.ManaLine(null, 0));
@@ -314,12 +329,14 @@ public class ManaChromeTests
             "Each line beneath the label, nulls skipped");
         Assert.IsNull(TileHover.TooltipLabel(fog, identity, T(30, 15), null, "Fire mana"), "Under fog: nothing");
 
-        mana.HasVent = true;
-        mana.VentTile = T(22, 13);
+        mana.AddPointOfInterest(ManaFlow.FireVentName, T(22, 13), Fire, 2f);
+        mana.AddPointOfInterest(ManaFlow.SpringName, T(20, 20), Water, 2f); // Sealed: dormant
+        mana.CarvePointsOfInterest();
         Assert.IsTrue(mana.TryAddUnit(T(23, 15), Fire));
         BuildPipe(T(23, 15));
-        Assert.AreEqual("Fire Vent · Emitting", TileHover.VentLine(mana, T(22, 13)));
-        Assert.IsNull(TileHover.VentLine(mana, T(23, 15)));
+        Assert.AreEqual("Fire Vent · Emitting", TileHover.PointOfInterestLine(mana, T(22, 13)));
+        Assert.AreEqual("Spring · Dormant", TileHover.PointOfInterestLine(mana, T(20, 20)));
+        Assert.IsNull(TileHover.PointOfInterestLine(mana, T(23, 15)));
         Assert.AreEqual("Fire mana", TileHover.ManaLine(mana, T(23, 15)));
         Assert.AreEqual("Pipe", TileHover.PipeLine(mana, T(23, 15)));
         Assert.IsNull(TileHover.PipeLine((ManaFlow)null, T(23, 15)));
@@ -443,23 +460,9 @@ public class ManaChromeTests
         Assert.IsFalse(manager.TryGetPower(PlaceableType.Accumulator, out _), "No power behavior in this story");
 
         Assert.AreEqual(5, mana.MaxManaPerTile);
-        Assert.AreEqual(new Vector2Int(24, 5), new ManaFlowDefaults().VentTile, "Deep in the rock south of the cavern");
         Assert.AreEqual(5f, mana.PipeThroughputPerSecond);
         Assert.AreEqual(0.25f, mana.TransferSeconds);
         Assert.AreEqual(5, mana.AccumulatorReserve);
-    }
-
-    // A fresh service's shipped defaults (the test fixture's own one has its vent turned off).
-    private sealed class ManaFlowDefaults
-    {
-        public readonly Vector2Int VentTile;
-
-        public ManaFlowDefaults()
-        {
-            var go = new GameObject("FreshMana");
-            try { VentTile = go.AddComponent<ManaFlow>().VentTile; }
-            finally { Object.DestroyImmediate(go); }
-        }
     }
 
     [Test]

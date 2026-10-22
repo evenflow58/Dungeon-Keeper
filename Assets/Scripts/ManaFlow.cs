@@ -20,6 +20,31 @@ public class ManaTypeDefinition
 }
 
 /// <summary>
+/// A mana point of interest (#145, rows since #150): a world feature on a tile that emits one unit of its type every
+/// emitSeconds. A data row — the Fire Vent and the Spring are two rows of the one mechanism. The timer and the last
+/// dormant reading are runtime state, never serialized.
+/// </summary>
+[Serializable]
+public class ManaPointOfInterest
+{
+    public string displayName;
+    public Vector2Int tile;
+    public string manaType;
+    public float emitSeconds;
+
+    [NonSerialized] public float emitTimer;
+    [NonSerialized] public bool wasEmitting; // Starts false: a fresh point reads dormant until it first can emit
+
+    public ManaPointOfInterest(string displayName, Vector2Int tile, string manaType, float emitSeconds)
+    {
+        this.displayName = displayName;
+        this.tile = tile;
+        this.manaType = manaType;
+        this.emitSeconds = emitSeconds;
+    }
+}
+
+/// <summary>
 /// A single-type mana store (#145): the accumulator's buffer and the container's bulk store. Empty, it holds no type; the
 /// first deposit adopts its type; it then accepts only that type; withdrawing to zero forgets the type. Deposits clamp at
 /// capacity and withdrawals at the amount, and both report what actually moved. Plain data, so tests drive it directly.
@@ -79,14 +104,15 @@ public interface IManaPort
 /// The mana simulation (#145), a service on the DungeonManager. Mana is discrete: units on tiles, grid data, never
 /// GameObjects. A tile holds at most maxManaPerTile units of one type; Floor and Entrance are open, Rock and Designated
 /// are walls (placeables and creatures never block). Fog never gates the simulation.
-/// The Fire Vent is a world feature on ventTile (carved to Floor at setup, entombed in rock until dug out): every
-/// ventEmitSeconds it emits one unit of its type onto the first 4-neighbor (board scan order) that has room, and is
-/// dormant while none has (entombed, or saturated), resuming on its own the moment one does. Flow is pressure, like a gas:
+/// Points of interest are data rows (#150: the Fire Vent and the Spring): each sits on its tile (carved to Floor at
+/// setup, entombed in rock until dug out) and every emitSeconds emits one unit of its type onto the first 4-neighbor
+/// (board scan order) that has room, dormant while none has (entombed, or saturated), resuming on its own the moment one
+/// does. The flow is type-uniform: every type obeys the same rules and types never combine on tiles. Flow is pressure, like a gas:
 /// a tile's pressure is the units on it. Every flowTickSeconds each tile holding mana, in a shuffled order and seeing
 /// moves already made, sends one unit to a neighbor that holds fewer units and has room, picked at random from those
 /// (seeded by flowSeed, so a run replays exactly). So mana always flows from high pressure to low; a closed space evens
 /// out until every tile is within one unit of the rest — the remainder keeps juggling, the counts never change — and
-/// with the vent emitting, every connected tile ends at the cap and the flow stops. Nothing pulls: an accumulator takes
+/// with a point emitting, every connected tile ends at the cap and the flow stops. Nothing pulls: an accumulator takes
 /// the units beside it and the flow refills the dip.
 /// Stores register here (the PowerNode pattern): TotalOf sums a type across them and a type is discovered, for the
 /// session, the first time any store holds it. Accumulators collect from beside them on their own cycle, driven by this
@@ -100,6 +126,8 @@ public class ManaFlow : MonoBehaviour
 {
     public const string FireId = "Fire";
     public const string WaterId = "Water";
+    public const string FireVentName = "Fire Vent";
+    public const string SpringName = "Spring";
 
     /// <summary>What a pipe drag does: lay pending pipe, or remove it.</summary>
     public enum PipeMode { Lay, Remove }
@@ -107,7 +135,7 @@ public class ManaFlow : MonoBehaviour
     [Header("References")]
     [SerializeField] private DungeonBoard dungeonBoard;
 
-    // The catalog home for mana types: append-only rows. Water has no source yet (#150); the row makes it vocabulary.
+    // The catalog home for mana types: append-only rows, referenced by id.
     [Header("Mana Types")]
     [SerializeField] private List<ManaTypeDefinition> manaTypes = new List<ManaTypeDefinition>
     {
@@ -120,11 +148,13 @@ public class ManaFlow : MonoBehaviour
     [SerializeField] private float flowTickSeconds = 0.5f;
     [SerializeField] private int flowSeed = 145;             // Seeds the flow's random picks: the same seed replays the same run
 
-    [Header("Fire Vent")]
-    [SerializeField] private bool hasVent = true;
-    [SerializeField] private Vector2Int ventTile = new Vector2Int(24, 5); // Deep in the rock south of the starter cavern
-    [SerializeField] private string ventManaType = FireId;
-    [SerializeField] private float ventEmitSeconds = 2f;
+    // The world's mana sources (#150): one row per point, each in its own sealed rock pocket.
+    [Header("Points of Interest")]
+    [SerializeField] private List<ManaPointOfInterest> pointsOfInterest = new List<ManaPointOfInterest>
+    {
+        new ManaPointOfInterest(FireVentName, new Vector2Int(24, 5), FireId, 2f), // Deep in the rock south of the starter cavern
+        new ManaPointOfInterest(SpringName, new Vector2Int(20, 27), WaterId, 2f), // Shallow, west of the entrance column
+    };
 
     [Header("Pipes")]
     [SerializeField] private float pipeSecondsPerTile = 0.5f;      // Imp work to build one pending pipe tile
@@ -146,10 +176,7 @@ public class ManaFlow : MonoBehaviour
             flowRandom = null;
         }
     }
-    public bool HasVent { get => hasVent; set => hasVent = value; }
-    public Vector2Int VentTile { get => ventTile; set => ventTile = value; }
-    public string VentManaType { get => ventManaType; set => ventManaType = value; }
-    public float VentEmitSeconds { get => ventEmitSeconds; set => ventEmitSeconds = value; }
+    public IReadOnlyList<ManaPointOfInterest> PointsOfInterest => pointsOfInterest;
     public float PipeSecondsPerTile { get => pipeSecondsPerTile; set => pipeSecondsPerTile = value; }
     public float PipeThroughputPerSecond { get => pipeThroughputPerSecond; set => pipeThroughputPerSecond = value; }
     public float TransferSeconds { get => transferSeconds; set => transferSeconds = value; }
@@ -165,8 +192,8 @@ public class ManaFlow : MonoBehaviour
     /// <summary>Raised when a tile's pipe changes (laid, built or removed).</summary>
     public event Action<Vector2Int> PipeChanged;
 
-    /// <summary>Raised when the vent's state may have changed (it emitted, went dormant, or woke).</summary>
-    public event Action VentChanged;
+    /// <summary>Raised with a point of interest's tile when its state changed (went dormant, or woke).</summary>
+    public event Action<Vector2Int> PointOfInterestChanged;
 
     private struct Cell
     {
@@ -183,10 +210,8 @@ public class ManaFlow : MonoBehaviour
     private Dictionary<Vector2Int, int> networks = new Dictionary<Vector2Int, int>();
     private readonly Dictionary<int, float> networkCarry = new Dictionary<int, float>();
     private bool networksDirty;
-    private float ventTimer;
     private float flowTimer;
     private float transferTimer;
-    private bool lastVentDormant = true;
     private System.Random flowRandom; // Made from flowSeed on the first flow tick
 
     private const float CompleteTolerance = 1e-4f; // Pipe progress sums deltaTime steps: absorb float rounding
@@ -205,7 +230,7 @@ public class ManaFlow : MonoBehaviour
     private void Start()
     {
         dungeonBoard ??= FindAnyObjectByType<DungeonBoard>();
-        CarveVent();
+        CarvePointsOfInterest();
     }
 
     private void Update()
@@ -236,32 +261,56 @@ public class ManaFlow : MonoBehaviour
     /// <summary>A type's color; white for a type with no row.</summary>
     public Color ColorOf(string id) => TryGetType(id, out ManaTypeDefinition d) ? d.color : Color.white;
 
-    // ---- the vent ----
+    // ---- points of interest ----
 
-    /// <summary>
-    /// Carves the vent's tile to Floor (its pocket stays sealed: the tiles around it are untouched, so it starts entombed
-    /// and dormant). Start runs it; idempotent; a no-op with no vent or no board.
-    /// </summary>
-    public void CarveVent()
+    /// <summary>Removes every point of interest (tests and staging build their own).</summary>
+    public void ClearPointsOfInterest() => pointsOfInterest.Clear();
+
+    /// <summary>Adds a point of interest row and returns it. Its tile isn't carved until CarvePointsOfInterest.</summary>
+    public ManaPointOfInterest AddPointOfInterest(string displayName, Vector2Int tile, string manaType, float emitSeconds)
     {
-        if (!hasVent || dungeonBoard == null || !dungeonBoard.IsInBounds(ventTile.x, ventTile.y)) return;
-        if (dungeonBoard.GetTile(ventTile.x, ventTile.y) != TileState.Floor) dungeonBoard.SetTile(ventTile.x, ventTile.y, TileState.Floor);
+        var point = new ManaPointOfInterest(displayName, tile, manaType, emitSeconds);
+        pointsOfInterest.Add(point);
+        return point;
     }
 
-    /// <summary>Whether this tile holds the vent.</summary>
-    public bool IsVentTile(Vector2Int tile) => hasVent && tile == ventTile;
+    /// <summary>
+    /// Carves each point's own tile to Floor (its pocket stays sealed: the tiles around it are untouched, so it starts
+    /// entombed and dormant). Start runs it; idempotent; a no-op with no board.
+    /// </summary>
+    public void CarvePointsOfInterest()
+    {
+        if (dungeonBoard == null) return;
+        foreach (ManaPointOfInterest point in pointsOfInterest)
+        {
+            if (point == null || !dungeonBoard.IsInBounds(point.tile.x, point.tile.y)) continue;
+            if (dungeonBoard.GetTile(point.tile.x, point.tile.y) != TileState.Floor)
+                dungeonBoard.SetTile(point.tile.x, point.tile.y, TileState.Floor);
+        }
+    }
 
-    /// <summary>True while the vent can't emit: no 4-neighbor has room for a unit of its type (entombed or saturated).</summary>
-    public bool VentDormant => !hasVent || !TryFindEmitTile(out _);
+    /// <summary>The point of interest on this tile, or null.</summary>
+    public ManaPointOfInterest PointOfInterestAt(Vector2Int tile)
+    {
+        foreach (ManaPointOfInterest point in pointsOfInterest)
+            if (point != null && point.tile == tile) return point;
+        return null;
+    }
 
-    /// <summary>Where the vent emits next: the first of its 4-neighbors, in board scan order, with room for its type.</summary>
-    public bool TryFindEmitTile(out Vector2Int tile)
+    /// <summary>Whether a point of interest stands on this tile.</summary>
+    public bool IsPointOfInterestTile(Vector2Int tile) => PointOfInterestAt(tile) != null;
+
+    /// <summary>True while the point can't emit: no 4-neighbor has room for a unit of its type (entombed or saturated).</summary>
+    public bool IsDormant(ManaPointOfInterest point) => !TryFindEmitTile(point, out _);
+
+    /// <summary>Where the point emits next: the first of its 4-neighbors, in board scan order, with room for its type.</summary>
+    public bool TryFindEmitTile(ManaPointOfInterest point, out Vector2Int tile)
     {
         tile = default;
-        if (!hasVent || dungeonBoard == null) return false;
-        foreach (Vector2Int candidate in ScanOrderedNeighbors(ventTile))
+        if (point == null || dungeonBoard == null) return false;
+        foreach (Vector2Int candidate in ScanOrderedNeighbors(point.tile))
         {
-            if (!CanAccept(candidate, ventManaType)) continue;
+            if (!CanAccept(candidate, point.manaType)) continue;
             tile = candidate;
             return true;
         }
@@ -280,11 +329,11 @@ public class ManaFlow : MonoBehaviour
     // ---- occupancy ----
 
     /// <summary>
-    /// Open to mana: in-bounds Floor or Entrance. Rock and Designated are walls; placeables never block. The vent's own tile
-    /// is never open: the vent stands there and emits beside it.
+    /// Open to mana: in-bounds Floor or Entrance. Rock and Designated are walls; placeables never block. A point of
+    /// interest's own tile is never open: the point stands there and emits beside it.
     /// </summary>
     public bool IsOpen(Vector2Int tile) =>
-        dungeonBoard != null && dungeonBoard.IsInBounds(tile.x, tile.y) && !IsVentTile(tile)
+        dungeonBoard != null && dungeonBoard.IsInBounds(tile.x, tile.y) && !IsPointOfInterestTile(tile)
         && IsOpenState(dungeonBoard.GetTile(tile.x, tile.y));
 
     public static bool IsOpenState(TileState state) => state == TileState.Floor || state == TileState.Entrance;
@@ -341,7 +390,7 @@ public class ManaFlow : MonoBehaviour
     // ---- the clock ----
 
     /// <summary>
-    /// Advances the simulation by deltaTime (game time: pause freezes it): the vent, then flow, then collection, then the
+    /// Advances the simulation by deltaTime (game time: pause freezes it): the points of interest in row order, then flow, then collection, then the
     /// transfer pass, each on its own serialized cadence; then discovery. Update calls it; public so tests can step it.
     /// </summary>
     public void Tick(float deltaTime)
@@ -349,7 +398,7 @@ public class ManaFlow : MonoBehaviour
         if (deltaTime <= 0f) return;
         ElapsedSeconds += deltaTime;
 
-        TickVent(deltaTime);
+        foreach (ManaPointOfInterest point in pointsOfInterest) TickPointOfInterest(point, deltaTime);
 
         flowTimer += deltaTime;
         if (flowTickSeconds > 0f)
@@ -376,29 +425,29 @@ public class ManaFlow : MonoBehaviour
         RefreshDiscovery();
     }
 
-    // The vent emits once per interval while a neighbor has room; dormant, it holds a full interval and emits the moment
+    // A point emits once per interval while a neighbor has room; dormant, it holds a full interval and emits the moment
     // space frees.
-    private void TickVent(float deltaTime)
+    private void TickPointOfInterest(ManaPointOfInterest point, float deltaTime)
     {
-        if (!hasVent || dungeonBoard == null) return;
-        ventTimer += deltaTime;
-        if (ventEmitSeconds > 0f)
+        if (point == null || dungeonBoard == null) return;
+        point.emitTimer += deltaTime;
+        if (point.emitSeconds > 0f)
         {
-            while (ventTimer >= ventEmitSeconds)
+            while (point.emitTimer >= point.emitSeconds)
             {
-                if (!TryFindEmitTile(out Vector2Int tile))
+                if (!TryFindEmitTile(point, out Vector2Int tile))
                 {
-                    ventTimer = ventEmitSeconds; // Dormant: ready the moment a neighbor frees
+                    point.emitTimer = point.emitSeconds; // Dormant: ready the moment a neighbor frees
                     break;
                 }
-                ventTimer -= ventEmitSeconds;
-                TryAddUnit(tile, ventManaType);
+                point.emitTimer -= point.emitSeconds;
+                TryAddUnit(tile, point.manaType);
             }
         }
-        bool dormant = VentDormant;
-        if (dormant == lastVentDormant) return;
-        lastVentDormant = dormant;
-        VentChanged?.Invoke();
+        bool emitting = !IsDormant(point);
+        if (emitting == point.wasEmitting) return;
+        point.wasEmitting = emitting;
+        PointOfInterestChanged?.Invoke(point.tile);
     }
 
     /// <summary>

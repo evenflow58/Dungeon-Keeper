@@ -13,7 +13,7 @@ public class TileHover : MonoBehaviour
     [SerializeField] private ImpDigger impDigger; // Optional (#132): names rock's material; unwired, labels as before
     [SerializeField] private Stockpile stockpile; // Optional (#132): the catalog's display names; unwired, enum names
     [SerializeField] private PowerGrid powerGrid; // Optional (#144): the conduit line; unwired, found at Start (none in a scene without power)
-    [SerializeField] private ManaFlow manaFlow;   // Optional (#145): vent, mana and pipe lines; unwired, found at Start
+    [SerializeField] private ManaFlow manaFlow;   // Optional (#145): point-of-interest, mana and pipe lines; unwired, found at Start
 
     [Header("Highlight")]
     [SerializeField] private Color highlightColor = new Color(1f, 1f, 1f, 0.35f);
@@ -173,7 +173,7 @@ public class TileHover : MonoBehaviour
 
         // Unexplored (#131): the highlight still marks the position, but no tooltip, so hovering can't probe the fog.
         string label = TooltipLabel(fogOfWar, TileIdentity.Of(dungeonBoard, impDigger, coords), coords, stockpile,
-            ConduitLine(powerGrid, coords), VentLine(manaFlow, coords), ManaLine(manaFlow, coords), PipeLine(manaFlow, coords));
+            ConduitLine(powerGrid, coords), PointOfInterestLine(manaFlow, coords), ManaLine(manaFlow, coords), PipeLine(manaFlow, coords));
         if (label == null)
         {
             tooltipCanvas?.gameObject.SetActive(false);
@@ -198,7 +198,7 @@ public class TileHover : MonoBehaviour
         TooltipLabel(fog, identity, tile, stockpile, null);
 
     /// <summary>
-    /// The hover tooltip with extra lines (#144 conduit, #145 vent, mana and pipe): the tile label, then each non-null line
+    /// The hover tooltip with extra lines (#144 conduit, #145 point of interest, mana and pipe): the tile label, then each non-null line
     /// beneath it in order. Fog suppresses the whole tooltip, every line included, exactly as for every other fact.
     /// </summary>
     public static string TooltipLabel(FogOfWar fog, TileIdentity identity, Vector2Int tile, Stockpile stockpile,
@@ -212,12 +212,16 @@ public class TileHover : MonoBehaviour
         return label;
     }
 
-    /// <summary>The vent's line (#145): "Fire Vent · Emitting" or "Fire Vent · Dormant".</summary>
-    public static string VentLine(string type, bool dormant) => $"{type} Vent · {(dormant ? "Dormant" : "Emitting")}";
+    /// <summary>A point of interest's line (#145, #150): "Fire Vent · Emitting", "Spring · Dormant".</summary>
+    public static string PointOfInterestLine(string displayName, bool dormant) =>
+        $"{displayName} · {(dormant ? "Dormant" : "Emitting")}";
 
-    /// <summary>The vent's line for a tile from a live service, or null when the tile isn't the vent's.</summary>
-    public static string VentLine(ManaFlow mana, Vector2Int tile) =>
-        mana != null && mana.IsVentTile(tile) ? VentLine(mana.VentManaType, mana.VentDormant) : null;
+    /// <summary>The line for the point of interest on a tile from a live service, or null when none stands there.</summary>
+    public static string PointOfInterestLine(ManaFlow mana, Vector2Int tile)
+    {
+        ManaPointOfInterest point = mana?.PointOfInterestAt(tile);
+        return point != null ? PointOfInterestLine(point.displayName, mana.IsDormant(point)) : null;
+    }
 
     /// <summary>A mana tile's line (#145): its type ("Fire mana"), with a count past one.</summary>
     public static string ManaLine(string type, int units) =>

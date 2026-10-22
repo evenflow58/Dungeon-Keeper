@@ -628,11 +628,17 @@ MonoBehaviour:
   ventEmberColor: {r: 1, g: 0.45, b: 0.12, a: 1}
   ventDormantEmberColor: {r: 0.3, g: 0.12, b: 0.06, a: 1}
   ventEmberIntensity: 2.5
+  springStoneColor: {r: 0.36, g: 0.38, b: 0.42, a: 1}
+  springPoolColor: {r: 0.25, g: 0.62, b: 1, a: 1}
+  springDormantPoolColor: {r: 0.08, g: 0.16, b: 0.28, a: 1}
+  springPoolIntensity: 2
   pipeOverlayColor: {r: 0.8, g: 0.72, b: 1, a: 1}
   pendingPipeOverlayColor: {r: 0.85, g: 0.85, b: 0.85, a: 0.45}
   storeEmptyOverlayColor: {r: 0.55, g: 0.52, b: 0.62, a: 1}
   ventActiveOverlayColor: {r: 1, g: 0.55, b: 0.2, a: 1}
   ventDormantOverlayColor: {r: 0.4, g: 0.22, b: 0.14, a: 1}
+  springActiveOverlayColor: {r: 0.3, g: 0.68, b: 1, a: 1}
+  springDormantOverlayColor: {r: 0.14, g: 0.24, b: 0.4, a: 1}
   manaTileTint: 0.6
   pipeTileTint: 0.45
   doorHeight: 0.9
@@ -1258,10 +1264,15 @@ MonoBehaviour:
   maxManaPerTile: 5
   flowTickSeconds: 0.5
   flowSeed: 145
-  hasVent: 1
-  ventTile: {x: 24, y: 5}
-  ventManaType: Fire
-  ventEmitSeconds: 2
+  pointsOfInterest:
+  - displayName: Fire Vent
+    tile: {x: 24, y: 5}
+    manaType: Fire
+    emitSeconds: 2
+  - displayName: Spring
+    tile: {x: 20, y: 27}
+    manaType: Water
+    emitSeconds: 2
   pipeSecondsPerTile: 0.5
   pipeThroughputPerSecond: 5
   transferSeconds: 0.25

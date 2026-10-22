@@ -1255,8 +1255,9 @@ MonoBehaviour:
   - id: Water
     displayName: Water Mana
     color: {r: 0.25, g: 0.6, b: 1, a: 1}
-  maxManaPerTile: 1
+  maxManaPerTile: 5
   flowTickSeconds: 0.5
+  flowSeed: 145
   hasVent: 1
   ventTile: {x: 24, y: 5}
   ventManaType: Fire

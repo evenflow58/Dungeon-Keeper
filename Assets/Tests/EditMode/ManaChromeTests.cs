@@ -442,7 +442,7 @@ public class ManaChromeTests
         Assert.AreEqual(100, manager.ManaContainerCapacity);
         Assert.IsFalse(manager.TryGetPower(PlaceableType.Accumulator, out _), "No power behavior in this story");
 
-        Assert.AreEqual(1, mana.MaxManaPerTile);
+        Assert.AreEqual(5, mana.MaxManaPerTile);
         Assert.AreEqual(new Vector2Int(24, 5), new ManaFlowDefaults().VentTile, "Deep in the rock south of the cavern");
         Assert.AreEqual(5f, mana.PipeThroughputPerSecond);
         Assert.AreEqual(0.25f, mana.TransferSeconds);

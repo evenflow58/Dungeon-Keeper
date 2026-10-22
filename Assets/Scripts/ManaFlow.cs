@@ -80,14 +80,14 @@ public interface IManaPort
 /// GameObjects. A tile holds at most maxManaPerTile units of one type; Floor and Entrance are open, Rock and Designated
 /// are walls (placeables and creatures never block). Fog never gates the simulation.
 /// The Fire Vent is a world feature on ventTile (carved to Floor at setup, entombed in rock until dug out): every
-/// ventEmitSeconds it emits one unit of its type: onto a free 4-neighbor (board scan order) when it has one, otherwise it
-/// pushes the line of its own mana along, so the unit lands on the nearest free tile reachable through that mana. It is
-/// dormant only when nothing it reaches is free (entombed, or every connected open tile full), resuming on its own the
-/// moment a unit is taken. Flow is pure diffusion: a tile's density is how full its surroundings are (Density: units over
-/// open tiles within densityRadius, nearer tiles weighted more). Every flowTickSeconds each unit, in scan order and seeing
-/// moves already made, steps to its lowest-density free 4-neighbor if that is lower by more than moveThreshold (ties:
-/// right, up, left, down), else it rests. So mana spreads from full to empty and a closed space comes to rest; with the
-/// vent emitting it ends full. Nothing pulls: an accumulator takes the units beside it and diffusion refills the dip.
+/// ventEmitSeconds it emits one unit of its type onto the first 4-neighbor (board scan order) that has room, and is
+/// dormant while none has (entombed, or saturated), resuming on its own the moment one does. Flow is pressure, like a gas:
+/// a tile's pressure is the units on it. Every flowTickSeconds each tile holding mana, in a shuffled order and seeing
+/// moves already made, sends one unit to a neighbor that holds fewer units and has room, picked at random from those
+/// (seeded by flowSeed, so a run replays exactly). So mana always flows from high pressure to low; a closed space evens
+/// out until every tile is within one unit of the rest — the remainder keeps juggling, the counts never change — and
+/// with the vent emitting, every connected tile ends at the cap and the flow stops. Nothing pulls: an accumulator takes
+/// the units beside it and the flow refills the dip.
 /// Stores register here (the PowerNode pattern): TotalOf sums a type across them and a type is discovered, for the
 /// session, the first time any store holds it. Accumulators collect from beside them on their own cycle, driven by this
 /// clock. Pipes are conduit's twin (pending / built, imp-built over pipeSecondsPerTile, explored Floor only); a network is
@@ -116,10 +116,9 @@ public class ManaFlow : MonoBehaviour
     };
 
     [Header("Occupancy and Flow")]
-    [SerializeField] private int maxManaPerTile = 1;
+    [SerializeField] private int maxManaPerTile = 5;         // A tile's pressure tops out here
     [SerializeField] private float flowTickSeconds = 0.5f;
-    [SerializeField] private int densityRadius = 2;          // How far around a tile its density looks (Manhattan)
-    [SerializeField] private float moveThreshold = 0.01f;    // A step must lower the density by more than this: no twitching on near-ties
+    [SerializeField] private int flowSeed = 145;             // Seeds the flow's random picks: the same seed replays the same run
 
     [Header("Fire Vent")]
     [SerializeField] private bool hasVent = true;
@@ -136,8 +135,17 @@ public class ManaFlow : MonoBehaviour
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public int MaxManaPerTile { get => maxManaPerTile; set => maxManaPerTile = Mathf.Max(1, value); }
     public float FlowTickSeconds { get => flowTickSeconds; set => flowTickSeconds = value; }
-    public int DensityRadius { get => densityRadius; set => densityRadius = Mathf.Max(0, value); }
-    public float MoveThreshold { get => moveThreshold; set => moveThreshold = value; }
+
+    /// <summary>The flow's seed. Setting it restarts the random sequence from that seed.</summary>
+    public int FlowSeed
+    {
+        get => flowSeed;
+        set
+        {
+            flowSeed = value;
+            flowRandom = null;
+        }
+    }
     public bool HasVent { get => hasVent; set => hasVent = value; }
     public Vector2Int VentTile { get => ventTile; set => ventTile = value; }
     public string VentManaType { get => ventManaType; set => ventManaType = value; }
@@ -179,6 +187,7 @@ public class ManaFlow : MonoBehaviour
     private float flowTimer;
     private float transferTimer;
     private bool lastVentDormant = true;
+    private System.Random flowRandom; // Made from flowSeed on the first flow tick
 
     private const float CompleteTolerance = 1e-4f; // Pipe progress sums deltaTime steps: absorb float rounding
 
@@ -242,53 +251,22 @@ public class ManaFlow : MonoBehaviour
     /// <summary>Whether this tile holds the vent.</summary>
     public bool IsVentTile(Vector2Int tile) => hasVent && tile == ventTile;
 
-    /// <summary>True while the vent can't emit: nothing it reaches through its own mana can take a unit (entombed or saturated).</summary>
+    /// <summary>True while the vent can't emit: no 4-neighbor has room for a unit of its type (entombed or saturated).</summary>
     public bool VentDormant => !hasVent || !TryFindEmitTile(out _);
 
-    /// <summary>
-    /// Where the vent's next unit lands. A free 4-neighbor first (board scan order). With every neighbor full of its own
-    /// type, the vent pushes: the line of its mana shifts one step toward the nearest free tile, which is the same as the
-    /// new unit landing there — so this is the nearest tile, walking through tiles full of the vent's type, that can accept
-    /// one (breadth-first: neighbors in scan order, then right, up, left, down). Rock, other types and the vent's own tile
-    /// stop the push. False when none is reachable: the vent is dormant.
-    /// </summary>
+    /// <summary>Where the vent emits next: the first of its 4-neighbors, in board scan order, with room for its type.</summary>
     public bool TryFindEmitTile(out Vector2Int tile)
     {
         tile = default;
         if (!hasVent || dungeonBoard == null) return false;
-        var queue = new Queue<Vector2Int>();
-        var seen = new HashSet<Vector2Int> { ventTile };
         foreach (Vector2Int candidate in ScanOrderedNeighbors(ventTile))
         {
-            if (!seen.Add(candidate)) continue;
-            if (CanAccept(candidate, ventManaType))
-            {
-                tile = candidate;
-                return true;
-            }
-            if (IsFullOfVentMana(candidate)) queue.Enqueue(candidate);
-        }
-        while (queue.Count > 0)
-        {
-            Vector2Int from = queue.Dequeue();
-            foreach (Vector2Int d in Neighbors)
-            {
-                Vector2Int candidate = from + d;
-                if (!seen.Add(candidate)) continue;
-                if (CanAccept(candidate, ventManaType))
-                {
-                    tile = candidate;
-                    return true;
-                }
-                if (IsFullOfVentMana(candidate)) queue.Enqueue(candidate);
-            }
+            if (!CanAccept(candidate, ventManaType)) continue;
+            tile = candidate;
+            return true;
         }
         return false;
     }
-
-    // A tile the vent's push passes through: open, at the cap, all of the vent's type.
-    private bool IsFullOfVentMana(Vector2Int tile) =>
-        IsOpen(tile) && UnitsAt(tile) >= maxManaPerTile && TypeAt(tile) == ventManaType;
 
     // The 4-neighbors in board scan order (x, then y): left, down, up, right.
     private static IEnumerable<Vector2Int> ScanOrderedNeighbors(Vector2Int tile)
@@ -398,8 +376,8 @@ public class ManaFlow : MonoBehaviour
         RefreshDiscovery();
     }
 
-    // The vent emits once per interval while anything it reaches is free; dormant, it holds a full interval and emits the
-    // moment space frees.
+    // The vent emits once per interval while a neighbor has room; dormant, it holds a full interval and emits the moment
+    // space frees.
     private void TickVent(float deltaTime)
     {
         if (!hasVent || dungeonBoard == null) return;
@@ -424,91 +402,52 @@ public class ManaFlow : MonoBehaviour
     }
 
     /// <summary>
-    /// One flow tick: each unit, in board scan order, may step once (ChooseMove over DensityAt). Occupancy updates as units
-    /// move, so a tile vacated earlier this tick can be entered and densities see the moves already made; a unit that moved
-    /// doesn't move again this tick. Returns how many units moved (0: the mana is at rest).
+    /// One flow tick: each tile holding mana at the start of the tick, in a shuffled order, sends one unit to a neighbor
+    /// with fewer units and room (ChooseMove, the pick random). Occupancy updates as units move, so later tiles see the
+    /// moves already made. Returns how many units moved.
     /// </summary>
     public int FlowStep()
     {
         if (dungeonBoard == null || cells.Count == 0) return 0;
-        int movedCount = 0;
-        var moved = new HashSet<Vector2Int>(); // Tiles that received a unit this tick: their newcomer rests
-        foreach (Vector2Int from in ScanOrdered(cells.Keys))
+        flowRandom ??= new System.Random(flowSeed);
+        List<Vector2Int> order = ScanOrdered(cells.Keys); // Scan order, then shuffled: the same seed gives the same order
+        for (int i = order.Count - 1; i > 0; i--)
         {
-            int units = UnitsAt(from);
-            if (units == 0) continue;
-            if (moved.Contains(from)) units--; // The newcomer stays put; the tile's earlier units may still move
-            for (int i = 0; i < units; i++)
-            {
-                string type = TypeAt(from);
-                if (type == null) break;
-                if (!ChooseMove(from, t => CanAccept(t, type), DensityAt, moveThreshold, out Vector2Int to)) break;
-                TryTakeUnit(from, out _);
-                TryAddUnit(to, type);
-                moved.Add(to);
-                movedCount++;
-            }
+            int j = flowRandom.Next(i + 1);
+            (order[i], order[j]) = (order[j], order[i]);
+        }
+        int movedCount = 0;
+        foreach (Vector2Int from in order)
+        {
+            string type = TypeAt(from);
+            if (type == null) continue;
+            if (!ChooseMove(from, UnitsAt, t => CanAccept(t, type), flowRandom.Next, out Vector2Int to)) continue;
+            TryTakeUnit(from, out _);
+            TryAddUnit(to, type);
+            movedCount++;
         }
         return movedCount;
     }
 
     /// <summary>
-    /// The density a unit leaving mover would feel at tile (Density with this board, the mover's own unit left out). Pass a
-    /// tile no unit stands on as mover to read a tile's own density.
+    /// The movement rule, pressure (a static seam): the 4-neighbors (right, up, left, down) that canEnter allows and that
+    /// hold fewer units than from are the candidates; pick(n) chooses one of n (random in play, fixed in tests). False,
+    /// staying put, when none has fewer: mana only ever flows from high pressure to low.
     /// </summary>
-    public float DensityAt(Vector2Int tile, Vector2Int mover) => Density(tile, mover, densityRadius, IsOpen, UnitsAt);
-
-    /// <summary>
-    /// How full the area around a tile is (a static seam): the units within Manhattan radius over the open tiles there, each
-    /// weighted by closeness (radius + 1 − distance), the mover's own unit left out. 0 with nothing open. Weighting by
-    /// closeness is what lets two units side by side feel each other and drift apart, and dividing by the open tiles is what
-    /// makes a packed tunnel read fuller than a half-empty hall (a plain neighbor count says the opposite: a tunnel tile has
-    /// fewer neighbors, so it always looked emptier and mana sloshed back into it).
-    /// </summary>
-    public static float Density(Vector2Int tile, Vector2Int mover, int radius, Func<Vector2Int, bool> isOpen, Func<Vector2Int, int> unitsAt)
-    {
-        float units = 0f, open = 0f;
-        for (int dx = -radius; dx <= radius; dx++)
-        {
-            for (int dy = -radius; dy <= radius; dy++)
-            {
-                int d = Mathf.Abs(dx) + Mathf.Abs(dy);
-                if (d > radius) continue;
-                var t = new Vector2Int(tile.x + dx, tile.y + dy);
-                if (t != tile && !isOpen(t)) continue; // The tile itself always counts: it's where the unit would stand
-                float w = radius + 1 - d;
-                open += w;
-                int n = unitsAt(t);
-                if (t == mover) n = Mathf.Max(0, n - 1);
-                units += w * n;
-            }
-        }
-        return open > 0f ? units / open : 0f;
-    }
-
-    /// <summary>
-    /// The movement rule, diffusion (a static seam): a unit steps to the free neighbor canEnter allows with the lowest
-    /// density, if that is lower than its own tile's by more than threshold; ties go right, up, left, down. Otherwise it
-    /// rests — so mana spreads from full to empty and settles once the density is even. density(tile, mover) is read with
-    /// the mover's own unit left out. False when it stays.
-    /// </summary>
-    public static bool ChooseMove(Vector2Int from, Func<Vector2Int, bool> canEnter, Func<Vector2Int, Vector2Int, float> density,
-        float threshold, out Vector2Int to)
+    public static bool ChooseMove(Vector2Int from, Func<Vector2Int, int> unitsAt, Func<Vector2Int, bool> canEnter,
+        Func<int, int> pick, out Vector2Int to)
     {
         to = from;
-        float best = density(from, from) - threshold;
-        bool found = false;
+        int here = unitsAt(from);
+        var lower = new List<Vector2Int>(4);
         foreach (Vector2Int d in Neighbors)
         {
             Vector2Int candidate = from + d;
-            if (!canEnter(candidate)) continue;
-            float p = density(candidate, from);
-            if (p >= best) continue;
-            best = p;
-            to = candidate;
-            found = true;
+            if (unitsAt(candidate) < here && canEnter(candidate)) lower.Add(candidate);
         }
-        return found;
+        if (lower.Count == 0) return false;
+        to = lower[Mathf.Clamp(pick(lower.Count), 0, lower.Count - 1)];
+        return true;
     }
 
     // ---- stores, totals, discovery ----

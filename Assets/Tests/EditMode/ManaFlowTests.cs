@@ -595,14 +595,15 @@ public class ManaFlowTests
     }
 
     [Test]
-    public void ShippedCatalog_FireAndWater_ByIdNotEnum()
+    public void ShippedCatalog_FireWaterAndTheMadeTypes_ByIdNotEnum()
     {
-        Assert.AreEqual(2, mana.ManaTypes.Count);
+        // #146 migration: Air, Storm and Lightning join the catalog (2 → 5), so the no-row example is now "Void".
+        Assert.AreEqual(5, mana.ManaTypes.Count);
         Assert.AreEqual("Fire Mana", mana.DisplayName(Fire));
         Assert.AreEqual("Water Mana", mana.DisplayName(Water));
         Assert.AreNotEqual(mana.ColorOf(Fire), mana.ColorOf(Water));
-        Assert.AreEqual("Storm", mana.DisplayName("Storm"), "A type with no row reads its id");
-        Assert.AreEqual(Color.white, mana.ColorOf("Storm"));
+        Assert.AreEqual("Void", mana.DisplayName("Void"), "A type with no row reads its id");
+        Assert.AreEqual(Color.white, mana.ColorOf("Void"));
     }
 
     // ---- 5. collection ----

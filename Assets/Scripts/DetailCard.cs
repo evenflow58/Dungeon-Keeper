@@ -21,6 +21,10 @@ using UnityEngine.UI;
 /// Toggles (#143): in placed mode a power node's card carries an Enable/Disable button (the only new raycast target; the
 /// card's own panel already keeps presses off the board). A click flips the node's Enabled at once. The furnace's card
 /// adds its fuel lines, the Grow-Lamp's the plots it covers.
+/// Process switcher (#146): a Combination Chamber's placed card lists its process rows as buttons (the selected one
+/// outlined); a click switches the chamber's process at once while it's idle and empty, otherwise once its current cycle
+/// is out (a line says so; clicking the running row cancels). Its lines carry the process, the cycle's state or stall
+/// reason, what's staged or held, and the stores on its network.
 /// </summary>
 [DisallowMultipleComponent]
 public class DetailCard : MonoBehaviour
@@ -61,6 +65,8 @@ public class DetailCard : MonoBehaviour
     [SerializeField] private float toggleWidth = 110f;       // #143: the placed card's Enable/Disable button
     [SerializeField] private float toggleHeight = 24f;
     [SerializeField] private int toggleFontSize = 12;
+    [SerializeField] private float processButtonHeight = 22f; // #146: one chamber process per button
+    [SerializeField] private float processButtonGap = 3f;
     [SerializeField] private float refreshSeconds = 0.25f;   // How often counts and affordability re-check (unscaled)
 
     [Header("Colors")]
@@ -121,6 +127,8 @@ public class DetailCard : MonoBehaviour
     private Button toggleButton; // #143: placed mode, power nodes only
     private Image toggleImage;
     private Text toggleText;
+    private RectTransform processList; // #146: placed mode, chambers only
+    private readonly List<(Button button, Image image, Text label)> processButtons = new List<(Button, Image, Text)>();
 
     private sealed class ChipView
     {
@@ -388,6 +396,8 @@ public class DetailCard : MonoBehaviour
                     : null;
             case BuildStat.ManaCollection: // #145
                 return $"Collects {manager.AccumulatorCollectPerCycle} mana per {Number(manager.AccumulatorCollectSeconds, "0.#")} s from beside it";
+            case BuildStat.ManaProcesses: // #146: the host's rows in the process table
+                return ProcessesStatLine(manager.ManaFlow != null ? manager.ManaFlow.RowsFor(type) : null);
             default:
                 return null;
         }
@@ -443,6 +453,12 @@ public class DetailCard : MonoBehaviour
             lines.AddRange(ContainerLines(container.Store.Type, container.Store.Amount, container.Store.Capacity,
                 mana != null && mana.NetworkAt(container.Tile) >= 0));
         }
+        if (placeable.TryGetComponent(out CombinationChamber chamber)) // #146
+        {
+            ManaFlow mana = chamber.Flow;
+            bool onPipe = mana != null && mana.NetworkAt(chamber.Tile) >= 0;
+            lines.AddRange(ChamberLines(chamber.Processor, onPipe, onPipe ? mana.PortsOnNetworkOf(chamber.Tile) : null));
+        }
 
         if (placeable.TryGetComponent(out PowerNode node) && node.Role != PowerRole.None)
         {
@@ -478,6 +494,79 @@ public class DetailCard : MonoBehaviour
             onPipe ? $"On a pipe · keeps {reserve}, the rest flows to containers" : "Not on a pipe · keeps what it collects",
         };
         return lines;
+    }
+
+    /// <summary>
+    /// The chamber's lines (#146): its process; its state ("Running 40% · 4.0/10 s", "Drawing inputs", "Depositing",
+    /// or "Stalled: Missing Water" / "Stalled: No room for output"); what's staged ("Staged: Fire 2/2 · Water 1/2") or
+    /// held ("Holding: Air 3"); the stores on its network; and a waiting switch ("Switching to … after this cycle").
+    /// </summary>
+    public static List<string> ChamberLines(ManaProcessor processor, bool onPipe, List<IManaPort> networkStores)
+    {
+        var lines = new List<string>();
+        if (processor == null) return lines;
+        ManaProcessRow row = processor.Row;
+        lines.Add(row != null ? $"Process: {row.Name}" : "No process");
+        lines.Add(ChamberStateLine(processor));
+        if (row != null && !processor.IsRunning && !processor.IsHolding)
+        {
+            var staged = new List<string>();
+            foreach (ManaAmount input in row.inputs)
+                if (input != null) staged.Add($"{input.type} {processor.StagedOf(input.type)}/{row.InputOf(input.type)}");
+            lines.Add("Staged: " + string.Join(" · ", staged));
+        }
+        if (processor.IsHolding)
+        {
+            var held = new List<string>();
+            foreach (string type in processor.HeldTypes()) held.Add($"{type} {processor.HeldOf(type)}");
+            lines.Add("Holding: " + string.Join(" · ", held));
+        }
+        lines.Add(onPipe ? $"On a pipe · {StoresSummary(networkStores)}" : "Not on a pipe · lay pipe onto its tile to connect it");
+        if (processor.PendingRow != null) lines.Add($"Switching to {processor.PendingRow.Name} after this cycle");
+        return lines;
+    }
+
+    /// <summary>The chamber's state line (#146): stalls first, then running, depositing, or drawing.</summary>
+    public static string ChamberStateLine(ManaProcessor processor)
+    {
+        if (processor == null || processor.Row == null) return "Idle";
+        if (processor.Stall != ManaProcessorStall.None) return $"Stalled: {processor.StallText}";
+        if (processor.IsRunning)
+            return $"Running {Mathf.FloorToInt(processor.Progress * 100f)}% · {Number(processor.ProgressSeconds, "0.0")}/{Number(processor.Row.cycleSeconds, "0.#")} s";
+        return processor.IsHolding ? "Depositing" : "Drawing inputs";
+    }
+
+    /// <summary>The network's stores (#146): "3 stores · Fire 40 · Water 12 · 1 empty", or "no stores on its network".</summary>
+    public static string StoresSummary(List<IManaPort> stores)
+    {
+        if (stores == null || stores.Count == 0) return "no stores on its network";
+        var totals = new List<(string type, int amount)>();
+        int empty = 0;
+        foreach (IManaPort port in stores)
+        {
+            ManaStore store = port?.Store;
+            if (store == null || store.Type == null || store.Amount == 0)
+            {
+                empty++;
+                continue;
+            }
+            int i = totals.FindIndex(t => t.type == store.Type);
+            if (i < 0) totals.Add((store.Type, store.Amount));
+            else totals[i] = (store.Type, totals[i].amount + store.Amount);
+        }
+        var parts = new List<string> { stores.Count == 1 ? "1 store" : $"{stores.Count} stores" };
+        foreach ((string type, int amount) in totals) parts.Add($"{type} {amount}");
+        if (empty > 0) parts.Add($"{empty} empty");
+        return string.Join(" · ", parts);
+    }
+
+    /// <summary>A process host's stat line (#146): "Runs one of 3 processes · 10 s cycles"; null with no rows.</summary>
+    public static string ProcessesStatLine(List<ManaProcessRow> rows)
+    {
+        if (rows == null || rows.Count == 0) return null;
+        bool sameCycle = rows.TrueForAll(r => Mathf.Approximately(r.cycleSeconds, rows[0].cycleSeconds));
+        string count = rows.Count == 1 ? "Runs 1 process" : $"Runs one of {rows.Count} processes";
+        return sameCycle ? $"{count} · {Number(rows[0].cycleSeconds, "0.#")} s cycles" : count;
     }
 
     /// <summary>The container's lines (#145): "Fire 40/100" or the empty note, and whether a pipe reaches it.</summary>
@@ -604,6 +693,49 @@ public class DetailCard : MonoBehaviour
         return true;
     }
 
+    // ---- the process switcher (#146) ----
+
+    /// <summary>The shown placed building's chamber; null otherwise (and outside placed mode).</summary>
+    public CombinationChamber ShownChamber =>
+        IsPlacedMode && ShownPlaceable.TryGetComponent(out CombinationChamber chamber) ? chamber : null;
+
+    /// <summary>The card lists the chamber's processes: placed mode on a chamber.</summary>
+    public bool HasProcessSwitcher => ShownChamber != null;
+
+    /// <summary>The shown chamber's process names, in table order; empty with no chamber.</summary>
+    public List<string> ProcessOptionLabels
+    {
+        get
+        {
+            var labels = new List<string>();
+            CombinationChamber chamber = ShownChamber;
+            if (chamber == null) return labels;
+            foreach (ManaProcessRow row in chamber.Rows) labels.Add(row.Name);
+            return labels;
+        }
+    }
+
+    /// <summary>The shown chamber's running row's index (-1 with no chamber).</summary>
+    public int SelectedProcessIndex => ShownChamber?.SelectedIndex ?? -1;
+
+    /// <summary>Whether a click may switch the shown chamber's process now: only while it's idle and empty.</summary>
+    public bool CanSwitchProcess => ShownChamber?.Processor.CanSwitch ?? false;
+
+    /// <summary>The shown chamber's waiting switch's index (-1 for none).</summary>
+    public int PendingProcessIndex => ShownChamber?.PendingIndex ?? -1;
+
+    /// <summary>
+    /// A process button's click: asks the shown chamber for that row (at once when idle and empty, else after its cycle)
+    /// and repaints. False (nothing changes) with no chamber or a bad index.
+    /// </summary>
+    public bool SelectShownProcess(int index)
+    {
+        CombinationChamber chamber = ShownChamber;
+        if (chamber == null || !chamber.RequestProcess(index)) return false;
+        Repaint();
+        return true;
+    }
+
     /// <summary>
     /// One chip per material the armed type can be ordered in (the controller's AvailableMaterials, in that order):
     /// its cost for this type, the amount owned, whether it is the selected material and whether an order in it would
@@ -681,6 +813,10 @@ public class DetailCard : MonoBehaviour
         hintText.text = HintText;
         waitingText = CreateText(cardGo.transform, "Waiting", statFontSize, Color.white, TextAnchor.UpperLeft);
         CreateToggle(cardGo.transform);
+        var processGo = new GameObject("Processes", typeof(RectTransform)); // #146: the chamber's process buttons
+        processGo.transform.SetParent(cardGo.transform, false);
+        processList = (RectTransform)processGo.transform;
+        processButtons.Clear();
 
         chromeWired = true; // Chips are built (and wired) later, by Repaint, under this same flag
         Repaint();
@@ -706,6 +842,8 @@ public class DetailCard : MonoBehaviour
         toggleButton = null;
         toggleImage = null;
         toggleText = null;
+        processList = null;
+        processButtons.Clear();
     }
 
     private static void DestroyChromeObject(Object target)
@@ -730,6 +868,8 @@ public class DetailCard : MonoBehaviour
         bool materialMode = IsMaterialMode;
         bool hasToggle = !materialMode && HasToggle;
         if (toggleButton != null) toggleButton.gameObject.SetActive(hasToggle);
+        bool hasProcesses = !materialMode && HasProcessSwitcher;
+        if (processList != null) processList.gameObject.SetActive(hasProcesses);
         if (onHandText != null) onHandText.gameObject.SetActive(materialMode);
         if (waitingText != null) waitingText.gameObject.SetActive(materialMode);
         if (hintText != null)
@@ -794,6 +934,15 @@ public class DetailCard : MonoBehaviour
             if (toggleImage != null) toggleImage.color = on ? toggleOnColor : toggleOffColor;
             PlaceTopLeft((RectTransform)toggleButton.transform, padding, y, toggleWidth, toggleHeight);
             y += toggleHeight + sectionGap;
+        }
+
+        if (hasProcesses && processList != null)
+        {
+            List<string> labels = ProcessOptionLabels;
+            float height = labels.Count * processButtonHeight + Mathf.Max(0, labels.Count - 1) * processButtonGap;
+            PlaceTopLeft(processList, padding, y, inner, height);
+            RepaintProcessButtons(labels, inner);
+            y += height + sectionGap;
         }
 
         List<Chip> chips = Chips();
@@ -1002,6 +1151,42 @@ public class DetailCard : MonoBehaviour
         toggleText = CreateText(go.transform, "Label", toggleFontSize, Color.white, TextAnchor.MiddleCenter);
         Stretch(toggleText.rectTransform, 0f, 0f, 0f, 0f);
         go.SetActive(false);
+    }
+
+    // The chamber's process buttons (#146): one per row, the selected one outlined, inert while a switch isn't allowed.
+    private void RepaintProcessButtons(List<string> labels, float width)
+    {
+        if (processList == null) return;
+        processButtons.RemoveAll(b => b.button == null);
+        while (processButtons.Count < labels.Count) processButtons.Add(CreateProcessButton(processButtons.Count));
+        int selected = SelectedProcessIndex;
+        int pending = PendingProcessIndex;
+        for (int i = 0; i < processButtons.Count; i++)
+        {
+            (Button button, Image image, Text label) = processButtons[i];
+            bool shown = i < labels.Count;
+            button.gameObject.SetActive(shown);
+            if (!shown) continue;
+            PlaceTopLeft((RectTransform)button.transform, 0f, i * (processButtonHeight + processButtonGap), width, processButtonHeight);
+            image.color = i == selected ? chipSelectedColor : chipColor;
+            button.interactable = true; // The running row's button cancels a waiting switch
+            label.text = i == pending ? labels[i] + " (next)" : labels[i];
+        }
+    }
+
+    private (Button, Image, Text) CreateProcessButton(int index)
+    {
+        var go = new GameObject("Process" + index);
+        go.transform.SetParent(processList, false);
+        go.AddComponent<RectTransform>();
+        Image image = go.AddComponent<Image>();
+        image.color = chipColor;
+        Button button = go.AddComponent<Button>();
+        button.targetGraphic = image;
+        button.onClick.AddListener(() => SelectShownProcess(index));
+        Text label = CreateText(go.transform, "Label", toggleFontSize, Color.white, TextAnchor.MiddleCenter);
+        Stretch(label.rectTransform, 0f, 0f, 0f, 0f);
+        return (button, image, label);
     }
 
     // A material chip's name starts right of its swatch.

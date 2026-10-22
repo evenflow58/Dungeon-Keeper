@@ -41,6 +41,7 @@ public class PlacementManager : MonoBehaviour, IFuelStore
     [SerializeField] private Color growLampColor = new Color(1.00f, 0.86f, 0.45f, 1f);     // #143: warm lamp glass
     [SerializeField] private Color accumulatorColor = new Color(0.66f, 0.48f, 1.00f, 1f);  // #145: the mana crystal
     [SerializeField] private Color manaContainerColor = new Color(0.34f, 0.30f, 0.44f, 1f); // #145: the tank's dark body
+    [SerializeField] private Color combinationChamberColor = new Color(0.46f, 0.44f, 0.52f, 1f); // #146: the vessel's stone
     [SerializeField] private float placeableSize = 0.8f;                                    // Fraction of a tile
 
     // Placeables are runtime-created (no Inspector presence), so their behavior config lives here.
@@ -76,6 +77,7 @@ public class PlacementManager : MonoBehaviour, IFuelStore
     [SerializeField] private float growLampBuildSeconds = 5f; // #143
     [SerializeField] private float accumulatorBuildSeconds = 6f;   // #145
     [SerializeField] private float manaContainerBuildSeconds = 6f; // #145
+    [SerializeField] private float combinationChamberBuildSeconds = 10f; // #146
 
     // What an order costs (#104), per type AND material (#109): a type is orderable in a material exactly when a row
     // exists. Ships with every type in Stone, Glimmerstone (#114) and Deepstone (#111); later materials add rows, not fields.
@@ -106,6 +108,9 @@ public class PlacementManager : MonoBehaviour, IFuelStore
         new PlaceableCost(PlaceableType.ManaContainer, MaterialType.Stone, 6),        // #145
         new PlaceableCost(PlaceableType.ManaContainer, MaterialType.Glimmerstone, 6),
         new PlaceableCost(PlaceableType.ManaContainer, MaterialType.Deepstone, 6),
+        new PlaceableCost(PlaceableType.CombinationChamber, MaterialType.Stone, 8),   // #146
+        new PlaceableCost(PlaceableType.CombinationChamber, MaterialType.Glimmerstone, 8),
+        new PlaceableCost(PlaceableType.CombinationChamber, MaterialType.Deepstone, 8),
     };
 
     // What each type does on a power grid (#142), the same row-table pattern as the costs: a type with no row has no role.
@@ -146,6 +151,7 @@ public class PlacementManager : MonoBehaviour, IFuelStore
     public int ManaContainerCapacity { get => manaContainerCapacity; set => manaContainerCapacity = value; }
     public float AccumulatorBuildSeconds { get => accumulatorBuildSeconds; set => accumulatorBuildSeconds = value; }
     public float ManaContainerBuildSeconds { get => manaContainerBuildSeconds; set => manaContainerBuildSeconds = value; }
+    public float CombinationChamberBuildSeconds { get => combinationChamberBuildSeconds; set => combinationChamberBuildSeconds = value; }
     public float ImpWheelBuildSeconds { get => impWheelBuildSeconds; set => impWheelBuildSeconds = value; }
     public float FurnaceBuildSeconds { get => furnaceBuildSeconds; set => furnaceBuildSeconds = value; }
     public float GrowLampBuildSeconds { get => growLampBuildSeconds; set => growLampBuildSeconds = value; }
@@ -290,6 +296,7 @@ public class PlacementManager : MonoBehaviour, IFuelStore
             case PlaceableType.GrowLamp: return growLampBuildSeconds;
             case PlaceableType.Accumulator: return accumulatorBuildSeconds;
             case PlaceableType.ManaContainer: return manaContainerBuildSeconds;
+            case PlaceableType.CombinationChamber: return combinationChamberBuildSeconds;
             default: return 0f;
         }
     }
@@ -419,7 +426,8 @@ public class PlacementManager : MonoBehaviour, IFuelStore
         foreach (Placeable p in placed.Values)
         {
             if (p == null) continue;
-            p.SetSeeThrough(PowerOverlay.SeesThrough(mode, p.TryGetComponent(out PowerNode _), p.TryGetComponent(out IManaPort _)), alpha);
+            p.SetSeeThrough(PowerOverlay.SeesThrough(mode, p.TryGetComponent(out PowerNode _),
+                p.TryGetComponent(out IManaPort _) || p.TryGetComponent(out IManaProcessorHost _)), alpha); // #146: chambers stay solid too
         }
     }
 
@@ -515,6 +523,9 @@ public class PlacementManager : MonoBehaviour, IFuelStore
     /// <summary>All placed Mana Containers (#145), sites included, in scan order.</summary>
     public List<ManaContainer> GetManaContainers() => Collect<ManaContainer>(PlaceableType.ManaContainer, builtOnly: false);
 
+    /// <summary>All placed Combination Chambers (#146), sites included, in scan order.</summary>
+    public List<CombinationChamber> GetCombinationChambers() => Collect<CombinationChamber>(PlaceableType.CombinationChamber, builtOnly: false);
+
     /// <summary>Built Imp Wheels' power nodes (#142), in scan order: the wheels an imp can operate.</summary>
     public List<PowerNode> GetBuiltWheels() => Collect<PowerNode>(PlaceableType.ImpWheel, builtOnly: true);
 
@@ -592,6 +603,8 @@ public class PlacementManager : MonoBehaviour, IFuelStore
             go.AddComponent<Accumulator>().Initialize(manaFlow, accumulatorCapacity, accumulatorCollectSeconds, accumulatorCollectPerCycle);
         else if (type == PlaceableType.ManaContainer)
             go.AddComponent<ManaContainer>().Initialize(manaFlow, manaContainerCapacity);
+        else if (type == PlaceableType.CombinationChamber) // #146: runs its first table row; no power row
+            go.AddComponent<CombinationChamber>().Initialize(manaFlow);
         if (TryGetPower(type, out PlaceablePower powerRow) && powerRow.role != PowerRole.None)
         {
             var node = go.AddComponent<PowerNode>();
@@ -664,6 +677,7 @@ public class PlacementManager : MonoBehaviour, IFuelStore
             case PlaceableType.GrowLamp: return growLampColor;
             case PlaceableType.Accumulator: return accumulatorColor;
             case PlaceableType.ManaContainer: return manaContainerColor;
+            case PlaceableType.CombinationChamber: return combinationChamberColor;
             default: return Color.magenta;
         }
     }

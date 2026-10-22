@@ -275,6 +275,21 @@ public static class PropModel
         new Part("Ember", Shape.Box,    new Vector3(0f, 0.12f, 0f),       new Vector3(0.34f, 0.03f, 0.08f), ember, new Vector3(0f, 30f, 0f)),
     };
 
+    public const string FireVentGlowPart = "Ember";
+
+    // ---- Spring (#150): a ring of stones around a round, glowing pool (the Pool part glows) ----
+
+    public static Part[] SpringRecipe(Color stone, Color pool) => new[]
+    {
+        new Part("Rim",    Shape.Cylinder, new Vector3(0f, 0.04f, 0f),       new Vector3(0.78f, 0.04f, 0.78f), stone),
+        new Part("Stone0", Shape.Sphere,   new Vector3(0.3f, 0.07f, 0.12f),   new Vector3(0.2f, 0.14f, 0.18f), stone),
+        new Part("Stone1", Shape.Sphere,   new Vector3(-0.26f, 0.07f, 0.2f),  new Vector3(0.18f, 0.12f, 0.2f), stone),
+        new Part("Stone2", Shape.Sphere,   new Vector3(-0.1f, 0.07f, -0.3f),  new Vector3(0.22f, 0.13f, 0.16f), stone),
+        new Part("Pool",   Shape.Cylinder, new Vector3(0f, 0.085f, 0f),      new Vector3(0.52f, 0.01f, 0.52f), pool),
+    };
+
+    public const string SpringGlowPart = "Pool";
+
     // ---- The Heart: a faceted crystal on a low stone plinth ----
 
     public static Part[] HeartRecipe(float height, float width, Color crystal, Color plinth, float plinthHeight) => new[]

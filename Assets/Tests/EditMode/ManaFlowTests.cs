@@ -5,14 +5,15 @@ using UnityEngine;
 using Object = UnityEngine.Object;
 
 /// <summary>
-/// #145: the mana simulation. Occupancy (walls, the cap of 5, one type per tile, the vent's own tile closed), the pressure
+/// #145, #150: the mana simulation. Occupancy (walls, the cap of 5, one type per tile, the vent's own tile closed), the pressure
 /// flow (one unit per tile per tick to a random neighbor holding fewer, never uphill or sideways, never mixing types,
 /// seeded so a run replays exactly), the anti-jam contract (a packed tunnel empties, the vent's mouth never jams, a closed
 /// space evens out to within one unit and stays even, the vent fills every open tile to the cap and resumes after a
 /// collection), accumulators with no pull, the vent (entombed, emitting, saturated, resuming), stores (adopt,
 /// accept, forget, clamps), discovery and global totals, accumulator collection, the transfer pass (overflow above the
 /// reserve, adopt/skip, the throughput budget with its exact carry, own-tile attachment, independent networks,
-/// conservation), and the pipe layer with the imp building it.
+/// conservation), the pipe layer with the imp building it, and (#150) points of interest as data rows: the Spring, both
+/// types emitting and going dormant identically, two types sharing one space, and stores meeting a second type.
 /// </summary>
 public class ManaFlowTests
 {
@@ -28,6 +29,7 @@ public class ManaFlowTests
     private PlacementManager manager;
     private PowerGrid grid;
     private ManaFlow mana;
+    private ManaPointOfInterest vent;
     private Imp imp;
     private ImpDigger digger;
 
@@ -51,7 +53,7 @@ public class ManaFlowTests
         grid.Board = board;
         mana = managerGo.AddComponent<ManaFlow>();
         mana.Board = board;
-        mana.HasVent = false; // Tests that want the vent turn it on and place it
+        mana.ClearPointsOfInterest(); // Tests that want a point of interest add and place it
         manager = managerGo.AddComponent<PlacementManager>();
         manager.Board = board;
         manager.Renderer = boardRenderer;
@@ -285,11 +287,12 @@ public class ManaFlowTests
         for (int y = TunnelFloor; y <= TunnelTop; y++) board.SetTile(24, y, TileState.Floor);
     }
 
-    private void PlaceVentBelowTheTunnel()
+    private void PlaceVentBelowTheTunnel() => PlaceVent(T(24, TunnelFloor - 1));
+
+    private void PlaceVent(Vector2Int tile)
     {
-        mana.HasVent = true;
-        mana.VentTile = T(24, TunnelFloor - 1);
-        mana.CarveVent();
+        vent = mana.AddPointOfInterest(ManaFlow.FireVentName, tile, Fire, 2f);
+        mana.CarvePointsOfInterest();
     }
 
     private int InHall()
@@ -356,7 +359,7 @@ public class ManaFlowTests
         for (int i = 0; i < 3000; i++) // 60 s: thirty units, far short of the 215 the space holds
         {
             mana.Tick(Dt);
-            Assert.IsFalse(mana.VentDormant, $"Room everywhere: the vent's mouth never jams ({i * Dt:0.0} s)");
+            Assert.IsFalse(mana.IsDormant(vent), $"Room everywhere: the vent's mouth never jams ({i * Dt:0.0} s)");
         }
         Assert.Greater(InHall(), 0, "Mana reached the hall");
         Assert.That(mana.UnitCount, Is.InRange(29, 30), "One unit per 2 s, every one of them emitted (the 30th lands on the 60 s mark)");
@@ -413,7 +416,7 @@ public class ManaFlowTests
         // until the next flow tick passes a unit on, so wait for the space itself to fill.)
         for (int i = 0; i < 40000 && mana.UnitCount < full; i++) mana.Tick(step);
         for (int i = 0; i < 50; i++) mana.Tick(step);
-        Assert.IsTrue(mana.VentDormant, "Dormant by saturation");
+        Assert.IsTrue(mana.IsDormant(vent), "Dormant by saturation");
         foreach (Vector2Int t in space) Assert.AreEqual(mana.MaxManaPerTile, mana.UnitsAt(t), $"{t}: every open tile at the cap");
         Assert.AreEqual(full, mana.UnitCount);
         Assert.AreEqual(0, mana.FlowStep(), "Full: nothing moves");
@@ -421,7 +424,7 @@ public class ManaFlowTests
         Assert.IsTrue(mana.TryTakeUnit(T(21, 18), out _), "A collection in the far corner");
         for (int i = 0; i < 20000 && mana.UnitCount < full; i++) mana.Tick(step);
         Assert.AreEqual(full, mana.UnitCount, "The gap flowed back to the vent and it topped the space up");
-        Assert.IsTrue(mana.VentDormant, "Full again");
+        Assert.IsTrue(mana.IsDormant(vent), "Full again");
     }
 
     [Test]
@@ -468,20 +471,17 @@ public class ManaFlowTests
     public void Vent_EntombedIsDormant_DiggingOutANeighborWakesIt_EmittingAtItsInterval()
     {
         // The vent at (24,11), sealed by the rock row y=12 just below the cavern (21..26, 13..18).
-        mana.HasVent = true;
-        mana.VentTile = T(24, 11);
-        mana.CarveVent();
+        PlaceVent(T(24, 11));
         Assert.AreEqual(TileState.Floor, board.GetTile(24, 11), "The vent's own tile is carved");
         Assert.AreEqual(TileState.Rock, board.GetTile(24, 12), "Its pocket stays sealed");
         Assert.IsFalse(mana.IsOpen(T(24, 11)), "The vent's own tile is never a home for mana");
-        Assert.IsTrue(mana.VentDormant, "Entombed");
-        Assert.AreEqual(2f, mana.VentEmitSeconds, "Shipped interval");
+        Assert.IsTrue(mana.IsDormant(vent), "Entombed");
 
         for (int i = 0; i < 300; i++) mana.Tick(Dt); // 6 s
         Assert.AreEqual(0, mana.UnitCount, "Entombed: nothing emitted");
 
         board.SetTile(24, 12, TileState.Floor); // Dug out into the cavern
-        Assert.IsFalse(mana.VentDormant);
+        Assert.IsFalse(mana.IsDormant(vent));
         mana.Tick(Dt);
         Assert.AreEqual(1, mana.UnitsAt(T(24, 12)), "Held a full interval while dormant: emits the moment space frees");
         Assert.AreEqual(Fire, mana.TypeAt(T(24, 12)));
@@ -497,12 +497,11 @@ public class ManaFlowTests
     [Test]
     public void Vent_EmitsOntoTheFirstFreeNeighborInScanOrder()
     {
-        mana.HasVent = true;
-        mana.VentTile = T(22, 15); // In the cavern: all four neighbors open
-        Assert.IsTrue(mana.TryFindEmitTile(out Vector2Int tile));
+        vent = mana.AddPointOfInterest(ManaFlow.FireVentName, T(22, 15), Fire, 2f); // In the cavern: all four neighbors open
+        Assert.IsTrue(mana.TryFindEmitTile(vent, out Vector2Int tile));
         Assert.AreEqual(T(21, 15), tile, "Scan order: left (x-1) first");
         Assert.IsTrue(mana.TryAddUnit(T(21, 15), Water)); // Another type there: not a home for Fire
-        Assert.IsTrue(mana.TryFindEmitTile(out tile));
+        Assert.IsTrue(mana.TryFindEmitTile(vent, out tile));
         Assert.AreEqual(T(22, 14), tile, "Then down (y-1)");
     }
 
@@ -510,24 +509,26 @@ public class ManaFlowTests
     public void Vent_SaturatedGoesDormant_AndResumesOnItsOwnWhenSpaceFrees()
     {
         // A vent at (10,5) whose only open neighbor (10,6) is a dead end: once that holds 5 units, nowhere has room.
-        mana.HasVent = true;
-        mana.VentTile = T(10, 5);
-        mana.CarveVent();
+        PlaceVent(T(10, 5));
         board.SetTile(10, 6, TileState.Floor);
         int changes = 0;
-        mana.VentChanged += () => changes++;
+        mana.PointOfInterestChanged += t =>
+        {
+            Assert.AreEqual(T(10, 5), t, "Announced with its tile");
+            changes++;
+        };
 
         for (int i = 0; i < 600; i++) mana.Tick(Dt); // 12 s
         Assert.AreEqual(5, mana.UnitsAt(T(10, 6)), "The dead end at the cap: nowhere for it to go (the vent's tile is closed)");
         Assert.AreEqual(5, mana.UnitCount);
-        Assert.IsTrue(mana.VentDormant, "Saturated: no free neighbor and nowhere to flow");
+        Assert.IsTrue(mana.IsDormant(vent), "Saturated: no free neighbor and nowhere to flow");
         int held = mana.UnitCount;
         for (int i = 0; i < 300; i++) mana.Tick(Dt);
         Assert.AreEqual(held, mana.UnitCount, "Dormant: emits nothing");
         Assert.Greater(changes, 0, "It announced going dormant");
 
         Assert.IsTrue(mana.TryTakeUnit(T(10, 6), out _), "An accumulator (or anyone) takes a unit");
-        Assert.IsFalse(mana.VentDormant, "Space freed");
+        Assert.IsFalse(mana.IsDormant(vent), "Space freed");
         mana.Tick(Dt);
         Assert.AreEqual(5, mana.UnitsAt(T(10, 6)), "Resumed unaided");
     }
@@ -843,5 +844,210 @@ public class ManaFlowTests
             out target, out _, out _, out conduit, out pipe, out _));
         Assert.IsTrue(pipe, "Alone, the pipe is the job");
         Assert.AreEqual(T(26, 16), target);
+    }
+
+    // ---- 8. points of interest as rows, the Spring, and a second type (#150) ----
+
+    [Test]
+    public void ShippedPointsOfInterest_TheFireVentAndTheSpring_EachInItsOwnSealedPocket()
+    {
+        var go = new GameObject("FreshMana");
+        try
+        {
+            var fresh = go.AddComponent<ManaFlow>();
+            fresh.Board = board;
+            Assert.AreEqual(2, fresh.PointsOfInterest.Count);
+            ManaPointOfInterest fireVent = fresh.PointsOfInterest[0];
+            Assert.AreEqual(ManaFlow.FireVentName, fireVent.displayName);
+            Assert.AreEqual(T(24, 5), fireVent.tile, "Deep in the rock south of the cavern");
+            Assert.AreEqual(Fire, fireVent.manaType);
+            Assert.AreEqual(2f, fireVent.emitSeconds, "Shipped interval");
+            ManaPointOfInterest spring = fresh.PointsOfInterest[1];
+            Assert.AreEqual("Spring", spring.displayName);
+            Assert.AreEqual(T(20, 27), spring.tile, "Shallow: west of the entrance column (24,31)");
+            Assert.AreEqual(Water, spring.manaType);
+            Assert.AreEqual(2f, spring.emitSeconds);
+
+            fresh.CarvePointsOfInterest();
+            foreach (ManaPointOfInterest point in fresh.PointsOfInterest)
+            {
+                Assert.AreEqual(TileState.Floor, board.GetTile(point.tile.x, point.tile.y), $"{point.displayName}: its own tile carved");
+                Assert.IsFalse(fresh.IsOpen(point.tile), $"{point.displayName}: its own tile is never a home for mana");
+                foreach (Vector2Int d in new[] { Vector2Int.right, Vector2Int.up, Vector2Int.left, Vector2Int.down })
+                    Assert.AreEqual(TileState.Rock, board.GetTile(point.tile.x + d.x, point.tile.y + d.y), $"{point.displayName}: sealed");
+                Assert.IsTrue(fresh.IsDormant(point), $"{point.displayName}: entombed at start");
+                Assert.AreSame(point, fresh.PointOfInterestAt(point.tile));
+            }
+            Assert.IsNull(fresh.PointOfInterestAt(T(24, 16)), "Not every tile is a point");
+        }
+        finally { Object.DestroyImmediate(go); }
+    }
+
+    // The Spring's pocket for the parity test: four tiles dug beside it, only (20,28) touching it.
+    private static readonly Vector2Int[] SpringPocket = { new Vector2Int(20, 28), new Vector2Int(19, 28), new Vector2Int(21, 28), new Vector2Int(20, 29) };
+
+    [TestCase(ManaFlow.WaterId)]
+    [TestCase(ManaFlow.FireId)]
+    public void PointOfInterest_AnyType_SealedDormant_DugOutEmits_SaturatesItsPocket_ResumesAfterACollection(string type)
+    {
+        // The same scenario for either type, with the same exact counts: the row's type is the only thing that differs.
+        ManaPointOfInterest spring = mana.AddPointOfInterest(ManaFlow.SpringName, T(20, 27), type, 2f);
+        mana.CarvePointsOfInterest();
+        int changes = 0;
+        mana.PointOfInterestChanged += t => changes++;
+        Assert.IsTrue(mana.IsDormant(spring), "Sealed: dormant");
+        for (int i = 0; i < 300; i++) mana.Tick(Dt); // 6 s
+        Assert.AreEqual(0, mana.UnitCount, "Sealed: nothing emitted");
+
+        Open(SpringPocket);
+        Assert.IsFalse(mana.IsDormant(spring), "Dug out");
+        mana.Tick(Dt);
+        Assert.AreEqual(1, mana.UnitsAt(T(20, 28)), "Emits the moment it has room");
+        Assert.AreEqual(type, mana.TypeAt(T(20, 28)), "Its own type");
+        for (int i = 0; i < 500; i++) mana.Tick(Dt); // 10 s more
+        Assert.AreEqual(6, mana.UnitCount, "One unit per 2 s");
+
+        int full = SpringPocket.Length * mana.MaxManaPerTile;
+        for (int i = 0; i < 4000 && mana.UnitCount < full; i++) mana.Tick(0.1f);
+        for (int i = 0; i < 50; i++) mana.Tick(0.1f);
+        Assert.AreEqual(full, mana.UnitCount, "The pocket filled");
+        foreach (Vector2Int t in SpringPocket)
+        {
+            Assert.AreEqual(mana.MaxManaPerTile, mana.UnitsAt(t), $"{t} at the cap");
+            Assert.AreEqual(type, mana.TypeAt(t));
+        }
+        Assert.IsTrue(mana.IsDormant(spring), "Dormant by saturation");
+        Assert.Greater(changes, 0, "It announced its state changes");
+
+        Assert.IsTrue(mana.TryTakeUnit(T(20, 29), out string took), "A collection at the pocket's far end");
+        Assert.AreEqual(type, took);
+        for (int i = 0; i < 2000 && mana.UnitCount < full; i++) mana.Tick(0.1f);
+        Assert.AreEqual(full, mana.UnitCount, "The gap flowed back and it topped the pocket up");
+        Assert.IsTrue(mana.IsDormant(spring), "Full again");
+    }
+
+    // Units of a type on the board.
+    private int UnitsOf(string type)
+    {
+        int n = 0;
+        foreach (Vector2Int t in mana.OccupiedTiles()) if (mana.TypeAt(t) == type) n += mana.UnitsAt(t);
+        return n;
+    }
+
+    [Test]
+    public void TwoTypes_OneHall_NoSources_EachTypeConservedEveryTick_AndNeverShareATile()
+    {
+        // A Fire crowd in the hall's west columns and a Water crowd in its east columns, nothing emitting or collecting.
+        for (int y = 13; y <= 18; y++)
+        {
+            for (int i = 0; i < 5; i++) Assert.IsTrue(mana.TryAddUnit(T(21, y), Fire));
+            for (int i = 0; i < 5; i++) Assert.IsTrue(mana.TryAddUnit(T(26, y), Water));
+        }
+        int fire = UnitsOf(Fire), water = UnitsOf(Water);
+        Assert.AreEqual(30, fire);
+        Assert.AreEqual(30, water);
+
+        bool met = false;
+        for (int step = 0; step < 400; step++) // 200 s
+        {
+            mana.FlowStep();
+            Assert.AreEqual(fire, UnitsOf(Fire), $"Tick {step}: Fire conserved");
+            Assert.AreEqual(water, UnitsOf(Water), $"Tick {step}: Water conserved");
+            foreach (Vector2Int t in mana.OccupiedTiles())
+            {
+                Assert.LessOrEqual(mana.UnitsAt(t), mana.MaxManaPerTile, $"{t}: never past the cap");
+                foreach (Vector2Int d in new[] { Vector2Int.right, Vector2Int.up })
+                {
+                    string other = mana.TypeAt(t + d);
+                    if (other != null && other != mana.TypeAt(t)) met = true;
+                }
+            }
+        }
+        Assert.IsTrue(met, "The fronts met: Fire and Water side by side, each on its own tiles");
+        Assert.Less(mana.UnitsAt(T(21, 15)), 5, "Fire spread out of its column");
+        Assert.Less(mana.UnitsAt(T(26, 15)), 5, "Water spread out of its column");
+    }
+
+    [Test]
+    public void BothPointsLive_InOneSpace_BothTypesGrowByTheirEmissions_DormantOnlyWhenTheMouthIsTaken()
+    {
+        PlaceVentBelowTheTunnel();
+        DigTunnel();
+        // A Spring at the hall's north wall, its mouth (24,18) in the hall: both points feed the one connected space.
+        ManaPointOfInterest spring = mana.AddPointOfInterest(ManaFlow.SpringName, T(24, 19), Water, 2f);
+        mana.CarvePointsOfInterest();
+
+        int lastFire = 0, lastWater = 0;
+        for (int i = 0; i < 3000; i++) // 60 s: about 30 of each, far short of the 215 the space holds
+        {
+            mana.Tick(Dt);
+            int f = UnitsOf(Fire), w = UnitsOf(Water);
+            Assert.GreaterOrEqual(f, lastFire, "Fire only grows: nothing collects");
+            Assert.GreaterOrEqual(w, lastWater, "Water only grows");
+            Assert.AreEqual(mana.UnitCount, f + w, "Every unit is one type or the other");
+            lastFire = f;
+            lastWater = w;
+            // A one-mouth point reads dormant while its mouth is at the cap or holds the other type: the shipped rule,
+            // never anything else.
+            Assert.AreEqual(!mana.CanAccept(T(24, TunnelFloor), Fire), mana.IsDormant(vent), $"The vent ({i * Dt:0.0} s)");
+            Assert.AreEqual(!mana.CanAccept(T(24, 18), Water), mana.IsDormant(spring), $"The Spring ({i * Dt:0.0} s)");
+        }
+        Assert.Greater(lastFire, 20, "Fire kept coming: about one per 2 s");
+        Assert.Greater(lastWater, 20, "Water kept coming: about one per 2 s");
+        int fireInHall = 0;
+        foreach (Vector2Int t in mana.OccupiedTiles()) if (t.y >= HallFloor && mana.TypeAt(t) == Fire) fireInHall += mana.UnitsAt(t);
+        Assert.Greater(fireInHall, 0, "Fire reached the hall, where the Water is");
+    }
+
+    [Test]
+    public void Accumulator_HoldingFire_IgnoresWaterBesideIt_OnceEmptiedItAdoptsWater_AndViceVersa()
+    {
+        mana.FlowTickSeconds = 1000f; // Hold units still so the counts are exact
+        Accumulator accumulator = BuiltAccumulator(T(23, 15));
+        Assert.AreEqual(3, accumulator.Buffer.Deposit(Fire, 3));
+        for (int i = 0; i < 2; i++) Assert.IsTrue(mana.TryAddUnit(T(22, 15), Water));
+
+        for (int i = 0; i < 300; i++) mana.Tick(Dt); // 6 s: six collection cycles
+        Assert.AreEqual(3, accumulator.Buffer.Amount, "Holding Fire: collected zero Water");
+        Assert.AreEqual(Fire, accumulator.Buffer.Type);
+        Assert.AreEqual(2, mana.UnitsAt(T(22, 15)), "The Water stays put");
+
+        Assert.AreEqual(3, accumulator.Buffer.Withdraw(3), "Emptied (spent, or piped away)");
+        Assert.IsNull(accumulator.Buffer.Type, "Forgets Fire");
+        int ticks = 0;
+        while (accumulator.Buffer.IsEmpty && ticks < 100) { mana.Tick(Dt); ticks++; }
+        Assert.LessOrEqual(ticks, 51, "Within its next cycle");
+        Assert.AreEqual(Water, accumulator.Buffer.Type, "Adopted Water");
+        Assert.AreEqual(1, accumulator.Buffer.Amount);
+
+        Assert.IsTrue(mana.TryAddUnit(T(24, 15), Fire));
+        for (int i = 0; i < 100; i++) mana.Tick(Dt); // 2 s
+        Assert.AreEqual(2, accumulator.Buffer.Amount, "The second Water came in");
+        Assert.AreEqual(Water, accumulator.Buffer.Type);
+        Assert.AreEqual(1, mana.UnitsAt(T(24, 15)), "...and now the Fire beside it is the one ignored");
+    }
+
+    [Test]
+    public void Container_HoldingFire_RefusesPipedWater_OnceEmptiedItAdoptsWater()
+    {
+        mana.FlowTickSeconds = 1000f;
+        Accumulator accumulator = BuiltAccumulator(T(22, 14));
+        ManaContainer tank = BuiltContainer(T(23, 14));
+        BuildPipe(T(22, 14), T(23, 14));
+        accumulator.Buffer.Deposit(Water, 15);
+        tank.Store.Deposit(Fire, 4);
+
+        for (int i = 0; i < 100; i++) mana.Tick(Dt); // 2 s: the pass would move 10 if it could
+        Assert.AreEqual(4, tank.Store.Amount, "Holding Fire: no Water piped in");
+        Assert.AreEqual(Fire, tank.Store.Type);
+        Assert.AreEqual(15, accumulator.Buffer.Amount, "The Water waits in the accumulator");
+
+        tank.Store.Withdraw(4);
+        for (int i = 0; i < 150; i++) mana.Tick(Dt); // 3 s: room for the whole 10 at 5/s
+        Assert.AreEqual(Water, tank.Store.Type, "Emptied: it adopted Water");
+        Assert.AreEqual(10, tank.Store.Amount, "Everything above the reserve");
+        Assert.AreEqual(5, accumulator.Buffer.Amount);
+        Assert.AreEqual(15, mana.TotalOf(Water), "Conserved across the two stores");
+        Assert.IsTrue(mana.IsDiscovered(Fire) && mana.IsDiscovered(Water), "Both types discovered in one session");
     }
 }

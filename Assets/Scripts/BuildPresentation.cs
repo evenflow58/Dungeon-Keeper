@@ -114,7 +114,7 @@ public static class BuildPresentation
             "A warm lamp that speeds up nearby mushroom plots while it has power.", new Color(1.00f, 0.86f, 0.45f, 1f),
             BuildStat.PowerDraw, BuildStat.LampCoverage),
         new Entry(PlaceableType.Accumulator, BuildCategory.Magic, "Accumulator",
-            "Draws nearby mana toward it and into its buffer. Pipe it to a container to store the overflow.",
+            "Collects the mana that drifts beside it into its buffer. Pipe it to a container to store the overflow.",
             new Color(0.66f, 0.48f, 1.00f, 1f), BuildStat.ManaCapacity, BuildStat.ManaCollection),
         new Entry(PlaceableType.ManaContainer, BuildCategory.Magic, "Mana Container",
             "Bulk mana storage for one type at a time. It only fills and drains through pipes.",

@@ -362,7 +362,7 @@ public class ManaChromeTests
 
         Assert.AreEqual("Holds up to 20 mana", DetailCard.StatLine(BuildStat.ManaCapacity, manager, PlaceableType.Accumulator, MaterialType.Stone));
         Assert.AreEqual("Holds up to 100 mana of one type", DetailCard.StatLine(BuildStat.ManaCapacity, manager, PlaceableType.ManaContainer, MaterialType.Stone));
-        Assert.AreEqual("Collects 1 mana per 1 s from beside it · draws mana within 4 tiles", DetailCard.StatLine(BuildStat.ManaCollection, manager, PlaceableType.Accumulator, MaterialType.Stone));
+        Assert.AreEqual("Collects 1 mana per 1 s from beside it", DetailCard.StatLine(BuildStat.ManaCollection, manager, PlaceableType.Accumulator, MaterialType.Stone));
         CollectionAssert.AreEqual(new[] { "Imp time: 0.5s per tile", "Carries up to 5 mana/s per network", "No material cost · Removing is instant, no refund" },
             DetailCard.PipeLines(mana));
         CollectionAssert.IsEmpty(DetailCard.PipeLines(null));

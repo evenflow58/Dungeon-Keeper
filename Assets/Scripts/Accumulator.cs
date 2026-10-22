@@ -4,10 +4,9 @@ using UnityEngine;
 /// <summary>
 /// The Accumulator (#145): a Magic placeable that draws mana units off the tiles beside it into its buffer (a ManaStore,
 /// so it adopts the first type it takes and only that type until emptied). Every collectSeconds it takes up to
-/// collectPerCycle units from its own tile, then its 4-neighbors in board scan order (its pull draws mana right under it), leaving units of another type in place; a full buffer
-/// stops collecting. While it has room it also pulls: mana within PullRadius tiles feels a suction toward it (ManaFlow's
-/// pressure), so nearby mana drifts in to be collected; farther mana is drawn in by the emptier patch it leaves, not by
-/// the accumulator itself. Its pipe port is output-only: on a pipe network it overflows what's above the reserve into
+/// collectPerCycle units from its own tile, then its 4-neighbors in board scan order (mana may sit under a building),
+/// leaving units of another type in place; a full buffer stops collecting. It doesn't pull: taking units leaves a dip that
+/// ManaFlow's diffusion refills, so it sips at the rate mana diffuses in. Its pipe port is output-only: on a pipe network it overflows what's above the reserve into
 /// containers (ManaFlow's transfer pass). The ManaFlow clock drives collection; a construction site does nothing.
 /// No power behavior in this story.
 /// </summary>
@@ -28,30 +27,16 @@ public class Accumulator : MonoBehaviour, IManaPort
     public int CollectPerCycle { get; private set; } = 1;
     public float RecentWindowSeconds => recentWindowSeconds;
 
-    /// <summary>How far its pull reaches, in tiles (Manhattan).</summary>
-    public int PullRadius { get; private set; }
-
-    /// <summary>The pull's strength at the accumulator itself (density runs 0–1), fading to 0 past PullRadius.</summary>
-    public float Suction { get; private set; }
-
-    /// <summary>Pulling now: built, with room in its buffer. A site, or a full buffer, pulls nothing.</summary>
-    public bool IsPulling => IsBuilt && !Buffer.IsFull && Suction > 0f;
-
     private float collectTimer;
     private readonly List<float> collectedAt = new List<float>(); // Sim times of recent units, for the card
 
-    /// <summary>
-    /// Called once by PlacementManager at placement: the service, the buffer's capacity, the collection cycle, and the pull's
-    /// reach and strength.
-    /// </summary>
-    public void Initialize(ManaFlow flow, int capacity, float collectSeconds, int collectPerCycle, int pullRadius = 0, float suction = 0f)
+    /// <summary>Called once by PlacementManager at placement: the service, the buffer's capacity, and the collection cycle.</summary>
+    public void Initialize(ManaFlow flow, int capacity, float collectSeconds, int collectPerCycle)
     {
         Flow = flow;
         Buffer = new ManaStore(capacity);
         CollectSeconds = collectSeconds;
         CollectPerCycle = Mathf.Max(0, collectPerCycle);
-        PullRadius = Mathf.Max(0, pullRadius);
-        Suction = Mathf.Max(0f, suction);
     }
 
     /// <summary>Placeable.CompleteConstruction calls this: the finished accumulator joins the service.</summary>

@@ -350,6 +350,49 @@ public class CombinationChamberTests
         Assert.AreEqual("3 Storm → 2 Lightning", processor.Row.Name);
     }
 
+    [Test]
+    public void QueuedSwitch_MidCycle_FinishesAndDepositsTheCycle_DrawsNothingNew_ThenSwitches()
+    {
+        ManaContainer fireTank = Tank(T(21, 15), Fire, 20);
+        ManaContainer waterTank = Tank(T(22, 15), Water, 20);
+        CombinationChamber chamber = Chamber(T(23, 15));
+        ManaContainer airTank = Tank(T(24, 15));
+        ManaProcessor processor = chamber.Processor;
+        RunUntil(() => processor.IsRunning, 3f);
+
+        Assert.IsFalse(chamber.SelectProcess(1), "Running: an immediate switch is refused");
+        Assert.IsTrue(chamber.RequestProcess(1), "...but the switch can wait");
+        Assert.AreEqual(1, chamber.PendingIndex);
+        Assert.AreEqual(0, chamber.SelectedIndex, "Still running the first row");
+
+        RunUntil(() => processor.CyclesCompleted == 1 && !processor.IsHolding, 15f);
+        Assert.AreEqual(3, airTank.Store.Amount, "The cycle it had started came out in full");
+        Assert.AreEqual(1, chamber.SelectedIndex, "Empty: switched");
+        Assert.AreEqual(-1, chamber.PendingIndex);
+        Assert.AreEqual(18, fireTank.Store.Amount, "No new Fire drawn for the old row");
+
+        RunUntil(() => processor.IsRunning, 3f);
+        Assert.AreEqual(1, airTank.Store.Amount, "The new row drew its Air");
+        Assert.AreEqual(16, waterTank.Store.Amount);
+        Assert.AreEqual(18, fireTank.Store.Amount, "...and no Fire: it isn't one of the new row's inputs");
+    }
+
+    [Test]
+    public void QueuedSwitch_WhileStalledWithABegunSet_FinishesTheSetFirst()
+    {
+        Tank(T(21, 15), Fire, 10);
+        CombinationChamber chamber = Chamber(T(23, 15));
+        Tank(T(24, 15), Air, 1);
+        BuildPipe(T(22, 15));
+        Run(2f);
+        Assert.AreEqual("Missing Water", chamber.Processor.StallText);
+        Assert.IsTrue(chamber.RequestProcess(2));
+        Run(5f);
+        Assert.AreEqual(0, chamber.SelectedIndex, "Its staged Fire is committed: it waits to finish that set");
+        Assert.AreEqual(2, chamber.Processor.StagedOf(Fire), "Nothing is stranded or thrown away");
+        Assert.AreEqual(10, mana.TotalOf(Fire));
+    }
+
     // ---- the chain, and no conversion in transit ----
 
     [Test]
@@ -443,8 +486,12 @@ public class CombinationChamberTests
             "Stalled: Missing Water",
             "Staged: Fire 2/2 · Water 0/2",
             "On a pipe · 2 stores · Fire 8 · 1 empty",
-            "Process locked until it's idle and empty",
         }, lines);
+        Assert.IsTrue(chamber.RequestProcess(2), "Partly staged: the switch waits");
+        lines = DetailCard.ChamberLines(chamber.Processor, true, mana.PortsOnNetworkOf(chamber.Tile));
+        Assert.AreEqual("Switching to 3 Storm → 2 Lightning after this cycle", lines[lines.Count - 1]);
+        Assert.IsTrue(chamber.RequestProcess(0), "Asking for the running row cancels it");
+        Assert.IsNull(chamber.Processor.PendingRow);
 
         chamber.Processor.Stage(Water, 2);
         chamber.Processor.Tick(4f);

@@ -75,7 +75,9 @@ public enum ManaProcessorStall
 /// moment the full set is staged, the inputs are consumed and the cycle runs for cycleSeconds; at completion the outputs
 /// are held until the transfer pass deposits them, and no new cycle starts until everything is out. Staged inputs and
 /// held product are real mana (they count in the global totals). The stall reasons are set by the transfer pass, which
-/// is what knows whether supply or room exists.
+/// is what knows whether supply or room exists. A row changes only while it's empty: a switch asked for mid-commitment
+/// waits as PendingRow — the processor finishes what it has started (stages the rest of a begun set, runs, deposits),
+/// starts nothing new, and switches the moment it's empty.
 /// </summary>
 public class ManaProcessor
 {
@@ -85,6 +87,9 @@ public class ManaProcessor
     public ManaProcessor(ManaProcessRow row) { Row = row; }
 
     public ManaProcessRow Row { get; private set; }
+
+    /// <summary>The row it switches to once it's empty (a switch asked for mid-commitment); null when none waits.</summary>
+    public ManaProcessRow PendingRow { get; private set; }
     public bool IsRunning { get; private set; }
 
     /// <summary>Seconds into the running cycle (0 while not running).</summary>
@@ -143,9 +148,13 @@ public class ManaProcessor
         return list;
     }
 
-    /// <summary>How many more of a type it wants staged: only while idle (not running, holding nothing).</summary>
+    /// <summary>
+    /// How many more of a type it wants staged: only while idle (not running, holding nothing), and with a switch pending
+    /// only to finish a set it has begun (it starts no new one).
+    /// </summary>
     public int Demand(string type) =>
-        Row == null || IsRunning || IsHolding ? 0 : Mathf.Max(0, Row.InputOf(type) - StagedOf(type));
+        Row == null || IsRunning || IsHolding || (PendingRow != null && StagedTotal == 0) ? 0
+        : Mathf.Max(0, Row.InputOf(type) - StagedOf(type));
 
     public bool IsFullyStaged
     {
@@ -179,7 +188,7 @@ public class ManaProcessor
         if (!IsHolding)
         {
             OutputBlocked = false;
-            TryStart(); // The product is out: a set staged meanwhile can't exist, but keep the rule in one place
+            ApplyPendingRow(); // The product is out: a waiting switch happens now, before anything new is drawn
         }
         return take;
     }
@@ -187,6 +196,7 @@ public class ManaProcessor
     /// <summary>Advances the running cycle; at completion the row's outputs are held. Starts a cycle when a full set waits.</summary>
     public void Tick(float deltaTime)
     {
+        ApplyPendingRow();
         TryStart();
         if (!IsRunning || deltaTime <= 0f) return;
         ProgressSeconds += deltaTime;
@@ -198,14 +208,37 @@ public class ManaProcessor
         CyclesCompleted++;
     }
 
-    /// <summary>Switches to another row; refused (false) unless empty — a switch mid-commitment would strand units.</summary>
+    /// <summary>Switches to another row now; refused (false) unless empty — a switch mid-commitment would strand units.</summary>
     public bool TrySetRow(ManaProcessRow row)
     {
         if (!CanSwitch || row == null) return false;
         Row = row;
+        PendingRow = null;
         MissingType = null;
         OutputBlocked = false;
         return true;
+    }
+
+    /// <summary>
+    /// Asks for a row: switches now when empty, otherwise waits as PendingRow until the current commitment is out. Asking
+    /// for the running row cancels a waiting switch. False only for no row.
+    /// </summary>
+    public bool RequestRow(ManaProcessRow row)
+    {
+        if (row == null) return false;
+        if (row == Row)
+        {
+            PendingRow = null;
+            return true;
+        }
+        if (TrySetRow(row)) return true;
+        PendingRow = row;
+        return true;
+    }
+
+    private void ApplyPendingRow()
+    {
+        if (PendingRow != null && IsEmpty) TrySetRow(PendingRow);
     }
 
     /// <summary>The transfer pass's verdicts: the input it found no supply for (or null), and whether the product is stuck.</summary>

@@ -5,8 +5,9 @@ using UnityEngine;
 /// The Combination Chamber (#146): a Magic placeable that hosts one process from ManaFlow's process table (its host rows).
 /// It holds no general store: it stages exactly one cycle of its row's inputs, drawn through its own tile's pipe by the
 /// transfer pass, runs the cycle, and holds the product until the transfer pass deposits it into connected stores. It
-/// runs unattended and unpowered. A new chamber runs the table's first chamber row; the row is switchable (its card)
-/// only while it's idle and empty. The ManaFlow clock drives the cycle; a construction site does nothing.
+/// runs unattended and unpowered. A new chamber runs the table's first chamber row; its card switches the row, at once
+/// while it's idle and empty, otherwise once its current cycle is out (RequestProcess). The ManaFlow clock drives the
+/// cycle; a construction site does nothing.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Placeable))]
@@ -37,6 +38,16 @@ public class CombinationChamber : MonoBehaviour, IManaProcessorHost
         List<ManaProcessRow> rows = Rows;
         return index >= 0 && index < rows.Count && Processor.TrySetRow(rows[index]);
     }
+
+    /// <summary>Asks for Rows[index]: now when idle and empty, else after the current cycle is out. False for a bad index.</summary>
+    public bool RequestProcess(int index)
+    {
+        List<ManaProcessRow> rows = Rows;
+        return index >= 0 && index < rows.Count && Processor.RequestRow(rows[index]);
+    }
+
+    /// <summary>The waiting switch's index among Rows (-1 for none).</summary>
+    public int PendingIndex => Processor.PendingRow != null ? Rows.IndexOf(Processor.PendingRow) : -1;
 
     /// <summary>Placeable.CompleteConstruction calls this: the finished chamber joins the service.</summary>
     public void OnConstructed()

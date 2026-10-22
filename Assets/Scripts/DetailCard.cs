@@ -22,9 +22,9 @@ using UnityEngine.UI;
 /// card's own panel already keeps presses off the board). A click flips the node's Enabled at once. The furnace's card
 /// adds its fuel lines, the Grow-Lamp's the plots it covers.
 /// Process switcher (#146): a Combination Chamber's placed card lists its process rows as buttons (the selected one
-/// outlined); a click switches the chamber's process, allowed only while it's idle and empty (the buttons go inert and a
-/// line says so otherwise). Its lines carry the process, the cycle's state or stall reason, what's staged or held, and
-/// the stores on its pipe network.
+/// outlined); a click switches the chamber's process at once while it's idle and empty, otherwise once its current cycle
+/// is out (a line says so; clicking the running row cancels). Its lines carry the process, the cycle's state or stall
+/// reason, what's staged or held, and the stores on its network.
 /// </summary>
 [DisallowMultipleComponent]
 public class DetailCard : MonoBehaviour
@@ -499,7 +499,7 @@ public class DetailCard : MonoBehaviour
     /// <summary>
     /// The chamber's lines (#146): its process; its state ("Running 40% · 4.0/10 s", "Drawing inputs", "Depositing",
     /// or "Stalled: Missing Water" / "Stalled: No room for output"); what's staged ("Staged: Fire 2/2 · Water 1/2") or
-    /// held ("Holding: Air 3"); the stores on its network; and, when a switch isn't allowed now, why.
+    /// held ("Holding: Air 3"); the stores on its network; and a waiting switch ("Switching to … after this cycle").
     /// </summary>
     public static List<string> ChamberLines(ManaProcessor processor, bool onPipe, List<IManaPort> networkStores)
     {
@@ -522,7 +522,7 @@ public class DetailCard : MonoBehaviour
             lines.Add("Holding: " + string.Join(" · ", held));
         }
         lines.Add(onPipe ? $"On a pipe · {StoresSummary(networkStores)}" : "Not on a pipe · lay pipe onto its tile to connect it");
-        if (!processor.CanSwitch) lines.Add("Process locked until it's idle and empty");
+        if (processor.PendingRow != null) lines.Add($"Switching to {processor.PendingRow.Name} after this cycle");
         return lines;
     }
 
@@ -721,11 +721,17 @@ public class DetailCard : MonoBehaviour
     /// <summary>Whether a click may switch the shown chamber's process now: only while it's idle and empty.</summary>
     public bool CanSwitchProcess => ShownChamber?.Processor.CanSwitch ?? false;
 
-    /// <summary>A process button's click: switches the shown chamber and repaints. False (nothing changes) when refused.</summary>
+    /// <summary>The shown chamber's waiting switch's index (-1 for none).</summary>
+    public int PendingProcessIndex => ShownChamber?.PendingIndex ?? -1;
+
+    /// <summary>
+    /// A process button's click: asks the shown chamber for that row (at once when idle and empty, else after its cycle)
+    /// and repaints. False (nothing changes) with no chamber or a bad index.
+    /// </summary>
     public bool SelectShownProcess(int index)
     {
         CombinationChamber chamber = ShownChamber;
-        if (chamber == null || !chamber.SelectProcess(index)) return false;
+        if (chamber == null || !chamber.RequestProcess(index)) return false;
         Repaint();
         return true;
     }
@@ -1154,7 +1160,7 @@ public class DetailCard : MonoBehaviour
         processButtons.RemoveAll(b => b.button == null);
         while (processButtons.Count < labels.Count) processButtons.Add(CreateProcessButton(processButtons.Count));
         int selected = SelectedProcessIndex;
-        bool canSwitch = CanSwitchProcess;
+        int pending = PendingProcessIndex;
         for (int i = 0; i < processButtons.Count; i++)
         {
             (Button button, Image image, Text label) = processButtons[i];
@@ -1163,8 +1169,8 @@ public class DetailCard : MonoBehaviour
             if (!shown) continue;
             PlaceTopLeft((RectTransform)button.transform, 0f, i * (processButtonHeight + processButtonGap), width, processButtonHeight);
             image.color = i == selected ? chipSelectedColor : chipColor;
-            button.interactable = canSwitch && i != selected;
-            label.text = labels[i];
+            button.interactable = true; // The running row's button cancels a waiting switch
+            label.text = i == pending ? labels[i] + " (next)" : labels[i];
         }
     }
 

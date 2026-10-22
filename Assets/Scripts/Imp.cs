@@ -185,7 +185,7 @@ public class Imp : MonoBehaviour
         if (poser == null) return;
         if (digger == null) TryGetComponent(out digger);
         bool swinging = digger != null && (digger.IsDigging || digger.IsRearming);
-        bool building = digger != null && (digger.IsBuilding || digger.IsWiring); // #142: wiring conduit is construction work
+        bool building = digger != null && (digger.IsBuilding || digger.IsWiring || digger.IsPiping); // #142, #145: wiring and piping are construction work
         bool operating = digger != null && digger.IsOperating;                    // #142: stands at the wheel, facing it
         bool working = swinging || building || operating;
         poser.Step(deltaTime, new CreatureMotion.Flags { Digging = swinging, Building = building, FaceTarget = working ? WorkPoint() : null });

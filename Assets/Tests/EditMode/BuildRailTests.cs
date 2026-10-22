@@ -176,7 +176,7 @@ public class BuildRailTests
     }
 
     [Test]
-    public void Categories_AreInOrder_WithTodaysThreeTypes_AndMagicEmpty()
+    public void Categories_AreInOrder_WithTodaysTypes_AndMagicHoldsTheManaBuildings()
     {
         // #142 migration: Power is seated between Defense and Magic (it holds the Imp Wheel; PowerGridTests pins it).
         CollectionAssert.AreEqual(
@@ -185,10 +185,12 @@ public class BuildRailTests
         CollectionAssert.AreEqual(new[] { PlaceableType.LairCot }, BuildPresentation.TypesInCategory(BuildCategory.Living));
         CollectionAssert.AreEqual(new[] { PlaceableType.MushroomPlot }, BuildPresentation.TypesInCategory(BuildCategory.Farming));
         CollectionAssert.AreEqual(new[] { PlaceableType.SpikeTrap }, BuildPresentation.TypesInCategory(BuildCategory.Defense));
-        CollectionAssert.IsEmpty(BuildPresentation.TypesInCategory(BuildCategory.Magic));
+        // #145 migration: Magic was empty and hidden; it now holds the two mana buildings, so every category shows.
+        CollectionAssert.AreEqual(new[] { PlaceableType.Accumulator, PlaceableType.ManaContainer },
+            BuildPresentation.TypesInCategory(BuildCategory.Magic));
         CollectionAssert.AreEqual(
-            new[] { BuildCategory.Living, BuildCategory.Farming, BuildCategory.Defense, BuildCategory.Power },
-            BuildPresentation.VisibleCategories(), "An empty category is not shown");
+            new[] { BuildCategory.Living, BuildCategory.Farming, BuildCategory.Defense, BuildCategory.Power, BuildCategory.Magic },
+            BuildPresentation.VisibleCategories());
         Assert.AreEqual("FARM", BuildPresentation.RailLabel(BuildCategory.Farming));
         Assert.AreEqual("Farming", BuildPresentation.CategoryName(BuildCategory.Farming));
     }
@@ -199,18 +201,19 @@ public class BuildRailTests
     public void VisibleEntries_AreDigThenTheNonEmptyCategories_ThenStock()
     {
         // #126 migration: STOCK joins the rail after the categories (it was 4 entries). #142 migration: Power joins
-        // after Defense (5 → 6 entries).
+        // after Defense (5 → 6 entries). #145 migration: Magic joins after Power (6 → 7 entries).
         List<BuildRail.RailEntry> entries = BuildRail.VisibleEntries();
-        Assert.AreEqual(6, entries.Count, "DIG, Living, Farming, Defense, Power, STOCK: no Magic");
+        Assert.AreEqual(7, entries.Count, "DIG, Living, Farming, Defense, Power, Magic, STOCK");
         Assert.IsTrue(entries[0].isDig);
         Assert.IsFalse(entries[1].isDig);
         Assert.AreEqual(BuildCategory.Living, entries[1].category);
         Assert.AreEqual(BuildCategory.Farming, entries[2].category);
         Assert.AreEqual(BuildCategory.Defense, entries[3].category);
         Assert.AreEqual(BuildCategory.Power, entries[4].category);
-        Assert.IsTrue(entries[5].isStock);
-        Assert.IsFalse(entries[5].isDig);
-        for (int i = 0; i < 5; i++) Assert.IsFalse(entries[i].isStock, $"Entry {i}");
+        Assert.AreEqual(BuildCategory.Magic, entries[5].category);
+        Assert.IsTrue(entries[6].isStock);
+        Assert.IsFalse(entries[6].isDig);
+        for (int i = 0; i < 6; i++) Assert.IsFalse(entries[i].isStock, $"Entry {i}");
     }
 
     [Test]
@@ -231,7 +234,8 @@ public class BuildRailTests
         controller.Select(PlaceableType.MushroomPlot);
         // #126 migration: index 4 (digit 5) is now STOCK, so "past the end" starts at 5. STOCK's digit is StockPanelTests'.
         // #142 migration: Power takes index 4 and STOCK moves to 5, so "past the end" starts at 6.
-        foreach (int beyond in new[] { 6, 7, -1 })
+        // #145 migration: Magic takes index 5 and STOCK moves to 6, so "past the end" starts at 7.
+        foreach (int beyond in new[] { 7, 8, -1 })
         {
             Assert.IsFalse(rail.ActivateEntry(beyond), $"Index {beyond}");
             Assert.AreEqual(BuildCategory.Farming, rail.OpenCategory, "Nothing changed");
@@ -253,11 +257,13 @@ public class BuildRailTests
     }
 
     [Test]
-    public void AnEmptyCategory_HasNoFlyout()
+    public void TheMagicCategory_HasItsFlyout()
     {
+        // #145 migration: Magic was the empty category this pinned ("no flyout"); it now holds the accumulator, the container
+        // and Lay pipe, so no shipped category is empty and Magic opens like the rest.
         rail.OpenFlyout(BuildCategory.Magic);
-        Assert.IsNull(rail.OpenCategory);
-        Assert.IsFalse(rail.IsFlyoutOpen);
+        Assert.AreEqual(BuildCategory.Magic, rail.OpenCategory);
+        Assert.IsTrue(rail.IsFlyoutOpen);
     }
 
     [Test]
@@ -412,7 +418,7 @@ public class BuildRailTests
         Assert.IsFalse(IsShown("Flyout"), "Collapsed: the flyout is hidden");
         foreach (string entry in new[] { "DigEntry", "LivingEntry", "FarmingEntry", "DefenseEntry" })
             Assert.AreEqual(rail.ButtonNormalColor, ColorOf("BuildRailCanvas/Rail/" + entry), entry);
-        Assert.IsFalse(IsShown("Rail/MagicEntry"));
+        Assert.IsTrue(IsShown("Rail/MagicEntry"), "#145 migration: Magic is no longer empty, so its entry shows");
         Assert.AreEqual("DIG", FindText("BuildRailCanvas/Rail/DigEntry/Label").text);
         Assert.AreEqual("DEFENSE", FindText("BuildRailCanvas/Rail/DefenseEntry/Label").text);
 

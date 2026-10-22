@@ -36,6 +36,7 @@ public static class InputConfig
     public const string Rail6 = "Rail6";
     public const string Rail7 = "Rail7";
     public const string TogglePowerView = "TogglePowerView";
+    public const string ToggleMagicView = "ToggleMagicView";
 
     private const string MapName = "Player";
 
@@ -62,6 +63,7 @@ public static class InputConfig
         public InputAction Rail6 => Map[InputConfig.Rail6];                     // Button: 6 (build rail entry 6, #123)
         public InputAction Rail7 => Map[InputConfig.Rail7];                     // Button: 7 (build rail entry 7, #142: the Power category made seven)
         public InputAction TogglePowerView => Map[InputConfig.TogglePowerView]; // Button: V (power overlay on / off, #144)
+        public InputAction ToggleMagicView => Map[InputConfig.ToggleMagicView]; // Button: M (magic overlay on / off, #145)
 
         internal Actions(InputActionMap map) { Map = map; }
 
@@ -136,6 +138,7 @@ public static class InputConfig
         AddSingle(map.AddAction(Rail6, InputActionType.Button), "<Keyboard>/6");
         AddSingle(map.AddAction(Rail7, InputActionType.Button), "<Keyboard>/7");
         AddSingle(map.AddAction(TogglePowerView, InputActionType.Button), "<Keyboard>/v");
+        AddSingle(map.AddAction(ToggleMagicView, InputActionType.Button), "<Keyboard>/m");
 
         return map;
     }

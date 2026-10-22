@@ -15,6 +15,7 @@ using UnityEngine.InputSystem.UI;
 /// unaffordable tint then. Orders are placed in the selected material (#109).
 /// Wire mode (#142): the Power flyout's Lay conduit verb arms it; ConduitDesignator is enabled exactly then (as
 /// DigDesignator is in Dig), left-drag lays conduit, right-drag removes it, and Esc exits unless a wire drag is live.
+/// Pipe mode (#145): the Magic flyout's Lay pipe verb arms it, exactly as Wire mode is armed, with PipeDesignator.
 /// Placed selection (#142): in Neutral only, a left-click on a built placeable's tile selects it (the detail card's placed
 /// mode); a click on any other board tile clears it, and so do Esc (its own press: the rail and the STOCK panel leave that
 /// press alone), leaving Neutral, and the STOCK panel selecting a material (most recent wins).
@@ -28,6 +29,7 @@ public class PlacementController : MonoBehaviour
     [SerializeField] private Imp imp;
     [SerializeField] private DigDesignator digDesignator;
     [SerializeField] private ConduitDesignator conduitDesignator; // #142: enabled exactly in Wire mode
+    [SerializeField] private PipeDesignator pipeDesignator;       // #145: enabled exactly in Pipe mode
     [SerializeField] private PlacementManager placementManager;
     [SerializeField] private Camera mainCamera;
 
@@ -43,6 +45,7 @@ public class PlacementController : MonoBehaviour
     public Imp Imp { get => imp; set => imp = value; }
     public DigDesignator DigDesignator { get => digDesignator; set => digDesignator = value; }
     public ConduitDesignator ConduitDesignator { get => conduitDesignator; set => conduitDesignator = value; }
+    public PipeDesignator PipeDesignator { get => pipeDesignator; set => pipeDesignator = value; }
     public PlacementManager PlacementManager { get => placementManager; set => placementManager = value; }
     public Camera MainCamera { get => mainCamera; set => mainCamera = value; }
 
@@ -56,7 +59,7 @@ public class PlacementController : MonoBehaviour
     public bool IsPlacing => SelectedType != null;
     public bool IsDragging => isDragging;
 
-    public enum ToolMode { Neutral, Dig, Armed, Wire }
+    public enum ToolMode { Neutral, Dig, Armed, Wire, Pipe }
 
     /// <summary>True in Dig mode (#123): the dig tool is selected and DigDesignator is enabled.</summary>
     public bool IsDigging { get; private set; }
@@ -64,7 +67,11 @@ public class PlacementController : MonoBehaviour
     /// <summary>True in Wire mode (#142): Lay conduit is armed and ConduitDesignator is enabled.</summary>
     public bool IsWiring { get; private set; }
 
-    public ToolMode Mode => IsPlacing ? ToolMode.Armed : IsDigging ? ToolMode.Dig : IsWiring ? ToolMode.Wire : ToolMode.Neutral;
+    /// <summary>True in Pipe mode (#145): Lay pipe is armed and PipeDesignator is enabled.</summary>
+    public bool IsPiping { get; private set; }
+
+    public ToolMode Mode => IsPlacing ? ToolMode.Armed : IsDigging ? ToolMode.Dig : IsWiring ? ToolMode.Wire
+        : IsPiping ? ToolMode.Pipe : ToolMode.Neutral;
 
     /// <summary>
     /// The built placeable selected in Neutral (#142): the detail card's placed mode shows it. Null when nothing is
@@ -106,6 +113,7 @@ public class PlacementController : MonoBehaviour
     private int toolExitFrame = -1;
     private bool digWasDragging; // DigDesignator's drag state as of our last Update: an Esc that aborted a dig drag is not ours
     private bool wireWasDragging; // The same for ConduitDesignator in Wire mode (#142)
+    private bool pipeWasDragging; // The same for PipeDesignator in Pipe mode (#145)
     private Placeable selectedPlaceable;
 
     // ---- visuals ----
@@ -146,6 +154,7 @@ public class PlacementController : MonoBehaviour
         imp ??= FindAnyObjectByType<Imp>();
         digDesignator ??= FindAnyObjectByType<DigDesignator>();
         conduitDesignator ??= FindAnyObjectByType<ConduitDesignator>();
+        pipeDesignator ??= FindAnyObjectByType<PipeDesignator>();
         placementManager ??= FindAnyObjectByType<PlacementManager>();
         mainCamera ??= Camera.main;
 
@@ -170,6 +179,7 @@ public class PlacementController : MonoBehaviour
         SelectedMaterial = MaterialFor(type);
         IsDigging = false;
         IsWiring = false;
+        IsPiping = false;
         ApplyMode();
     }
 
@@ -180,6 +190,7 @@ public class PlacementController : MonoBehaviour
         SelectedType = null;
         IsDigging = true;
         IsWiring = false;
+        IsPiping = false;
         ApplyMode();
     }
 
@@ -195,6 +206,23 @@ public class PlacementController : MonoBehaviour
         SelectedType = null;
         IsDigging = false;
         IsWiring = true;
+        IsPiping = false;
+        ApplyMode();
+    }
+
+    /// <summary>Arms Lay pipe (Pipe mode, #145); selecting it again while armed exits to Neutral, like Lay conduit.</summary>
+    public void SelectPipe()
+    {
+        if (IsPiping)
+        {
+            ClearSelection();
+            return;
+        }
+        CancelDrag();
+        SelectedType = null;
+        IsDigging = false;
+        IsWiring = false;
+        IsPiping = true;
         ApplyMode();
     }
 
@@ -289,6 +317,7 @@ public class PlacementController : MonoBehaviour
         SelectedType = null;
         IsDigging = false;
         IsWiring = false;
+        IsPiping = false;
         ApplyMode();
     }
 
@@ -300,6 +329,15 @@ public class PlacementController : MonoBehaviour
     {
         if (!IsWiring) return false;
         if (wireWasDragging || (conduitDesignator != null && conduitDesignator.IsDragging)) return false;
+        ExitFromBoardInput();
+        return true;
+    }
+
+    /// <summary>Esc in Pipe (#145): exits to Neutral unless a pipe drag is live, or was last update. False when not ours.</summary>
+    public bool TryExitPipeOnAbort()
+    {
+        if (!IsPiping) return false;
+        if (pipeWasDragging || (pipeDesignator != null && pipeDesignator.IsDragging)) return false;
         ExitFromBoardInput();
         return true;
     }
@@ -331,6 +369,7 @@ public class PlacementController : MonoBehaviour
     {
         if (digDesignator != null) digDesignator.enabled = IsDigging;
         if (conduitDesignator != null) conduitDesignator.enabled = IsWiring;
+        if (pipeDesignator != null) pipeDesignator.enabled = IsPiping;
         if (Mode != ToolMode.Neutral) selectedPlaceable = null;
         ModeChanged?.Invoke();
     }
@@ -343,6 +382,8 @@ public class PlacementController : MonoBehaviour
         digWasDragging = IsDigging && digDesignator != null && digDesignator.IsDragging;
         if (IsWiring && (input?.Abort.WasPressedThisFrame() ?? false)) TryExitWireOnAbort();
         wireWasDragging = IsWiring && conduitDesignator != null && conduitDesignator.IsDragging;
+        if (IsPiping && (input?.Abort.WasPressedThisFrame() ?? false)) TryExitPipeOnAbort();
+        pipeWasDragging = IsPiping && pipeDesignator != null && pipeDesignator.IsDragging;
         if (Mode == ToolMode.Neutral) HandleNeutralInput();
 
         if (feedbackTimer > 0f)

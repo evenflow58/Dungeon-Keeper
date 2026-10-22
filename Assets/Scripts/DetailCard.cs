@@ -27,6 +27,7 @@ public class DetailCard : MonoBehaviour
 {
     public const string HintText = "Drag to place · Orders that can't be paid wait · Right-click cancels";
     public const string WireHintText = "Drag over explored floor to lay conduit · Right-drag removes · Esc exits";
+    public const string PipeHintText = "Drag over explored floor to lay pipe · Right-drag removes · Esc exits"; // #145
     public const string PlacedHintText = "Esc or click empty floor to deselect";
 
     [Header("References")]
@@ -187,20 +188,29 @@ public class DetailCard : MonoBehaviour
     /// <summary>Wire mode (#142): Lay conduit is armed; the card describes the verb.</summary>
     public bool IsWireMode => placementController != null && placementController.IsWiring;
 
+    /// <summary>Pipe mode (#145): Lay pipe is armed; the card describes the verb.</summary>
+    public bool IsPipeMode => placementController != null && placementController.IsPiping;
+
+    /// <summary>The verb tool armed now (#142 Lay conduit, #145 Lay pipe), or null.</summary>
+    public BuildVerb? ArmedVerb => IsWireMode ? BuildVerb.LayConduit : IsPipeMode ? BuildVerb.LayPipe : (BuildVerb?)null;
+
+    /// <summary>Verb mode: a verb tool is armed (wire or pipe); the card describes it.</summary>
+    public bool IsVerbMode => ArmedVerb != null;
+
     /// <summary>The built placeable the controller has selected (#142); null when none.</summary>
     public Placeable ShownPlaceable => placementController != null ? placementController.SelectedPlaceable : null;
 
     /// <summary>Placed mode (#142): nothing armed and a built placeable selected.</summary>
-    public bool IsPlacedMode => ArmedType == null && !IsWireMode && ShownPlaceable != null;
+    public bool IsPlacedMode => ArmedType == null && !IsVerbMode && ShownPlaceable != null;
 
     /// <summary>
     /// Material mode (#126): a material is shown and nothing is armed (an armed type always wins the card), and no placed
     /// building is selected (#142: the most recent selection wins, and the two never stand together).
     /// </summary>
-    public bool IsMaterialMode => ArmedType == null && !IsWireMode && ShownPlaceable == null && ShownMaterial != null;
+    public bool IsMaterialMode => ArmedType == null && !IsVerbMode && ShownPlaceable == null && ShownMaterial != null;
 
     /// <summary>The card shows while a buildable is armed, in wire mode, in placed mode, or in material mode.</summary>
-    public bool IsVisible => ArmedType != null || IsWireMode || IsPlacedMode || ShownMaterial != null;
+    public bool IsVisible => ArmedType != null || IsVerbMode || IsPlacedMode || ShownMaterial != null;
 
     /// <summary>The STOCK panel's selection (#126): the material to describe while nothing is armed, or null to stop.</summary>
     public void ShowMaterial(MaterialType? material)
@@ -216,7 +226,7 @@ public class DetailCard : MonoBehaviour
     public bool TryGetCardCategory(out BuildCategory category)
     {
         if (CardType != null) return BuildPresentation.TryGetCategory(CardType.Value, out category);
-        if (IsWireMode && BuildPresentation.TryGetVerb(BuildVerb.LayConduit, out BuildPresentation.VerbEntry verb))
+        if (ArmedVerb != null && BuildPresentation.TryGetVerb(ArmedVerb.Value, out BuildPresentation.VerbEntry verb))
         {
             category = verb.category;
             return true;
@@ -228,7 +238,7 @@ public class DetailCard : MonoBehaviour
     /// <summary>The armed type's name, the wire verb's, the placed building's, else the shown material's; empty with none.</summary>
     public string Title =>
         ArmedType != null ? BuildPresentation.DisplayName(ArmedType.Value)
-        : IsWireMode ? (BuildPresentation.TryGetVerb(BuildVerb.LayConduit, out BuildPresentation.VerbEntry verb) ? verb.displayName : "")
+        : ArmedVerb != null ? (BuildPresentation.TryGetVerb(ArmedVerb.Value, out BuildPresentation.VerbEntry verb) ? verb.displayName : "")
         : IsPlacedMode ? BuildPresentation.DisplayName(ShownPlaceable.Type)
         : ShownMaterial != null ? MaterialName(ShownMaterial.Value)
         : "";
@@ -241,12 +251,13 @@ public class DetailCard : MonoBehaviour
 
     public string Description =>
         CardType != null ? BuildPresentation.Description(CardType.Value)
-        : IsWireMode ? (BuildPresentation.TryGetVerb(BuildVerb.LayConduit, out BuildPresentation.VerbEntry verb) ? verb.description : "")
+        : ArmedVerb != null ? (BuildPresentation.TryGetVerb(ArmedVerb.Value, out BuildPresentation.VerbEntry verb) ? verb.description : "")
         : IsMaterialMode ? BuildPresentation.MaterialDescription(ShownMaterial.Value)
         : "";
 
     /// <summary>The bottom hint for the current mode; empty in material mode.</summary>
-    public string Hint => ArmedType != null ? HintText : IsWireMode ? WireHintText : IsPlacedMode ? PlacedHintText : "";
+    public string Hint => ArmedType != null ? HintText : IsWireMode ? WireHintText : IsPipeMode ? PipeHintText
+        : IsPlacedMode ? PlacedHintText : "";
 
     private Stockpile CurrentStockpile => placementManager != null ? placementManager.Stockpile : null;
 
@@ -328,6 +339,7 @@ public class DetailCard : MonoBehaviour
     {
         var lines = new List<string>();
         if (IsWireMode && ArmedType == null) return WireLines(placementManager != null ? placementManager.PowerGrid : null);
+        if (IsPipeMode && ArmedType == null) return PipeLines(placementManager != null ? placementManager.ManaFlow : null);
         if (IsPlacedMode) return PlacedLines(ShownPlaceable, placementManager);
         if (ArmedType == null || placementManager == null) return lines;
 
@@ -370,12 +382,29 @@ public class DetailCard : MonoBehaviour
                     : null;
             case BuildStat.LampCoverage: // #143
                 return $"Plots within {manager.LampRadius} tiles grow ×{Number(manager.LampGrowthMultiplier, "0.#")}";
+            case BuildStat.ManaCapacity: // #145
+                return type == PlaceableType.Accumulator ? $"Holds up to {manager.AccumulatorCapacity} mana"
+                    : type == PlaceableType.ManaContainer ? $"Holds up to {manager.ManaContainerCapacity} mana of one type"
+                    : null;
+            case BuildStat.ManaCollection: // #145
+                return $"Collects {manager.AccumulatorCollectPerCycle} mana per {Number(manager.AccumulatorCollectSeconds, "0.#")} s from beside it";
             default:
                 return null;
         }
     }
 
     // ---- wire and placed modes (#142) ----
+
+    /// <summary>The pipe verb's lines (#145): imp time per tile and the throughput, from the service's own values.</summary>
+    public static List<string> PipeLines(ManaFlow mana)
+    {
+        var lines = new List<string>();
+        if (mana == null) return lines;
+        lines.Add($"Imp time: {Number(mana.PipeSecondsPerTile, "0.0#")}s per tile");
+        lines.Add($"Carries up to {Number(mana.PipeThroughputPerSecond, "0.#")} mana/s per network");
+        lines.Add("No material cost · Removing is instant, no refund");
+        return lines;
+    }
 
     /// <summary>The wire verb's lines: the imp time per tile, from the grid's own value. None with no grid.</summary>
     public static List<string> WireLines(PowerGrid grid)
@@ -400,6 +429,20 @@ public class DetailCard : MonoBehaviour
         if (placeable.Type == PlaceableType.LairCot) lines.Add(placeable.IsClaimed ? "Claimed" : "Free");
         if (placeable.TryGetComponent(out MushroomPlot plot)) lines.Add($"Food: {plot.FoodCount} / {plot.Capacity}");
         if (placeable.TryGetComponent(out SpikeTrap trap)) lines.Add(TrapLine(trap.IsArmed, trap.PoweredRearmProgress));
+        if (placeable.TryGetComponent(out Accumulator accumulator)) // #145
+        {
+            ManaFlow mana = accumulator.Flow;
+            float now = mana != null ? mana.ElapsedSeconds : 0f;
+            lines.AddRange(AccumulatorLines(accumulator.Buffer.Type, accumulator.Buffer.Amount, accumulator.Buffer.Capacity,
+                accumulator.HasCollectableNeighbor(mana), accumulator.RecentCollected(now), accumulator.RecentWindowSeconds,
+                mana != null && mana.NetworkAt(accumulator.Tile) >= 0, mana != null ? mana.AccumulatorReserve : 0));
+        }
+        if (placeable.TryGetComponent(out ManaContainer container)) // #145
+        {
+            ManaFlow mana = container.Flow;
+            lines.AddRange(ContainerLines(container.Store.Type, container.Store.Amount, container.Store.Capacity,
+                mana != null && mana.NetworkAt(container.Tile) >= 0));
+        }
 
         if (placeable.TryGetComponent(out PowerNode node) && node.Role != PowerRole.None)
         {
@@ -417,6 +460,32 @@ public class DetailCard : MonoBehaviour
         }
         return lines;
     }
+
+    /// <summary>
+    /// The accumulator's lines (#145): its buffer ("Buffer: Fire 12/20" or "Buffer: empty (0/20)"), what it's doing (full,
+    /// collecting, or starved: nothing it can take beside it), its recent rate, and its pipe (what overflows where).
+    /// </summary>
+    public static List<string> AccumulatorLines(string type, int amount, int capacity, bool canCollectNow, int recent,
+        float windowSeconds, bool onPipe, int reserve)
+    {
+        var lines = new List<string>
+        {
+            type != null && amount > 0 ? $"Buffer: {type} {amount}/{capacity}" : $"Buffer: empty (0/{capacity})",
+            amount >= capacity ? "Full · stopped collecting"
+                : canCollectNow ? "Collecting"
+                : "Waiting: no mana it can take beside it",
+            $"Collected {recent} in the last {Number(windowSeconds, "0.#")} s",
+            onPipe ? $"On a pipe · keeps {reserve}, the rest flows to containers" : "Not on a pipe · keeps what it collects",
+        };
+        return lines;
+    }
+
+    /// <summary>The container's lines (#145): "Fire 40/100" or the empty note, and whether a pipe reaches it.</summary>
+    public static List<string> ContainerLines(string type, int amount, int capacity, bool onPipe) => new List<string>
+    {
+        type != null && amount > 0 ? $"{type} {amount}/{capacity}" : $"Empty — adopts the first type piped in (0/{capacity})",
+        onPipe ? "On a pipe" : "Not on a pipe · lay pipe onto its tile to connect it",
+    };
 
     /// <summary>
     /// The furnace's lines (#143): "Producer · 100 W", its state, "Fuel: 7 mushrooms · burns 1 per 12 s", the minutes of

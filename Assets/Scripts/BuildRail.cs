@@ -284,16 +284,17 @@ public class BuildRail : MonoBehaviour
         Repaint();
     }
 
-    /// <summary>A verb tile's click (#142): Lay conduit arms Wire mode (again disarms it).</summary>
+    /// <summary>A verb tile's click (#142): Lay conduit arms Wire mode, (#145) Lay pipe arms Pipe mode; again disarms it.</summary>
     public void SelectVerb(BuildVerb verb)
     {
         if (placementController != null && verb == BuildVerb.LayConduit) placementController.SelectWire();
+        else if (placementController != null && verb == BuildVerb.LayPipe) placementController.SelectPipe();
         Repaint();
     }
 
-    /// <summary>Whether a verb's tool is the one armed now (#142).</summary>
-    public bool IsVerbArmed(BuildVerb verb) =>
-        placementController != null && verb == BuildVerb.LayConduit && placementController.IsWiring;
+    /// <summary>Whether a verb's tool is the one armed now (#142, #145).</summary>
+    public bool IsVerbArmed(BuildVerb verb) => placementController != null &&
+        (verb == BuildVerb.LayConduit ? placementController.IsWiring : verb == BuildVerb.LayPipe && placementController.IsPiping);
 
     /// <summary>
     /// Esc at the neutral level: closes the open flyout. While a tool is selected the press is the controller's (disarm,
@@ -315,6 +316,7 @@ public class BuildRail : MonoBehaviour
     {
         if (placementController == null) return false;
         if (placementController.IsWiring) return BuildPresentation.VerbsInCategory(category).Contains(BuildVerb.LayConduit); // #142
+        if (placementController.IsPiping) return BuildPresentation.VerbsInCategory(category).Contains(BuildVerb.LayPipe);    // #145
         return placementController.SelectedType != null &&
             BuildPresentation.TryGetCategory(placementController.SelectedType.Value, out BuildCategory armed) && armed == category;
     }

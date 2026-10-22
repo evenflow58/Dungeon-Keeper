@@ -7,14 +7,16 @@ public enum PlaceableType
     SpikeTrap,
     ImpWheel,         // #142: appended (never reorder: serialized rows reference these by value)
     FurnaceGenerator, // #143: appended
-    GrowLamp          // #143: appended
+    GrowLamp,         // #143: appended
+    Accumulator,      // #145: appended
+    ManaContainer     // #145: appended
 }
 
 /// <summary>
 /// A placed item occupying one board tile. Placement never changes the tile's TileState:
 /// the tile stays Floor and walkable; occupancy lives in PlacementManager's registry.
 /// Its look is a code-built model (ticket #77): a cot, a mushroom mound, a trap's base plate, (#142) an imp wheel, or
-/// (#143) a furnace with its chimney or a lamp on a post.
+/// (#143) a furnace with its chimney or a lamp on a post, or (#145) an accumulator's basin or a mana container's tank.
 /// Placement is an order (#91): it starts as an inert construction site (a materials pile) until
 /// CompleteConstruction, which the builder calls (story #92; tests and staging call it directly).
 /// Orders cost materials (#104): an order records its requirement and waits UNFUNDED — showing an order marker (a
@@ -34,6 +36,9 @@ public class Placeable : MonoBehaviour
     [SerializeField] private Color furnaceIronColor = new Color(0.18f, 0.18f, 0.20f, 1f); // #143: door, bands and chimney
     [SerializeField] private Color furnaceFireColor = new Color(1.00f, 0.50f, 0.15f, 1f); // #143: the firebox glow
     [SerializeField] private Color lampPostColor = new Color(0.22f, 0.22f, 0.24f, 1f);    // #143: iron post and cap
+    [SerializeField] private Color accumulatorStoneColor = new Color(0.40f, 0.38f, 0.44f, 1f); // #145: the basin and prongs
+    [SerializeField] private Color containerBandColor = new Color(0.22f, 0.22f, 0.26f, 1f);    // #145: iron bands, plinth, lid
+    [SerializeField] private Color containerGlassColor = new Color(0.70f, 0.55f, 1.00f, 1f);   // #145: the gauge
     [SerializeField] private float modelSmoothness = 0.2f;                              // A little sheen, less than creatures
 
     [Header("Construction Site (#91)")]
@@ -219,6 +224,8 @@ public class Placeable : MonoBehaviour
         if (TryGetComponent(out MushroomPlot plot)) plot.OnConstructed();
         if (TryGetComponent(out PowerNode node)) node.OnConstructed(); // #142: a node joins its grid once built
         if (TryGetComponent(out FurnaceGenerator furnace)) furnace.OnConstructed(); // #143: lights at once if there's fuel
+        if (TryGetComponent(out Accumulator accumulator)) accumulator.OnConstructed(); // #145: joins the mana service
+        if (TryGetComponent(out ManaContainer container)) container.OnConstructed();
     }
 
     private void Update()
@@ -313,6 +320,8 @@ public class Placeable : MonoBehaviour
         : Type == PlaceableType.ImpWheel ? PropModel.ImpWheelRecipe(size, wheelFrameColor, color, wheelIronColor)
         : Type == PlaceableType.FurnaceGenerator ? PropModel.FurnaceRecipe(size, color, furnaceIronColor, furnaceFireColor)
         : Type == PlaceableType.GrowLamp ? PropModel.GrowLampRecipe(size, lampPostColor, color)
+        : Type == PlaceableType.Accumulator ? PropModel.AccumulatorRecipe(size, accumulatorStoneColor, color)
+        : Type == PlaceableType.ManaContainer ? PropModel.ManaContainerRecipe(size, color, containerBandColor, containerGlassColor)
         : PropModel.SpikeTrapPlateRecipe(size, color);
 
     private void CreateModel(Color color, float size)
@@ -401,6 +410,8 @@ public class Placeable : MonoBehaviour
             : Type == PlaceableType.ImpWheel ? PropModel.WheelMaterialsRecipe(size, wheelFrameColor, crateColor, color)
             : Type == PlaceableType.FurnaceGenerator ? PropModel.FurnaceMaterialsRecipe(size, color, furnaceIronColor, crateColor)
             : Type == PlaceableType.GrowLamp ? PropModel.LampMaterialsRecipe(size, lampPostColor, color, crateColor)
+            : Type == PlaceableType.Accumulator ? PropModel.AccumulatorMaterialsRecipe(size, accumulatorStoneColor, color, crateColor)
+            : Type == PlaceableType.ManaContainer ? PropModel.ManaContainerMaterialsRecipe(size, color, containerBandColor, crateColor)
             : PropModel.TrapMaterialsRecipe(size, color, Color.Lerp(color, Color.white, 0.45f), crateColor);
         MaterialsPile = CreatureModel.Build(transform, Type + "Materials", recipe, modelSmoothness);
     }

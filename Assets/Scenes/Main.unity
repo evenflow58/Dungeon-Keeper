@@ -236,6 +236,7 @@ MonoBehaviour:
   placementManager: {fileID: 565044525}
   stockpile: {fileID: 565044532}
   powerGrid: {fileID: 565044537}
+  manaFlow: {fileID: 565044539}
   digSecondsPerTile: 2.5
   stoneYieldPerTile: 1
   glimmerstoneBandRows: 6
@@ -556,6 +557,8 @@ GameObject:
   - component: {fileID: 565044536}
   - component: {fileID: 565044537}
   - component: {fileID: 565044538}
+  - component: {fileID: 565044539}
+  - component: {fileID: 565044540}
   m_Layer: 0
   m_Name: DungeonManager
   m_TagString: Untagged
@@ -579,6 +582,7 @@ MonoBehaviour:
   fogOfWar: {fileID: 565044536}
   impDigger: {fileID: 71735947}
   powerGrid: {fileID: 565044537}
+  manaFlow: {fileID: 565044539}
   rockHeight: 0.6
   floorThickness: 0.1
   overlayLift: 0.01
@@ -595,6 +599,42 @@ MonoBehaviour:
   pendingConduitColor: {r: 0.95, g: 0.7, b: 0.4, a: 0.45}
   conduitWidth: 0.16
   conduitThickness: 0.012
+  gridPalette:
+  - {r: 0.25, g: 0.55, b: 1, a: 1}
+  - {r: 0.3, g: 0.85, b: 0.4, a: 1}
+  - {r: 0.8, g: 0.4, b: 0.95, a: 1}
+  - {r: 0.2, g: 0.8, b: 0.8, a: 1}
+  brownoutGridColor: {r: 1, g: 0.35, b: 0.15, a: 1}
+  pendingOverlayColor: {r: 0.8, g: 0.8, b: 0.8, a: 0.45}
+  activeProducerColor: {r: 1, g: 0.88, b: 0.3, a: 1}
+  idleProducerColor: {r: 0.55, g: 0.48, b: 0.25, a: 1}
+  poweredConsumerColor: {r: 0.55, g: 0.9, b: 1, a: 1}
+  unpoweredConsumerColor: {r: 0.95, g: 0.15, b: 0.12, a: 1}
+  disabledNodeColor: {r: 0.45, g: 0.45, b: 0.45, a: 1}
+  unconnectedNodeColor: {r: 0.2, g: 0.2, b: 0.22, a: 1}
+  overlayDimFactor: 0.35
+  conduitTileTint: 0.5
+  overlayRefreshSeconds: 0.25
+  overlayPropAlpha: 0.25
+  manaGlowSize: 0.26
+  manaGlowHeight: 0.2
+  manaGlowIntensity: 0.6
+  pipeColor: {r: 0.46, g: 0.4, b: 0.62, a: 1}
+  pendingPipeColor: {r: 0.7, g: 0.62, b: 0.95, a: 0.45}
+  pipeWidth: 0.12
+  pipeHeight: 0.07
+  pipeLaneOffset: 0.2
+  ventRockColor: {r: 0.16, g: 0.13, b: 0.12, a: 1}
+  ventEmberColor: {r: 1, g: 0.45, b: 0.12, a: 1}
+  ventDormantEmberColor: {r: 0.3, g: 0.12, b: 0.06, a: 1}
+  ventEmberIntensity: 2.5
+  pipeOverlayColor: {r: 0.8, g: 0.72, b: 1, a: 1}
+  pendingPipeOverlayColor: {r: 0.85, g: 0.85, b: 0.85, a: 0.45}
+  storeEmptyOverlayColor: {r: 0.55, g: 0.52, b: 0.62, a: 1}
+  ventActiveOverlayColor: {r: 1, g: 0.55, b: 0.2, a: 1}
+  ventDormantOverlayColor: {r: 0.4, g: 0.22, b: 0.14, a: 1}
+  manaTileTint: 0.6
+  pipeTileTint: 0.45
   doorHeight: 0.9
   doorPostWidth: 0.12
   surfaceSmoothness: 0
@@ -647,9 +687,12 @@ MonoBehaviour:
   fogOfWar: {fileID: 565044536}
   impDigger: {fileID: 71735947}
   stockpile: {fileID: 565044532}
+  powerGrid: {fileID: 0}
+  manaFlow: {fileID: 565044539}
   highlightColor: {r: 1, g: 1, b: 1, a: 0.35}
   tooltipOffset: {x: 15, y: -30}
   tooltipMinWidth: 160
+  tooltipMinHeight: 28
 --- !u!114 &565044523
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -684,6 +727,7 @@ MonoBehaviour:
   imp: {fileID: 71735945}
   digDesignator: {fileID: 565044523}
   conduitDesignator: {fileID: 565044538}
+  pipeDesignator: {fileID: 565044540}
   placementManager: {fileID: 565044525}
   mainCamera: {fileID: 330585545}
   validPreviewColor: {r: 0.4, g: 0.9, b: 0.4, a: 0.35}
@@ -706,17 +750,24 @@ MonoBehaviour:
   boardRenderer: {fileID: 565044519}
   stockpile: {fileID: 565044532}
   powerGrid: {fileID: 565044537}
+  manaFlow: {fileID: 565044539}
   lairCotColor: {r: 0.4, g: 0.6, b: 0.9, a: 1}
   mushroomPlotColor: {r: 0.35, g: 0.75, b: 0.35, a: 1}
   spikeTrapColor: {r: 0.55, g: 0.55, b: 0.6, a: 1}
   impWheelColor: {r: 0.62, g: 0.44, b: 0.26, a: 1}
   furnaceColor: {r: 0.4, g: 0.36, b: 0.34, a: 1}
   growLampColor: {r: 1, g: 0.86, b: 0.45, a: 1}
+  accumulatorColor: {r: 0.66, g: 0.48, b: 1, a: 1}
+  manaContainerColor: {r: 0.34, g: 0.3, b: 0.44, a: 1}
   placeableSize: 0.8
   mushroomGrowthSecondsPerFood: 30
   mushroomCapacity: 5
   spikeDamage: 1
   furnaceRetrySeconds: 1
+  accumulatorCapacity: 20
+  accumulatorCollectSeconds: 1
+  accumulatorCollectPerCycle: 1
+  manaContainerCapacity: 100
   lampRadius: 2
   lampGrowthMultiplier: 2
   lairCotBuildSeconds: 4
@@ -725,6 +776,8 @@ MonoBehaviour:
   impWheelBuildSeconds: 6
   furnaceBuildSeconds: 8
   growLampBuildSeconds: 5
+  accumulatorBuildSeconds: 6
+  manaContainerBuildSeconds: 6
   costs:
   - type: 0
     material: 0
@@ -780,6 +833,24 @@ MonoBehaviour:
   - type: 5
     material: 2
     amount: 4
+  - type: 6
+    material: 0
+    amount: 5
+  - type: 6
+    material: 1
+    amount: 5
+  - type: 6
+    material: 2
+    amount: 5
+  - type: 7
+    material: 0
+    amount: 6
+  - type: 7
+    material: 1
+    amount: 6
+  - type: 7
+    material: 2
+    amount: 6
   power:
   - type: 3
     role: 1
@@ -889,17 +960,26 @@ MonoBehaviour:
   heroSpawner: {fileID: 565044527}
   gameManager: {fileID: 565044526}
   stockpile: {fileID: 565044532}
+  powerGrid: {fileID: 0}
+  boardRenderer: {fileID: 0}
+  manaFlow: {fileID: 565044539}
   fontSize: 20
-  minFontSize: 12
+  minFontSize: 10
   barHeight: 36
   sidePadding: 16
   slotGap: 4
   panelColor: {r: 0, g: 0, b: 0, a: 0.6}
   speedClusterWidth: 220
-  goblinShare: 0.1885
-  foodShare: 0.133
-  materialShare: 0.38
-  heroShare: 0.2985
+  goblinShare: 0.151
+  foodShare: 0.103
+  materialShare: 0.285
+  heroShare: 0.248
+  powerShare: 0.132
+  magicShare: 0.081
+  powerWarningColor: {r: 1, g: 0.38, b: 0.32, a: 1}
+  segmentIdleColor: {r: 1, g: 1, b: 1, a: 0}
+  segmentActiveColor: {r: 0.35, g: 0.65, b: 1, a: 0.35}
+  magicSegmentActiveColor: {r: 0.66, g: 0.48, b: 1, a: 0.35}
   pollIntervalSeconds: 0.25
 --- !u!114 &565044529
 MonoBehaviour:
@@ -1084,6 +1164,7 @@ MonoBehaviour:
   stockpile: {fileID: 565044532}
   detailCard: {fileID: 565044534}
   buildRail: {fileID: 565044533}
+  manaFlow: {fileID: 565044539}
   leftOffset: 54
   topOffset: 36
   panelWidth: 400
@@ -1153,6 +1234,56 @@ MonoBehaviour:
   powerGrid: {fileID: 565044537}
   fogOfWar: {fileID: 565044536}
   layPreviewColor: {r: 0.95, g: 0.65, b: 0.25, a: 0.45}
+  removePreviewColor: {r: 0.9, g: 0.3, b: 0.3, a: 0.45}
+--- !u!114 &565044539
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3fecaef148a46de4f9eac525ab6a19c8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::ManaFlow
+  dungeonBoard: {fileID: 565044520}
+  manaTypes:
+  - id: Fire
+    displayName: Fire Mana
+    color: {r: 1, g: 0.42, b: 0.12, a: 1}
+  - id: Water
+    displayName: Water Mana
+    color: {r: 0.25, g: 0.6, b: 1, a: 1}
+  maxManaPerTile: 5
+  flowTickSeconds: 0.5
+  flowSeed: 145
+  hasVent: 1
+  ventTile: {x: 24, y: 5}
+  ventManaType: Fire
+  ventEmitSeconds: 2
+  pipeSecondsPerTile: 0.5
+  pipeThroughputPerSecond: 5
+  transferSeconds: 0.25
+  accumulatorReserve: 5
+--- !u!114 &565044540
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ccbda3d5b00cc55428e2b6458dec2561, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::PipeDesignator
+  dungeonBoard: {fileID: 565044520}
+  boardRenderer: {fileID: 565044519}
+  mainCamera: {fileID: 330585545}
+  manaFlow: {fileID: 565044539}
+  fogOfWar: {fileID: 565044536}
+  layPreviewColor: {r: 0.7, g: 0.6, b: 1, a: 0.45}
   removePreviewColor: {r: 0.9, g: 0.3, b: 0.3, a: 0.45}
 --- !u!1 &708604853
 GameObject:

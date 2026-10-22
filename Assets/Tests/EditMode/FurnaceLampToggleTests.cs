@@ -614,7 +614,7 @@ public class FurnaceLampToggleTests
             Assert.IsTrue(manager.TryGetCost(PlaceableType.GrowLamp, material, out MaterialAmount lampCost), $"{material}");
             Assert.AreEqual(4, lampCost.amount);
         }
-        Assert.AreEqual(18, manager.Costs.Count);
+        Assert.AreEqual(24, manager.Costs.Count, "#145 migration: the accumulator and the container add three rows each (18 → 24)");
         Assert.AreEqual(8f, manager.BuildSecondsFor(PlaceableType.FurnaceGenerator), 1e-6f);
         Assert.AreEqual(5f, manager.BuildSecondsFor(PlaceableType.GrowLamp), 1e-6f);
 

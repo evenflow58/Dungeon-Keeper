@@ -437,8 +437,8 @@ public class ManaChromeTests
     [Test]
     public void ShippedData_MagicCategory_Costs_BuildTimes_Params_Verb()
     {
-        CollectionAssert.AreEqual(new[] { PlaceableType.Accumulator, PlaceableType.ManaContainer },
-            BuildPresentation.TypesInCategory(BuildCategory.Magic));
+        CollectionAssert.AreEqual(new[] { PlaceableType.Accumulator, PlaceableType.ManaContainer, PlaceableType.CombinationChamber },
+            BuildPresentation.TypesInCategory(BuildCategory.Magic), "#146 migration: the chamber joins the Magic category");
         CollectionAssert.AreEqual(new[] { BuildVerb.LayPipe }, BuildPresentation.VerbsInCategory(BuildCategory.Magic));
         Assert.AreEqual("Accumulator", BuildPresentation.DisplayName(PlaceableType.Accumulator));
         Assert.AreEqual("Mana Container", BuildPresentation.DisplayName(PlaceableType.ManaContainer));
@@ -446,7 +446,7 @@ public class ManaChromeTests
         Assert.AreEqual("Lay pipe", verb.displayName);
         Assert.AreEqual("Imp time only", verb.costLine);
 
-        Assert.AreEqual(24, manager.Costs.Count);
+        Assert.AreEqual(27, manager.Costs.Count, "#146 migration: the chamber adds three rows (24 → 27)");
         foreach (MaterialType material in new[] { MaterialType.Stone, MaterialType.Glimmerstone, MaterialType.Deepstone })
         {
             Assert.IsTrue(manager.TryGetCost(PlaceableType.Accumulator, material, out MaterialAmount a));

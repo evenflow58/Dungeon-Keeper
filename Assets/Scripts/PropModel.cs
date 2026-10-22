@@ -265,6 +265,35 @@ public static class PropModel
         new Part("Crate",  Shape.Box,      new Vector3(0.26f * s, 0.1f, 0.2f * s),     new Vector3(0.2f, 0.2f, 0.2f), crate, new Vector3(0f, 16f, 0f)),
     };
 
+    // ---- Combination Chamber (#146): a round stone vessel on a plinth, an inlet on the left (input port), an outlet on
+    // the right (output port), and a glowing core where the mana combines (the Core part glows) ----
+
+    public const string ChamberCorePart = "Core";
+
+    public static Part[] CombinationChamberRecipe(float s, Color stone, Color band, Color core)
+    {
+        float side = 0.36f * s;
+        return new[]
+        {
+            new Part("Plinth", Shape.Box,        new Vector3(0f, 0.03f, 0f),       new Vector3(0.84f * s, 0.06f, 0.84f * s), band),
+            new Part("Vessel", Shape.Sphere,     new Vector3(0f, 0.24f, 0f),       new Vector3(0.6f * s, 0.42f, 0.6f * s), stone),
+            new Part("Collar", Shape.Cylinder,   new Vector3(0f, 0.42f, 0f),       new Vector3(0.36f * s, 0.03f, 0.36f * s), band),
+            new Part("Inlet",  Shape.Box,        new Vector3(-side, 0.16f, 0f),    new Vector3(0.2f * s, 0.1f, 0.12f), band),
+            new Part("Outlet", Shape.Box,        new Vector3(side, 0.16f, 0f),     new Vector3(0.2f * s, 0.1f, 0.12f), band),
+            new Part(ChamberCorePart, Shape.Octahedron, new Vector3(0f, 0.52f, 0f), new Vector3(0.16f, 0.24f, 0.16f), core, new Vector3(0f, 45f, 0f)),
+        };
+    }
+
+    /// <summary>Chamber materials (#146): two curved stone slabs, a band, the core crystal lying loose, a crate.</summary>
+    public static Part[] CombinationChamberMaterialsRecipe(float s, Color stone, Color band, Color core, Color crate) => new[]
+    {
+        new Part("Slab0", Shape.Box,        new Vector3(-0.12f * s, 0.04f, -0.1f * s), new Vector3(0.5f * s, 0.08f, 0.24f * s), stone, new Vector3(0f, 12f, 0f)),
+        new Part("Slab1", Shape.Box,        new Vector3(-0.08f * s, 0.12f, 0.14f * s), new Vector3(0.46f * s, 0.08f, 0.22f * s), stone, new Vector3(0f, -9f, 0f)),
+        new Part("Band",  Shape.Cylinder,   new Vector3(0.2f * s, 0.015f, -0.24f * s), new Vector3(0.3f * s, 0.015f, 0.3f * s), band),
+        new Part("Shard", Shape.Octahedron, new Vector3(0.28f * s, 0.06f, 0.08f * s),  new Vector3(0.1f, 0.18f, 0.1f), core, new Vector3(0f, 20f, 80f)),
+        new Part("Crate", Shape.Box,        new Vector3(0.3f * s, 0.1f, 0.28f * s),    new Vector3(0.18f, 0.18f, 0.18f), crate, new Vector3(0f, -12f, 0f)),
+    };
+
     // ---- Fire Vent (#145): a cracked rock mound around a glowing fissure (the Ember part glows) ----
 
     public static Part[] FireVentRecipe(Color rock, Color ember) => new[]

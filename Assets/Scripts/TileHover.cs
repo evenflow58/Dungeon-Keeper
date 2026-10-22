@@ -238,7 +238,7 @@ public class TileHover : MonoBehaviour
         !hasPipe || hasStore ? null : built ? "Pipe" : "Pipe (planned)";
 
     public static string PipeLine(ManaFlow mana, Vector2Int tile) =>
-        mana != null ? PipeLine(mana.HasPipe(tile), mana.IsPipeBuilt(tile), mana.PortAt(tile) != null) : null;
+        mana != null ? PipeLine(mana.HasPipe(tile), mana.IsPipeBuilt(tile), mana.PortAt(tile) != null || mana.ProcessorAt(tile) != null) : null;
 
     /// <summary>
     /// The conduit line for a tile (#144), or null for none: built conduit reads its grid's live totals ("Conduit — grid:

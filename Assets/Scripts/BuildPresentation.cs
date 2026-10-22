@@ -53,7 +53,8 @@ public enum BuildStat
     FuelUse,       // #143: a fueled producer's burn, from its power row ("Burns 1 mushroom per 12 s")
     LampCoverage,  // #143: the Grow-Lamp's reach and boost ("Plots within 2 tiles grow ×2")
     ManaCapacity,  // #145: a store's capacity ("Holds up to 20 mana")
-    ManaCollection // #145: the accumulator's cycle ("Collects 1 mana per 1 s from beside it")
+    ManaCollection, // #145: the accumulator's cycle ("Collects 1 mana per 1 s from beside it")
+    ManaProcesses   // #146: a process host's rows ("Runs one of 3 processes · 10 s cycles")
 }
 
 /// <summary>
@@ -119,6 +120,9 @@ public static class BuildPresentation
         new Entry(PlaceableType.ManaContainer, BuildCategory.Magic, "Mana Container",
             "Bulk mana storage for one type at a time. It only fills and drains through pipes.",
             new Color(0.55f, 0.50f, 0.80f, 1f), BuildStat.ManaCapacity),
+        new Entry(PlaceableType.CombinationChamber, BuildCategory.Magic, "Combination Chamber",
+            "Combines mana piped in into a new type. Pipe it to its inputs' stores and to a container for the product.",
+            new Color(0.80f, 0.90f, 1.00f, 1f), BuildStat.ManaProcesses),
     };
 
     /// <summary>A verb tile's presentation (#142).</summary>

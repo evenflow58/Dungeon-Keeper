@@ -1287,31 +1287,37 @@ MonoBehaviour:
   - host: 8
     inputs:
     - type: Fire
-      amount: 2
+      amount: 3
     - type: Water
-      amount: 2
+      amount: 3
     outputs:
     - type: Air
-      amount: 3
+      amount: 1
     cycleSeconds: 10
+    hostInputMultiplier: 2
+    combinesOnMap: 1
   - host: 8
     inputs:
     - type: Air
-      amount: 2
+      amount: 3
     - type: Water
-      amount: 2
+      amount: 3
     outputs:
     - type: Storm
-      amount: 3
+      amount: 1
     cycleSeconds: 10
+    hostInputMultiplier: 2
+    combinesOnMap: 1
   - host: 8
     inputs:
     - type: Storm
       amount: 3
     outputs:
     - type: Lightning
-      amount: 2
+      amount: 1
     cycleSeconds: 10
+    hostInputMultiplier: 2
+    combinesOnMap: 0
   maxManaPerTile: 5
   flowTickSeconds: 0.5
   flowSeed: 145

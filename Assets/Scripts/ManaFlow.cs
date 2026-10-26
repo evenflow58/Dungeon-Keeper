@@ -107,7 +107,7 @@ public interface IManaPort
 /// Points of interest are data rows (#150: the Fire Vent and the Spring): each sits on its tile (carved to Floor at
 /// setup, entombed in rock until dug out) and every emitSeconds emits one unit of its type onto the first 4-neighbor
 /// (board scan order) that has room, dormant while none has (entombed, or saturated), resuming on its own the moment one
-/// does. The flow is type-uniform: every type obeys the same rules and types never combine on tiles. Flow is pressure, like a gas:
+/// does. The flow is type-uniform: every type obeys the same rules. Flow is pressure, like a gas:
 /// a tile's pressure is the units on it. Every flowTickSeconds each tile holding mana, in a shuffled order and seeing
 /// moves already made, sends one unit to a neighbor that holds fewer units and has room, picked at random from those
 /// (seeded by flowSeed, so a run replays exactly). So mana always flows from high pressure to low; a closed space evens
@@ -121,8 +121,11 @@ public interface IManaPort
 /// transferSeconds per network, under a shared per-network throughput with an exact fractional carry: (#146) process hosts
 /// draw their demand first (from containers, then accumulator buffers above accumulatorReserve), then deposit held
 /// product into containers, then accumulators push what's above the reserve into containers with room. Pipes never pool,
-/// buildings never touch-transfer, and types change nowhere but inside a running process cycle.
+/// and buildings never touch-transfer.
 /// The process table (#146) holds the rows hosts run (inputs and outputs by type, cycle seconds), keyed by host type.
+/// Types change in exactly two places: inside a running host cycle (the controlled route, the inputs × the row's host
+/// multiplier) and where a row's inputs collide on the map (the wild route, CombineStep, after every flow tick). Never in
+/// pipes, never in stores.
 /// </summary>
 [DisallowMultipleComponent]
 public class ManaFlow : MonoBehaviour
@@ -153,15 +156,17 @@ public class ManaFlow : MonoBehaviour
     };
 
     // The process table (#146): inputs + cycle → outputs, keyed by host. The chamber is the pilot host; later hosts add rows.
+    // Inputs are the map amounts (3 + 3 → 1 where fronts collide); the chamber takes hostInputMultiplier (×2) of them.
+    // The single-input Storm row doesn't combine on the map: with nothing to collide with, Storm would decay on its own.
     [Header("Processes")]
     [SerializeField] private List<ManaProcessRow> processes = new List<ManaProcessRow>
     {
         new ManaProcessRow(PlaceableType.CombinationChamber,
-            new[] { new ManaAmount(FireId, 2), new ManaAmount(WaterId, 2) }, new[] { new ManaAmount(AirId, 3) }, 10f),
+            new[] { new ManaAmount(FireId, 3), new ManaAmount(WaterId, 3) }, new[] { new ManaAmount(AirId, 1) }, 10f),
         new ManaProcessRow(PlaceableType.CombinationChamber,
-            new[] { new ManaAmount(AirId, 2), new ManaAmount(WaterId, 2) }, new[] { new ManaAmount(StormId, 3) }, 10f),
+            new[] { new ManaAmount(AirId, 3), new ManaAmount(WaterId, 3) }, new[] { new ManaAmount(StormId, 1) }, 10f),
         new ManaProcessRow(PlaceableType.CombinationChamber,
-            new[] { new ManaAmount(StormId, 3) }, new[] { new ManaAmount(LightningId, 2) }, 10f),
+            new[] { new ManaAmount(StormId, 3) }, new[] { new ManaAmount(LightningId, 1) }, 10f, combinesOnMap: false),
     };
 
     [Header("Occupancy and Flow")]
@@ -415,7 +420,8 @@ public class ManaFlow : MonoBehaviour
     // ---- the clock ----
 
     /// <summary>
-    /// Advances the simulation by deltaTime (game time: pause freezes it): the points of interest in row order, then flow, then collection, then (#146)
+    /// Advances the simulation by deltaTime (game time: pause freezes it): the points of interest in row order, then flow
+    /// (each flow tick followed by a map combination pass, #146), then collection, then (#146)
     /// process cycles, then the transfer pass, each on its own serialized cadence; then discovery. Update calls it; public so tests can step it.
     /// </summary>
     public void Tick(float deltaTime)
@@ -432,6 +438,7 @@ public class ManaFlow : MonoBehaviour
             {
                 flowTimer -= flowTickSeconds;
                 FlowStep();
+                CombineStep(); // #146: fronts that met this tick react before the next
             }
         }
 
@@ -522,6 +529,102 @@ public class ManaFlow : MonoBehaviour
         }
         if (lower.Count == 0) return false;
         to = lower[Mathf.Clamp(pick(lower.Count), 0, lower.Count - 1)];
+        return true;
+    }
+
+    // ---- map combination (#146, the wild route) ----
+
+    /// <summary>
+    /// One combination pass over the board (the clock runs it after every flow tick). Tiles in board scan order; for each,
+    /// the process rows that combine on the map, in table order; the first that fires wins and the tile is done for the
+    /// tick. A row fires at a tile when the tile holds at least the row's map amount of one input and (a two-input row) a
+    /// 4-neighbour, in right-up-left-down order and not yet used this tick, holds at least the map amount of the other.
+    /// Exactly the row's amounts leave those tiles and exactly its outputs appear: on the reacting tiles first, then their
+    /// open 4-neighbours, each taking what the cap and the one-type rule allow. When the product can't all fit, nothing
+    /// changes — it waits for room. Every tile that changed is used for the rest of the tick. Deterministic: no random
+    /// picks. Returns how many reactions fired.
+    /// </summary>
+    public int CombineStep()
+    {
+        if (dungeonBoard == null || cells.Count == 0 || processes == null) return 0;
+        var rows = new List<ManaProcessRow>();
+        foreach (ManaProcessRow row in processes)
+            if (row != null && row.CanCombineOnMap) rows.Add(row);
+        if (rows.Count == 0) return 0;
+
+        var used = new HashSet<Vector2Int>();
+        int reactions = 0;
+        foreach (Vector2Int tile in ScanOrdered(cells.Keys))
+        {
+            if (used.Contains(tile) || TypeAt(tile) == null) continue;
+            foreach (ManaProcessRow row in rows)
+            {
+                if (!TryCombineAt(row, tile, used)) continue;
+                reactions++;
+                break;
+            }
+        }
+        return reactions;
+    }
+
+    private bool TryCombineAt(ManaProcessRow row, Vector2Int tile, HashSet<Vector2Int> used)
+    {
+        List<string> types = row.InputTypes();
+        string here = TypeAt(tile);
+        if (!types.Contains(here) || UnitsAt(tile) < row.MapInputOf(here)) return false;
+
+        var reacting = new List<Vector2Int> { tile };
+        if (types.Count == 2)
+        {
+            string other = types[0] == here ? types[1] : types[0];
+            bool found = false;
+            foreach (Vector2Int d in Neighbors)
+            {
+                Vector2Int n = tile + d;
+                if (used.Contains(n) || TypeAt(n) != other || UnitsAt(n) < row.MapInputOf(other)) continue;
+                reacting.Add(n);
+                found = true;
+                break;
+            }
+            if (!found) return false;
+        }
+
+        // What the board would hold after: the inputs out, then the outputs placed. Committed only if everything fits.
+        var after = new Dictionary<Vector2Int, Cell>();
+        foreach (Vector2Int r in reacting)
+        {
+            Cell c = cells[r];
+            int left = c.count - row.MapInputOf(c.type);
+            after[r] = left > 0 ? new Cell { type = c.type, count = left } : default;
+        }
+        var places = new List<Vector2Int>(reacting);
+        foreach (Vector2Int r in reacting)
+            foreach (Vector2Int d in Neighbors)
+                if (!places.Contains(r + d) && IsOpen(r + d)) places.Add(r + d);
+
+        foreach (ManaAmount output in row.outputs)
+        {
+            int toPlace = output.amount;
+            foreach (Vector2Int p in places)
+            {
+                if (toPlace <= 0) break;
+                Cell c = after.TryGetValue(p, out Cell a) ? a : cells.TryGetValue(p, out Cell b) ? b : default;
+                if (c.count > 0 && c.type != output.type) continue;
+                int put = Mathf.Min(toPlace, maxManaPerTile - c.count);
+                if (put <= 0) continue;
+                after[p] = new Cell { type = output.type, count = c.count + put };
+                toPlace -= put;
+            }
+            if (toPlace > 0) return false; // No room for the product: nothing converts
+        }
+
+        foreach (KeyValuePair<Vector2Int, Cell> e in after)
+        {
+            if (e.Value.count > 0) cells[e.Key] = e.Value;
+            else cells.Remove(e.Key);
+            used.Add(e.Key);
+            ManaChanged?.Invoke(e.Key);
+        }
         return true;
     }
 

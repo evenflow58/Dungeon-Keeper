@@ -18,8 +18,11 @@ public class ManaAmount
 }
 
 /// <summary>
-/// One row of the process table (#146): a host building type, the inputs one cycle consumes, the outputs it produces, and
-/// the cycle's length. The Combination Chamber is the pilot host; later hosts (kilns, cooks) add rows, not machinery.
+/// One row of the process table (#146): a host building type, the reaction's inputs and outputs, and the host's cycle
+/// length. The inputs are the reaction's base amounts — what a collision on the map consumes (3 Fire + 3 Water → 1 Air).
+/// A host consumes hostInputMultiplier times the inputs for the same outputs (the chamber: ×2, so 6 + 6 → 1): the
+/// controlled route costs more than the wild one. combinesOnMap says whether the reaction also happens where its inputs
+/// meet on the board. The Combination Chamber is the pilot host; later hosts (kilns, cooks) add rows, not machinery.
 /// </summary>
 [Serializable]
 public class ManaProcessRow
@@ -28,34 +31,79 @@ public class ManaProcessRow
     public List<ManaAmount> inputs = new List<ManaAmount>();
     public List<ManaAmount> outputs = new List<ManaAmount>();
     public float cycleSeconds;
+    public int hostInputMultiplier = 2; // A host takes this many times the inputs for the same outputs (tuning)
+    public bool combinesOnMap = true;    // The reaction also happens where its inputs collide on the board
 
-    public ManaProcessRow(PlaceableType host, ManaAmount[] inputs, ManaAmount[] outputs, float cycleSeconds)
+    public ManaProcessRow(PlaceableType host, ManaAmount[] inputs, ManaAmount[] outputs, float cycleSeconds,
+        int hostInputMultiplier = 2, bool combinesOnMap = true)
     {
         this.host = host;
         this.inputs = new List<ManaAmount>(inputs);
         this.outputs = new List<ManaAmount>(outputs);
         this.cycleSeconds = cycleSeconds;
+        this.hostInputMultiplier = hostInputMultiplier;
+        this.combinesOnMap = combinesOnMap;
     }
 
-    /// <summary>The row's name, from its data: "2 Fire + 2 Water → 3 Air".</summary>
-    public string Name => $"{Join(inputs)} → {Join(outputs)}";
+    /// <summary>The multiplier a host applies, never below 1 (a host never gets the reaction cheaper than the map).</summary>
+    public int HostMultiplier => Mathf.Max(1, hostInputMultiplier);
 
-    /// <summary>How many of a type one cycle consumes (0 when it isn't an input).</summary>
-    public int InputOf(string type)
+    /// <summary>The row's name as its host runs it, from its data: "6 Fire + 6 Water → 1 Air".</summary>
+    public string Name => $"{Join(inputs, HostMultiplier)} → {Join(outputs, 1)}";
+
+    /// <summary>The reaction as it happens on the map: "3 Fire + 3 Water → 1 Air".</summary>
+    public string MapName => $"{Join(inputs, 1)} → {Join(outputs, 1)}";
+
+    /// <summary>How many of a type a map collision consumes (0 when it isn't an input).</summary>
+    public int MapInputOf(string type)
     {
         int n = 0;
         foreach (ManaAmount a in inputs) if (a != null && a.type == type) n += a.amount;
         return n;
     }
 
-    private static string Join(List<ManaAmount> amounts)
+    /// <summary>How many of a type one host cycle consumes: the map amount × the host multiplier.</summary>
+    public int HostInputOf(string type) => MapInputOf(type) * HostMultiplier;
+
+    /// <summary>The distinct input types, in row order.</summary>
+    public List<string> InputTypes()
+    {
+        var list = new List<string>();
+        foreach (ManaAmount a in inputs)
+            if (a != null && !string.IsNullOrEmpty(a.type) && !list.Contains(a.type)) list.Add(a.type);
+        return list;
+    }
+
+    /// <summary>
+    /// Whether the reaction can happen on the map: flagged, one or two input types (a tile holds one type, so a collision
+    /// is one tile or two side by side), every amount positive, and some output.
+    /// </summary>
+    public bool CanCombineOnMap
+    {
+        get
+        {
+            if (!combinesOnMap) return false;
+            int types = InputTypes().Count;
+            if (types < 1 || types > 2) return false;
+            foreach (ManaAmount a in inputs) if (a == null || a.amount <= 0) return false;
+            int produced = 0;
+            foreach (ManaAmount a in outputs)
+            {
+                if (a == null || string.IsNullOrEmpty(a.type) || a.amount < 0) return false;
+                produced += a.amount;
+            }
+            return produced > 0;
+        }
+    }
+
+    private static string Join(List<ManaAmount> amounts, int multiplier)
     {
         var sb = new StringBuilder();
         foreach (ManaAmount a in amounts)
         {
             if (a == null) continue;
             if (sb.Length > 0) sb.Append(" + ");
-            sb.Append(a.amount).Append(' ').Append(a.type);
+            sb.Append(a.amount * multiplier).Append(' ').Append(a.type);
         }
         return sb.ToString();
     }
@@ -154,7 +202,7 @@ public class ManaProcessor
     /// </summary>
     public int Demand(string type) =>
         Row == null || IsRunning || IsHolding || (PendingRow != null && StagedTotal == 0) ? 0
-        : Mathf.Max(0, Row.InputOf(type) - StagedOf(type));
+        : Mathf.Max(0, Row.HostInputOf(type) - StagedOf(type));
 
     public bool IsFullyStaged
     {
@@ -162,7 +210,7 @@ public class ManaProcessor
         {
             if (Row == null || Row.inputs.Count == 0) return false;
             foreach (ManaAmount a in Row.inputs)
-                if (a != null && StagedOf(a.type) < Row.InputOf(a.type)) return false;
+                if (a != null && StagedOf(a.type) < Row.HostInputOf(a.type)) return false;
             return true;
         }
     }

@@ -512,7 +512,7 @@ public class DetailCard : MonoBehaviour
         {
             var staged = new List<string>();
             foreach (ManaAmount input in row.inputs)
-                if (input != null) staged.Add($"{input.type} {processor.StagedOf(input.type)}/{row.InputOf(input.type)}");
+                if (input != null) staged.Add($"{input.type} {processor.StagedOf(input.type)}/{row.HostInputOf(input.type)}");
             lines.Add("Staged: " + string.Join(" · ", staged));
         }
         if (processor.IsHolding)

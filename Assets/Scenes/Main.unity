@@ -1280,9 +1280,6 @@ MonoBehaviour:
   - id: Storm
     displayName: Storm Mana
     color: {r: 0.52, g: 0.48, b: 0.66, a: 1}
-  - id: Lightning
-    displayName: Lightning Mana
-    color: {r: 1, g: 0.92, b: 0.25, a: 1}
   processes:
   - host: 8
     inputs:
@@ -1308,16 +1305,6 @@ MonoBehaviour:
     cycleSeconds: 10
     hostInputMultiplier: 2
     combinesOnMap: 1
-  - host: 8
-    inputs:
-    - type: Storm
-      amount: 3
-    outputs:
-    - type: Lightning
-      amount: 1
-    cycleSeconds: 10
-    hostInputMultiplier: 2
-    combinesOnMap: 0
   maxManaPerTile: 5
   flowTickSeconds: 0.5
   flowSeed: 145

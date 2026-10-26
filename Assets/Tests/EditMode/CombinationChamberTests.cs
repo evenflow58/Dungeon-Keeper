@@ -8,7 +8,7 @@ using Object = UnityEngine.Object;
 /// the new made types; the chamber's cycle accounting at the host ratio (6 + 6 → 1: exactly the row's inputs × the host
 /// multiplier consumed at the start, exactly its outputs produced at the end, every unit accounted for in between); the
 /// multiplier as tuning; the draw order (containers before buffers, buffers never below the reserve); both stall reasons
-/// and the hands-off resume; a partial deposit; process selection; the full chain to Lightning; no conversion in pipes;
+/// and the hands-off resume; a partial deposit; process selection; the full chain to Storm; no conversion in pipes;
 /// the map collision (3 + 3 → 1, exact, nothing below the row's amounts, the product placed or the reaction waits); and
 /// the chamber's shipped data and presentation.
 /// </summary>
@@ -20,7 +20,6 @@ public class CombinationChamberTests
     private const string Water = ManaFlow.WaterId;
     private const string Air = ManaFlow.AirId;
     private const string Storm = ManaFlow.StormId;
-    private const string Lightning = ManaFlow.LightningId;
 
     private GameObject managerGo;
     private DungeonBoard board;
@@ -133,10 +132,10 @@ public class CombinationChamberTests
     // ---- the process table ----
 
     [Test]
-    public void ProcessTable_TheThreeChamberRows_ResolveExactly_FilteredByHost()
+    public void ProcessTable_TheTwoChamberRows_ResolveExactly_FilteredByHost()
     {
         List<ManaProcessRow> rows = mana.RowsFor(PlaceableType.CombinationChamber);
-        Assert.AreEqual(3, rows.Count);
+        Assert.AreEqual(2, rows.Count);
         void AssertRow(ManaProcessRow row, (string, int)[] inputs, (string, int)[] outputs, string name, string mapName, bool onMap)
         {
             Assert.AreEqual(PlaceableType.CombinationChamber, row.host);
@@ -160,7 +159,6 @@ public class CombinationChamberTests
         }
         AssertRow(rows[0], new[] { (Fire, 3), (Water, 3) }, new[] { (Air, 1) }, "6 Fire + 6 Water → 1 Air", "3 Fire + 3 Water → 1 Air", true);
         AssertRow(rows[1], new[] { (Air, 3), (Water, 3) }, new[] { (Storm, 1) }, "6 Air + 6 Water → 1 Storm", "3 Air + 3 Water → 1 Storm", true);
-        AssertRow(rows[2], new[] { (Storm, 3) }, new[] { (Lightning, 1) }, "6 Storm → 1 Lightning", "3 Storm → 1 Lightning", false);
         Assert.AreEqual(3, rows[0].MapInputOf(Fire));
         Assert.AreEqual(6, rows[0].HostInputOf(Fire));
         Assert.AreEqual(0, rows[0].HostInputOf(Storm));
@@ -170,7 +168,7 @@ public class CombinationChamberTests
 
         // Rows key by host: a later host's rows never leak into the chamber's.
         mana.Processes.Add(new ManaProcessRow(PlaceableType.FurnaceGenerator, new[] { new ManaAmount(Fire, 1) }, new ManaAmount[0], 5f));
-        Assert.AreEqual(3, mana.RowsFor(PlaceableType.CombinationChamber).Count);
+        Assert.AreEqual(2, mana.RowsFor(PlaceableType.CombinationChamber).Count);
         Assert.AreEqual(1, mana.RowsFor(PlaceableType.FurnaceGenerator).Count);
     }
 
@@ -194,9 +192,9 @@ public class CombinationChamberTests
     }
 
     [Test]
-    public void ShippedTypes_AirStormAndLightning_AreDataRows()
+    public void ShippedTypes_AirAndStorm_AreDataRows()
     {
-        foreach ((string id, string name) in new[] { (Air, "Air Mana"), (Storm, "Storm Mana"), (Lightning, "Lightning Mana") })
+        foreach ((string id, string name) in new[] { (Air, "Air Mana"), (Storm, "Storm Mana") })
         {
             Assert.IsTrue(mana.TryGetType(id, out ManaTypeDefinition row), id);
             Assert.AreEqual(name, row.displayName);
@@ -204,7 +202,7 @@ public class CombinationChamberTests
         }
         var colors = new HashSet<Color>();
         foreach (ManaTypeDefinition d in mana.ManaTypes) colors.Add(d.color);
-        Assert.AreEqual(5, colors.Count, "Five types, five colors");
+        Assert.AreEqual(4, colors.Count, "Four types, four colors");
     }
 
     // ---- the cycle ----
@@ -413,8 +411,8 @@ public class CombinationChamberTests
         Assert.AreEqual(1, processor.HeldOf(Storm));
         Assert.IsFalse(chamber.SelectProcess(0), "Holding product: refused");
         Assert.AreEqual(1, processor.TakeHeld(Storm, 1));
-        Assert.IsTrue(chamber.SelectProcess(2), "Empty again: switches");
-        Assert.AreEqual("6 Storm → 1 Lightning", processor.Row.Name);
+        Assert.IsTrue(chamber.SelectProcess(0), "Empty again: switches");
+        Assert.AreEqual("6 Fire + 6 Water → 1 Air", processor.Row.Name);
     }
 
     [Test]
@@ -453,7 +451,7 @@ public class CombinationChamberTests
         BuildPipe(T(22, 15));
         Run(3f);
         Assert.AreEqual("Missing Water", chamber.Processor.StallText);
-        Assert.IsTrue(chamber.RequestProcess(2));
+        Assert.IsTrue(chamber.RequestProcess(1));
         Run(5f);
         Assert.AreEqual(0, chamber.SelectedIndex, "Its staged Fire is committed: it waits to finish that set");
         Assert.AreEqual(6, chamber.Processor.StagedOf(Fire), "Nothing is stranded or thrown away");
@@ -463,40 +461,31 @@ public class CombinationChamberTests
     // ---- the chain, and no conversion in transit ----
 
     [Test]
-    public void EndToEnd_FireAndWaterToAir_AirAndWaterToStorm_StormToLightning_LandsInAContainer()
+    public void EndToEnd_FireAndWaterToAir_AirAndWaterToStorm_LandsInAContainer()
     {
-        // Staged in code: each row makes one unit, so the Air and Storm containers start one cycle short of a set.
+        // Staged in code: each row makes one unit, so the Air container starts one cycle short of a set.
         Tank(T(21, 15), Fire, 20);
         Tank(T(22, 15), Water, 20);
         CombinationChamber chamber = Chamber(T(23, 15));
-        Tank(T(24, 15), Storm, 5);
-        Tank(T(25, 15), Air, 5);
-        Tank(T(26, 15));
+        Tank(T(24, 15), Air, 5);
+        Tank(T(25, 15));
         ManaProcessor processor = chamber.Processor;
 
-        void RunOneCycleThenSwitch(int completed, int nextRow)
-        {
-            RunUntil(() => processor.CyclesCompleted == completed && !processor.IsHolding && processor.IsEmpty, 20f);
-            Assert.IsTrue(chamber.SelectProcess(nextRow), $"Idle and empty after cycle {completed}: switch to row {nextRow}");
-        }
-
-        RunOneCycleThenSwitch(1, 1);
+        RunUntil(() => processor.CyclesCompleted == 1 && processor.IsEmpty, 20f);
         Assert.AreEqual(6, mana.TotalOf(Air), "One Air made");
-        RunOneCycleThenSwitch(2, 2);
-        Assert.AreEqual(0, mana.TotalOf(Air), "Six Air went into the Storm");
-        Assert.AreEqual(6, mana.TotalOf(Storm), "One Storm made");
-        RunUntil(() => processor.CyclesCompleted == 3 && !processor.IsHolding, 20f);
+        Assert.IsTrue(chamber.SelectProcess(1), "Idle and empty after cycle 1: switch to the Storm row");
+        RunUntil(() => processor.CyclesCompleted == 2 && !processor.IsHolding, 20f);
 
-        Assert.AreEqual(0, mana.TotalOf(Storm), "Six Storm went into the Lightning");
-        Assert.AreEqual(1, mana.TotalOf(Lightning));
-        Assert.IsTrue(mana.IsDiscovered(Lightning));
+        Assert.AreEqual(0, mana.TotalOf(Air), "Six Air went into the Storm");
+        Assert.AreEqual(1, mana.TotalOf(Storm), "One Storm made");
+        Assert.IsTrue(mana.IsDiscovered(Storm));
         bool inAContainer = false;
         foreach (ManaContainer tank in manager.GetManaContainers())
-            if (tank.Store.Type == Lightning && tank.Store.Amount == 1) inAContainer = true;
-        Assert.IsTrue(inAContainer, "Lightning landed in a container");
+            if (tank.Store.Type == Storm && tank.Store.Amount == 1) inAContainer = true;
+        Assert.IsTrue(inAContainer, "Storm landed in a container");
         Assert.AreEqual(20 - 6, mana.TotalOf(Fire), "Fire: only the first row's 6");
         Assert.AreEqual(20 - 12, mana.TotalOf(Water), "Water: 6 for Air, 6 for Storm");
-        CollectionAssert.AreEqual(new[] { Fire, Water, Air, Storm, Lightning }, mana.DiscoveredTypes(), "Catalog order");
+        CollectionAssert.AreEqual(new[] { Fire, Water, Air, Storm }, mana.DiscoveredTypes(), "Catalog order");
     }
 
     [Test]
@@ -648,13 +637,9 @@ public class CombinationChamberTests
     }
 
     [Test]
-    public void MapCollision_SingleInputStormRow_IsOffTheMap_AndTheFlagTurnsARowOff()
+    public void MapCollision_TheFlagTurnsARowOff()
     {
-        Carve(T(10, 6), T(11, 6), T(13, 6), T(14, 6));
-        Put(T(10, 6), Storm, 5);
-        Assert.AreEqual(0, mana.CombineStep(), "Storm on its own never decays into Lightning");
-        Assert.AreEqual(5, OnBoard(Storm));
-
+        Carve(T(13, 6), T(14, 6));
         Put(T(13, 6), Fire, 3);
         Put(T(14, 6), Water, 3);
         mana.RowsFor(PlaceableType.CombinationChamber)[0].combinesOnMap = false;
@@ -681,7 +666,6 @@ public class CombinationChamberTests
             int a1 = OnBoard(Air) + 3 * a2;
             Assert.AreEqual(f0 - 3 * a1, OnBoard(Fire), $"tick {i}: Fire leaves only 3 at a time, by reaction");
             Assert.AreEqual(w0 - 3 * a1 - 3 * a2, OnBoard(Water), $"tick {i}: so does Water");
-            Assert.AreEqual(0, OnBoard(Lightning), "Storm never decays on the map");
         }
         Assert.Greater(OnBoard(Air) + OnBoard(Storm), 0, "The fronts met and reacted");
     }
@@ -701,7 +685,7 @@ public class CombinationChamberTests
         Assert.IsTrue(BuildPresentation.TryGetCategory(PlaceableType.CombinationChamber, out BuildCategory category));
         Assert.AreEqual(BuildCategory.Magic, category);
         Assert.AreEqual("Combination Chamber", BuildPresentation.DisplayName(PlaceableType.CombinationChamber));
-        Assert.AreEqual("Runs one of 3 processes · 10 s cycles",
+        Assert.AreEqual("Runs one of 2 processes · 10 s cycles",
             DetailCard.StatLine(BuildStat.ManaProcesses, manager, PlaceableType.CombinationChamber, MaterialType.Stone));
 
         Assert.IsTrue(manager.TryPlace(PlaceableType.CombinationChamber, T(23, 15), ImpTile, out Placeable site));
@@ -726,9 +710,9 @@ public class CombinationChamberTests
             "Staged: Fire 6/6 · Water 0/6",
             "On a pipe · 2 stores · Fire 4 · 1 empty",
         }, lines);
-        Assert.IsTrue(chamber.RequestProcess(2), "Partly staged: the switch waits");
+        Assert.IsTrue(chamber.RequestProcess(1), "Partly staged: the switch waits");
         lines = DetailCard.ChamberLines(chamber.Processor, true, mana.PortsOnNetworkOf(chamber.Tile));
-        Assert.AreEqual("Switching to 6 Storm → 1 Lightning after this cycle", lines[lines.Count - 1]);
+        Assert.AreEqual("Switching to 6 Air + 6 Water → 1 Storm after this cycle", lines[lines.Count - 1]);
         Assert.IsTrue(chamber.RequestProcess(0), "Asking for the running row cancels it");
         Assert.IsNull(chamber.Processor.PendingRow);
 

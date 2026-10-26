@@ -134,7 +134,6 @@ public class ManaFlow : MonoBehaviour
     public const string WaterId = "Water";
     public const string AirId = "Air";             // #146: made, not found — the chamber's products
     public const string StormId = "Storm";
-    public const string LightningId = "Lightning";
     public const string FireVentName = "Fire Vent";
     public const string SpringName = "Spring";
 
@@ -152,12 +151,10 @@ public class ManaFlow : MonoBehaviour
         new ManaTypeDefinition(WaterId, "Water Mana", new Color(0.25f, 0.60f, 1.00f, 1f)),
         new ManaTypeDefinition(AirId, "Air Mana", new Color(0.82f, 0.94f, 0.96f, 1f)),             // #146: pale
         new ManaTypeDefinition(StormId, "Storm Mana", new Color(0.52f, 0.48f, 0.66f, 1f)),         // Grey-violet
-        new ManaTypeDefinition(LightningId, "Lightning Mana", new Color(1.00f, 0.92f, 0.25f, 1f)), // Bright yellow
     };
 
     // The process table (#146): inputs + cycle → outputs, keyed by host. The chamber is the pilot host; later hosts add rows.
     // Inputs are the map amounts (3 + 3 → 1 where fronts collide); the chamber takes hostInputMultiplier (×2) of them.
-    // The single-input Storm row doesn't combine on the map: with nothing to collide with, Storm would decay on its own.
     [Header("Processes")]
     [SerializeField] private List<ManaProcessRow> processes = new List<ManaProcessRow>
     {
@@ -165,8 +162,6 @@ public class ManaFlow : MonoBehaviour
             new[] { new ManaAmount(FireId, 3), new ManaAmount(WaterId, 3) }, new[] { new ManaAmount(AirId, 1) }, 10f),
         new ManaProcessRow(PlaceableType.CombinationChamber,
             new[] { new ManaAmount(AirId, 3), new ManaAmount(WaterId, 3) }, new[] { new ManaAmount(StormId, 1) }, 10f),
-        new ManaProcessRow(PlaceableType.CombinationChamber,
-            new[] { new ManaAmount(StormId, 3) }, new[] { new ManaAmount(LightningId, 1) }, 10f, combinesOnMap: false),
     };
 
     [Header("Occupancy and Flow")]

@@ -21,8 +21,8 @@ public class ManaAmount
 /// One row of the process table (#146): a host building type, the reaction's inputs and outputs, and the host's cycle
 /// length. The inputs are the reaction's base amounts — what a collision on the map consumes (3 Fire + 3 Water → 1 Air).
 /// A host consumes hostInputMultiplier times the inputs for the same outputs (the chamber: ×2, so 6 + 6 → 1): the
-/// controlled route costs more than the wild one. combinesOnMap says whether the reaction also happens where its inputs
-/// meet on the board. The Combination Chamber is the pilot host; later hosts (kilns, cooks) add rows, not machinery.
+/// controlled route costs more than the wild one. Every row also happens on the map, where its inputs collide (see
+/// CanCombineOnMap for the shape a row needs). The Combination Chamber is the pilot host; later hosts (kilns, cooks) add rows, not machinery.
 /// </summary>
 [Serializable]
 public class ManaProcessRow
@@ -32,17 +32,15 @@ public class ManaProcessRow
     public List<ManaAmount> outputs = new List<ManaAmount>();
     public float cycleSeconds;
     public int hostInputMultiplier = 2; // A host takes this many times the inputs for the same outputs (tuning)
-    public bool combinesOnMap = true;    // The reaction also happens where its inputs collide on the board
 
     public ManaProcessRow(PlaceableType host, ManaAmount[] inputs, ManaAmount[] outputs, float cycleSeconds,
-        int hostInputMultiplier = 2, bool combinesOnMap = true)
+        int hostInputMultiplier = 2)
     {
         this.host = host;
         this.inputs = new List<ManaAmount>(inputs);
         this.outputs = new List<ManaAmount>(outputs);
         this.cycleSeconds = cycleSeconds;
         this.hostInputMultiplier = hostInputMultiplier;
-        this.combinesOnMap = combinesOnMap;
     }
 
     /// <summary>The multiplier a host applies, never below 1 (a host never gets the reaction cheaper than the map).</summary>
@@ -75,14 +73,13 @@ public class ManaProcessRow
     }
 
     /// <summary>
-    /// Whether the reaction can happen on the map: flagged, one or two input types (a tile holds one type, so a collision
+    /// Whether the reaction can happen on the map: one or two input types (a tile holds one type, so a collision
     /// is one tile or two side by side), every amount positive, and some output.
     /// </summary>
     public bool CanCombineOnMap
     {
         get
         {
-            if (!combinesOnMap) return false;
             int types = InputTypes().Count;
             if (types < 1 || types > 2) return false;
             foreach (ManaAmount a in inputs) if (a == null || a.amount <= 0) return false;

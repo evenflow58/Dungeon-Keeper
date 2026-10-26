@@ -350,7 +350,7 @@ public class CombinationChamberTests
         mana.Processes = new List<ManaProcessRow>
         {
             new ManaProcessRow(PlaceableType.CombinationChamber,
-                new[] { new ManaAmount(Fire, 1), new ManaAmount(Water, 1) }, new[] { new ManaAmount(Air, 3) }, 10f, 2, false),
+                new[] { new ManaAmount(Fire, 1), new ManaAmount(Water, 1) }, new[] { new ManaAmount(Air, 3) }, 10f),
         };
         Tank(T(21, 15), Fire, 20);
         Tank(T(22, 15), Water, 20);
@@ -634,17 +634,6 @@ public class CombinationChamberTests
         Assert.AreEqual(0, OnBoard(Fire));
         Assert.AreEqual(0, OnBoard(Water));
         Assert.AreEqual(2, OnBoard(Air));
-    }
-
-    [Test]
-    public void MapCollision_TheFlagTurnsARowOff()
-    {
-        Carve(T(13, 6), T(14, 6));
-        Put(T(13, 6), Fire, 3);
-        Put(T(14, 6), Water, 3);
-        mana.RowsFor(PlaceableType.CombinationChamber)[0].combinesOnMap = false;
-        Assert.AreEqual(0, mana.CombineStep(), "Flagged off: the chamber's route only");
-        Assert.AreEqual(3, OnBoard(Fire));
     }
 
     [Test]

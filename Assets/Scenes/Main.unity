@@ -1292,7 +1292,6 @@ MonoBehaviour:
       amount: 1
     cycleSeconds: 10
     hostInputMultiplier: 2
-    combinesOnMap: 1
   - host: 8
     inputs:
     - type: Air
@@ -1304,7 +1303,6 @@ MonoBehaviour:
       amount: 1
     cycleSeconds: 10
     hostInputMultiplier: 2
-    combinesOnMap: 1
   maxManaPerTile: 5
   flowTickSeconds: 0.5
   flowSeed: 145

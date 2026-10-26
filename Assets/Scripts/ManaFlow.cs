@@ -536,13 +536,14 @@ public class ManaFlow : MonoBehaviour
 
     /// <summary>
     /// One combination pass over the board (the clock runs it after every flow tick). Tiles in board scan order; for each,
-    /// the process rows that combine on the map, in table order; the first that fires wins and the tile is done for the
-    /// tick. A row fires at a tile when the tile holds at least the row's map amount of one input and (a two-input row) a
-    /// 4-neighbour, in right-up-left-down order and not yet used this tick, holds at least the map amount of the other.
-    /// Exactly the row's amounts leave those tiles and exactly its outputs appear: on the reacting tiles first, then their
-    /// open 4-neighbours, each taking what the cap and the one-type rule allow. When the product can't all fit, nothing
-    /// changes — it waits for room. Every tile that changed is used for the rest of the tick. Deterministic: no random
-    /// picks. Returns how many reactions fired.
+    /// the process rows that combine on the map, in table order; the first that fires wins. A row fires centred on a tile
+    /// that holds one of its inputs when the plus — the centre and its 4-neighbours not yet used this tick — holds at least
+    /// the row's map amount of every input. So the other input always touches the centre: a collision, not a mix at a
+    /// distance; and the scattered 1–2 unit pockets where fronts interleave still count. Exactly the row's amounts leave
+    /// the plus (the centre first, then right, up, left, down) and exactly its outputs appear: on the centre, then its open
+    /// neighbours, then the open neighbours of the tiles drawn from, each taking what the cap and the one-type rule allow.
+    /// When the product can't all fit, nothing changes — it waits for room. Every tile that changed is used for the rest of
+    /// the tick. Deterministic: no random picks. Returns how many reactions fired.
     /// </summary>
     public int CombineStep()
     {
@@ -570,35 +571,33 @@ public class ManaFlow : MonoBehaviour
     private bool TryCombineAt(ManaProcessRow row, Vector2Int tile, HashSet<Vector2Int> used)
     {
         List<string> types = row.InputTypes();
-        string here = TypeAt(tile);
-        if (!types.Contains(here) || UnitsAt(tile) < row.MapInputOf(here)) return false;
+        if (!types.Contains(TypeAt(tile))) return false; // The centre holds an input: whatever else counts touches it
 
-        var reacting = new List<Vector2Int> { tile };
-        if (types.Count == 2)
+        // The plus: the centre, then its 4-neighbours not yet used this tick. Each input is taken from it in that order.
+        var plus = new List<Vector2Int> { tile };
+        foreach (Vector2Int d in Neighbors)
+            if (!used.Contains(tile + d)) plus.Add(tile + d);
+        var after = new Dictionary<Vector2Int, Cell>(); // What the board would hold after; committed only if all fits
+        foreach (string type in types)
         {
-            string other = types[0] == here ? types[1] : types[0];
-            bool found = false;
-            foreach (Vector2Int d in Neighbors)
+            int need = row.MapInputOf(type);
+            foreach (Vector2Int p in plus)
             {
-                Vector2Int n = tile + d;
-                if (used.Contains(n) || TypeAt(n) != other || UnitsAt(n) < row.MapInputOf(other)) continue;
-                reacting.Add(n);
-                found = true;
-                break;
+                if (need <= 0) break;
+                Cell c = after.TryGetValue(p, out Cell a) ? a : cells.TryGetValue(p, out Cell b) ? b : default;
+                if (c.count <= 0 || c.type != type) continue;
+                int take = Mathf.Min(need, c.count);
+                after[p] = c.count > take ? new Cell { type = type, count = c.count - take } : default;
+                need -= take;
             }
-            if (!found) return false;
+            if (need > 0) return false; // Below the row's amount: nothing converts
         }
 
-        // What the board would hold after: the inputs out, then the outputs placed. Committed only if everything fits.
-        var after = new Dictionary<Vector2Int, Cell>();
-        foreach (Vector2Int r in reacting)
-        {
-            Cell c = cells[r];
-            int left = c.count - row.MapInputOf(c.type);
-            after[r] = left > 0 ? new Cell { type = c.type, count = left } : default;
-        }
-        var places = new List<Vector2Int>(reacting);
-        foreach (Vector2Int r in reacting)
+        // The product goes to the centre, then its open neighbours, then the open neighbours of the tiles it drew from.
+        var places = new List<Vector2Int> { tile };
+        foreach (Vector2Int d in Neighbors)
+            if (IsOpen(tile + d)) places.Add(tile + d);
+        foreach (Vector2Int r in new List<Vector2Int>(after.Keys))
             foreach (Vector2Int d in Neighbors)
                 if (!places.Contains(r + d) && IsOpen(r + d)) places.Add(r + d);
 

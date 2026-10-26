@@ -982,10 +982,15 @@ public class ManaFlowTests
         for (int i = 0; i < 3000; i++) // 60 s: about 30 of each, far short of the 215 the space holds
         {
             mana.Tick(Dt);
-            int f = UnitsOf(Fire), w = UnitsOf(Water);
-            Assert.GreaterOrEqual(f, lastFire, "Fire only grows: nothing collects");
-            Assert.GreaterOrEqual(w, lastWater, "Water only grows");
-            Assert.AreEqual(mana.UnitCount, f + w, "Every unit is one type or the other");
+            // #146: where the fronts meet they combine on the map (3 + 3 → 1). Count what each point has emitted: what's
+            // on the board plus what reactions consumed (a1 Air reactions, a2 Storm reactions; Storm = a2, Air = a1 − 3·a2).
+            int a2 = UnitsOf(ManaFlow.StormId);
+            int a1 = UnitsOf(ManaFlow.AirId) + 3 * a2;
+            int f = UnitsOf(Fire) + 3 * a1, w = UnitsOf(Water) + 3 * a1 + 3 * a2;
+            Assert.GreaterOrEqual(f, lastFire, "Emitted Fire only grows: nothing collects");
+            Assert.GreaterOrEqual(w, lastWater, "Emitted Water only grows");
+            Assert.AreEqual(mana.UnitCount, UnitsOf(Fire) + UnitsOf(Water) + UnitsOf(ManaFlow.AirId) + UnitsOf(ManaFlow.StormId),
+                "Every unit is Fire, Water, or what they made");
             lastFire = f;
             lastWater = w;
             // A one-mouth point reads dormant while its mouth is at the cap or holds the other type: the shipped rule,

@@ -567,6 +567,35 @@ public class CombinationChamberTests
     }
 
     [Test]
+    public void MapCollision_ScatteredPocketsAroundATile_CountTogether_ExactlyTheRowsAmountsLeave()
+    {
+        // Where fronts interleave: a Fire tile boxed in by four 1-unit Water pockets (the measured Play freeze).
+        Carve(T(10, 6), T(11, 6), T(9, 6), T(10, 7), T(10, 5));
+        Put(T(10, 6), Fire, 5);
+        foreach (Vector2Int w in new[] { T(11, 6), T(10, 7), T(9, 6), T(10, 5) }) Put(w, Water, 1);
+
+        Assert.AreEqual(1, mana.CombineStep());
+        Assert.AreEqual(2, OnBoard(Fire), "Exactly 3 Fire from the centre");
+        Assert.AreEqual(1, OnBoard(Water), "Exactly 3 Water: right, up, left — in that order");
+        Assert.AreEqual(1, mana.UnitsAt(T(10, 5)), "Down, the last in order, kept its unit");
+        Assert.AreEqual(Air, mana.TypeAt(T(11, 6)), "The centre still holds Fire: the Air took the first freed neighbour");
+        Assert.AreEqual(1, OnBoard(Air));
+    }
+
+    [Test]
+    public void MapCollision_TheCentreMustHoldAnInput_SoTheInputsTouch()
+    {
+        // Fire and Water on either side of an Air tile never meet: no reaction centred on the Air.
+        Carve(T(9, 6), T(10, 6), T(11, 6));
+        Put(T(9, 6), Fire, 3);
+        Put(T(10, 6), Air, 1);
+        Put(T(11, 6), Water, 3);
+        Assert.AreEqual(0, mana.CombineStep());
+        Assert.AreEqual(3, OnBoard(Fire));
+        Assert.AreEqual(3, OnBoard(Water));
+    }
+
+    [Test]
     public void MapCollision_NoRoomForTheProduct_Waits_ThenReactsWhenRoomOpens()
     {
         Carve(T(10, 6), T(11, 6));

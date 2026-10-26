@@ -551,6 +551,8 @@ public class BoardRenderer : MonoBehaviour
         if (point != null) return SourceOverlayColor(point.manaType, manaFlow.IsDormant(point));
         IManaPort port = manaFlow.PortAt(tile);
         if (port != null) return StoreOverlayColor(port.Store);
+        IManaProcessorHost host = manaFlow.ProcessorAt(tile);
+        if (host != null) return ProcessorOverlayColor(host.Processor);
         Color dimmed = PowerOverlay.Dim(normal, overlayDimFactor);
         string type = manaFlow.TypeAt(tile);
         if (type != null) return Color.Lerp(dimmed, manaFlow.ColorOf(type), manaTileTint);
@@ -561,6 +563,18 @@ public class BoardRenderer : MonoBehaviour
     /// <summary>A store's magic-overlay color: its type's color while it holds mana, the neutral empty color otherwise.</summary>
     public Color StoreOverlayColor(ManaStore store) =>
         store != null && store.Type != null && manaFlow != null ? manaFlow.ColorOf(store.Type) : storeEmptyOverlayColor;
+
+    /// <summary>
+    /// A process host's magic-overlay color (#146): its product's type color while it runs or holds product, the neutral
+    /// empty color while it draws or sits idle.
+    /// </summary>
+    public Color ProcessorOverlayColor(ManaProcessor processor)
+    {
+        bool busy = processor != null && processor.Row != null && (processor.IsRunning || processor.IsHolding);
+        return busy && processor.Row.outputs.Count > 0 && manaFlow != null
+            ? manaFlow.ColorOf(processor.Row.outputs[0].type)
+            : storeEmptyOverlayColor;
+    }
 
     public Color PipeOverlayColor => pipeOverlayColor;
 

@@ -107,7 +107,7 @@ public interface IManaPort
 /// Points of interest are data rows (#150: the Fire Vent and the Spring): each sits on its tile (carved to Floor at
 /// setup, entombed in rock until dug out) and every emitSeconds emits one unit of its type onto the first 4-neighbor
 /// (board scan order) that has room, dormant while none has (entombed, or saturated), resuming on its own the moment one
-/// does. The flow is type-uniform: every type obeys the same rules and types never combine on tiles. Flow is pressure, like a gas:
+/// does. The flow is type-uniform: every type obeys the same rules. Flow is pressure, like a gas:
 /// a tile's pressure is the units on it. Every flowTickSeconds each tile holding mana, in a shuffled order and seeing
 /// moves already made, sends one unit to a neighbor that holds fewer units and has room, picked at random from those
 /// (seeded by flowSeed, so a run replays exactly). So mana always flows from high pressure to low; a closed space evens
@@ -118,14 +118,22 @@ public interface IManaPort
 /// session, the first time any store holds it. Accumulators collect from beside them on their own cycle, driven by this
 /// clock. Pipes are conduit's twin (pending / built, imp-built over pipeSecondsPerTile, explored Floor only); a network is
 /// a connected run of built pipe, and a building attaches only through pipe on its own tile. The transfer pass runs every
-/// transferSeconds per network: accumulators push what's above accumulatorReserve into containers with room, capped by a
-/// shared per-network throughput with an exact fractional carry. Pipes never pool and buildings never touch-transfer.
+/// transferSeconds per network, under a shared per-network throughput with an exact fractional carry: (#146) process hosts
+/// draw their demand first (from containers, then accumulator buffers above accumulatorReserve), then deposit held
+/// product into containers, then accumulators push what's above the reserve into containers with room. Pipes never pool,
+/// and buildings never touch-transfer.
+/// The process table (#146) holds the rows hosts run (inputs and outputs by type, cycle seconds), keyed by host type.
+/// Types change in exactly two places: inside a running host cycle (the controlled route, the inputs × the row's host
+/// multiplier) and where a row's inputs collide on the map (the wild route, CombineStep, after every flow tick). Never in
+/// pipes, never in stores.
 /// </summary>
 [DisallowMultipleComponent]
 public class ManaFlow : MonoBehaviour
 {
     public const string FireId = "Fire";
     public const string WaterId = "Water";
+    public const string AirId = "Air";             // #146: made, not found — the chamber's products
+    public const string StormId = "Storm";
     public const string FireVentName = "Fire Vent";
     public const string SpringName = "Spring";
 
@@ -141,6 +149,19 @@ public class ManaFlow : MonoBehaviour
     {
         new ManaTypeDefinition(FireId, "Fire Mana", new Color(1.00f, 0.42f, 0.12f, 1f)),
         new ManaTypeDefinition(WaterId, "Water Mana", new Color(0.25f, 0.60f, 1.00f, 1f)),
+        new ManaTypeDefinition(AirId, "Air Mana", new Color(0.82f, 0.94f, 0.96f, 1f)),             // #146: pale
+        new ManaTypeDefinition(StormId, "Storm Mana", new Color(0.52f, 0.48f, 0.66f, 1f)),         // Grey-violet
+    };
+
+    // The process table (#146): inputs + cycle → outputs, keyed by host. The chamber is the pilot host; later hosts add rows.
+    // Inputs are the map amounts (3 + 3 → 1 where fronts collide); the chamber takes hostInputMultiplier (×2) of them.
+    [Header("Processes")]
+    [SerializeField] private List<ManaProcessRow> processes = new List<ManaProcessRow>
+    {
+        new ManaProcessRow(PlaceableType.CombinationChamber,
+            new[] { new ManaAmount(FireId, 3), new ManaAmount(WaterId, 3) }, new[] { new ManaAmount(AirId, 1) }, 10f),
+        new ManaProcessRow(PlaceableType.CombinationChamber,
+            new[] { new ManaAmount(AirId, 3), new ManaAmount(WaterId, 3) }, new[] { new ManaAmount(StormId, 1) }, 10f),
     };
 
     [Header("Occupancy and Flow")]
@@ -183,6 +204,9 @@ public class ManaFlow : MonoBehaviour
     public int AccumulatorReserve { get => accumulatorReserve; set => accumulatorReserve = Mathf.Max(0, value); }
     public IReadOnlyList<ManaTypeDefinition> ManaTypes => manaTypes;
 
+    /// <summary>The process rows, in table order (replaceable in code, e.g. by tests).</summary>
+    public List<ManaProcessRow> Processes { get => processes; set => processes = value ?? new List<ManaProcessRow>(); }
+
     /// <summary>Game seconds this simulation has run (the clock accumulators time their recent collection by).</summary>
     public float ElapsedSeconds { get; private set; }
 
@@ -203,6 +227,7 @@ public class ManaFlow : MonoBehaviour
 
     private readonly Dictionary<Vector2Int, Cell> cells = new Dictionary<Vector2Int, Cell>();
     private readonly List<IManaPort> ports = new List<IManaPort>();
+    private readonly List<IManaProcessorHost> processors = new List<IManaProcessorHost>(); // #146
     private readonly HashSet<string> discovered = new HashSet<string>();
     private readonly HashSet<Vector2Int> pendingPipe = new HashSet<Vector2Int>();
     private readonly HashSet<Vector2Int> builtPipe = new HashSet<Vector2Int>();
@@ -390,8 +415,9 @@ public class ManaFlow : MonoBehaviour
     // ---- the clock ----
 
     /// <summary>
-    /// Advances the simulation by deltaTime (game time: pause freezes it): the points of interest in row order, then flow, then collection, then the
-    /// transfer pass, each on its own serialized cadence; then discovery. Update calls it; public so tests can step it.
+    /// Advances the simulation by deltaTime (game time: pause freezes it): the points of interest in row order, then flow
+    /// (each flow tick followed by a map combination pass, #146), then collection, then (#146)
+    /// process cycles, then the transfer pass, each on its own serialized cadence; then discovery. Update calls it; public so tests can step it.
     /// </summary>
     public void Tick(float deltaTime)
     {
@@ -407,10 +433,12 @@ public class ManaFlow : MonoBehaviour
             {
                 flowTimer -= flowTickSeconds;
                 FlowStep();
+                CombineStep(); // #146: fronts that met this tick react before the next
             }
         }
 
         foreach (Accumulator accumulator in Accumulators()) accumulator.TickCollect(deltaTime, this);
+        foreach (IManaProcessorHost host in Processors()) host.Processor?.Tick(deltaTime); // #146: cycles run on game time
 
         transferTimer += deltaTime;
         if (transferSeconds > 0f)
@@ -499,6 +527,101 @@ public class ManaFlow : MonoBehaviour
         return true;
     }
 
+    // ---- map combination (#146, the wild route) ----
+
+    /// <summary>
+    /// One combination pass over the board (the clock runs it after every flow tick). Tiles in board scan order; for each,
+    /// the process rows that combine on the map, in table order; the first that fires wins. A row fires centred on a tile
+    /// that holds one of its inputs when the plus — the centre and its 4-neighbours not yet used this tick — holds at least
+    /// the row's map amount of every input. So the other input always touches the centre: a collision, not a mix at a
+    /// distance; and the scattered 1–2 unit pockets where fronts interleave still count. Exactly the row's amounts leave
+    /// the plus (the centre first, then right, up, left, down) and exactly its outputs appear: on the centre, then its open
+    /// neighbours, then the open neighbours of the tiles drawn from, each taking what the cap and the one-type rule allow.
+    /// When the product can't all fit, nothing changes — it waits for room. Every tile that changed is used for the rest of
+    /// the tick. Deterministic: no random picks. Returns how many reactions fired.
+    /// </summary>
+    public int CombineStep()
+    {
+        if (dungeonBoard == null || cells.Count == 0 || processes == null) return 0;
+        var rows = new List<ManaProcessRow>();
+        foreach (ManaProcessRow row in processes)
+            if (row != null && row.CanCombineOnMap) rows.Add(row);
+        if (rows.Count == 0) return 0;
+
+        var used = new HashSet<Vector2Int>();
+        int reactions = 0;
+        foreach (Vector2Int tile in ScanOrdered(cells.Keys))
+        {
+            if (used.Contains(tile) || TypeAt(tile) == null) continue;
+            foreach (ManaProcessRow row in rows)
+            {
+                if (!TryCombineAt(row, tile, used)) continue;
+                reactions++;
+                break;
+            }
+        }
+        return reactions;
+    }
+
+    private bool TryCombineAt(ManaProcessRow row, Vector2Int tile, HashSet<Vector2Int> used)
+    {
+        List<string> types = row.InputTypes();
+        if (!types.Contains(TypeAt(tile))) return false; // The centre holds an input: whatever else counts touches it
+
+        // The plus: the centre, then its 4-neighbours not yet used this tick. Each input is taken from it in that order.
+        var plus = new List<Vector2Int> { tile };
+        foreach (Vector2Int d in Neighbors)
+            if (!used.Contains(tile + d)) plus.Add(tile + d);
+        var after = new Dictionary<Vector2Int, Cell>(); // What the board would hold after; committed only if all fits
+        foreach (string type in types)
+        {
+            int need = row.MapInputOf(type);
+            foreach (Vector2Int p in plus)
+            {
+                if (need <= 0) break;
+                Cell c = after.TryGetValue(p, out Cell a) ? a : cells.TryGetValue(p, out Cell b) ? b : default;
+                if (c.count <= 0 || c.type != type) continue;
+                int take = Mathf.Min(need, c.count);
+                after[p] = c.count > take ? new Cell { type = type, count = c.count - take } : default;
+                need -= take;
+            }
+            if (need > 0) return false; // Below the row's amount: nothing converts
+        }
+
+        // The product goes to the centre, then its open neighbours, then the open neighbours of the tiles it drew from.
+        var places = new List<Vector2Int> { tile };
+        foreach (Vector2Int d in Neighbors)
+            if (IsOpen(tile + d)) places.Add(tile + d);
+        foreach (Vector2Int r in new List<Vector2Int>(after.Keys))
+            foreach (Vector2Int d in Neighbors)
+                if (!places.Contains(r + d) && IsOpen(r + d)) places.Add(r + d);
+
+        foreach (ManaAmount output in row.outputs)
+        {
+            int toPlace = output.amount;
+            foreach (Vector2Int p in places)
+            {
+                if (toPlace <= 0) break;
+                Cell c = after.TryGetValue(p, out Cell a) ? a : cells.TryGetValue(p, out Cell b) ? b : default;
+                if (c.count > 0 && c.type != output.type) continue;
+                int put = Mathf.Min(toPlace, maxManaPerTile - c.count);
+                if (put <= 0) continue;
+                after[p] = new Cell { type = output.type, count = c.count + put };
+                toPlace -= put;
+            }
+            if (toPlace > 0) return false; // No room for the product: nothing converts
+        }
+
+        foreach (KeyValuePair<Vector2Int, Cell> e in after)
+        {
+            if (e.Value.count > 0) cells[e.Key] = e.Value;
+            else cells.Remove(e.Key);
+            used.Add(e.Key);
+            ManaChanged?.Invoke(e.Key);
+        }
+        return true;
+    }
+
     // ---- stores, totals, discovery ----
 
     /// <summary>A built store joins the service (Accumulator / ManaContainer call this on build-complete). Idempotent.</summary>
@@ -549,24 +672,31 @@ public class ManaFlow : MonoBehaviour
     // A destroyed MonoBehaviour port reads null through Unity's check.
     private void PrunePorts() => ports.RemoveAll(p => p == null || (p is Object o && o == null));
 
-    /// <summary>The global sum of a type across every registered store (information is global; the resource is physical).</summary>
+    /// <summary>
+    /// The global sum of a type across every registered store and (#146) every process host's staged inputs and held
+    /// product (information is global; the resource is physical).
+    /// </summary>
     public int TotalOf(string type)
     {
         int total = 0;
         foreach (IManaPort p in Ports())
             if (p.Store != null && p.Store.Type == type) total += p.Store.Amount;
+        foreach (IManaProcessorHost h in Processors())
+            if (h.Processor != null) total += h.Processor.StagedOf(type) + h.Processor.HeldOf(type);
         return total;
     }
 
-    /// <summary>Every type across every store: the TopBar ✦ readout.</summary>
+    /// <summary>Every type across every store and process host: the TopBar ✦ readout.</summary>
     public int TotalAll()
     {
         int total = 0;
         foreach (IManaPort p in Ports()) total += p.Store?.Amount ?? 0;
+        foreach (IManaProcessorHost h in Processors())
+            if (h.Processor != null) total += h.Processor.StagedTotal + h.Processor.HeldTotal;
         return total;
     }
 
-    /// <summary>A type is discovered the first time any store holds it; permanent for the session.</summary>
+    /// <summary>A type is discovered the first time any store (or, #146, process host) holds it; permanent for the session.</summary>
     public bool IsDiscovered(string type) => type != null && discovered.Contains(type);
 
     /// <summary>The discovered types in catalog order (a discovered type with no row comes after, in id order).</summary>
@@ -588,6 +718,59 @@ public class ManaFlow : MonoBehaviour
     {
         foreach (IManaPort p in Ports())
             if (p.Store != null && p.Store.Amount > 0 && p.Store.Type != null) discovered.Add(p.Store.Type);
+        foreach (IManaProcessorHost h in Processors())
+            if (h.Processor != null)
+                foreach (KeyValuePair<string, int> e in h.Processor.Holdings()) discovered.Add(e.Key);
+    }
+
+    // ---- process hosts and the process table (#146) ----
+
+    /// <summary>The process rows for a host type, in table order (none for a host with no rows).</summary>
+    public List<ManaProcessRow> RowsFor(PlaceableType host)
+    {
+        var rows = new List<ManaProcessRow>();
+        if (processes != null)
+            foreach (ManaProcessRow row in processes)
+                if (row != null && row.host == host) rows.Add(row);
+        return rows;
+    }
+
+    /// <summary>A built process host joins the service (the chamber calls this on build-complete). Idempotent.</summary>
+    public void RegisterProcessor(IManaProcessorHost host)
+    {
+        if (host == null || processors.Contains(host)) return;
+        processors.Add(host);
+    }
+
+    /// <summary>A process host leaves the service (destroyed). Idempotent.</summary>
+    public void UnregisterProcessor(IManaProcessorHost host) => processors.Remove(host);
+
+    /// <summary>The registered process hosts, pruned of destroyed ones, in board scan order.</summary>
+    public List<IManaProcessorHost> Processors()
+    {
+        processors.RemoveAll(h => h == null || (h is Object o && o == null));
+        var list = new List<IManaProcessorHost>(processors);
+        list.Sort((a, b) => CompareScan(a.Tile, b.Tile));
+        return list;
+    }
+
+    /// <summary>The registered process host standing on this tile, or null.</summary>
+    public IManaProcessorHost ProcessorAt(Vector2Int tile)
+    {
+        foreach (IManaProcessorHost h in Processors())
+            if (h.Tile == tile) return h;
+        return null;
+    }
+
+    /// <summary>The stores on the same pipe network as a tile (its own-tile attachment), in scan order; none off a network.</summary>
+    public List<IManaPort> PortsOnNetworkOf(Vector2Int tile)
+    {
+        var list = new List<IManaPort>();
+        int id = NetworkAt(tile);
+        if (id < 0) return list;
+        foreach (IManaPort p in Ports())
+            if (p.Tile != tile && NetworkAt(p.Tile) == id) list.Add(p);
+        return list;
     }
 
     // ---- the pipe layer (conduit's twin) ----
@@ -711,13 +894,29 @@ public class ManaFlow : MonoBehaviour
     // ---- the transfer pass ----
 
     /// <summary>
-    /// One transfer pass over seconds of time (#145): per network, the attached ports (own-tile only) are gathered in scan
-    /// order and the overflow phase runs: outputs (accumulators) push what's above the reserve into inputs (containers)
-    /// with room, under the network's throughput budget. Returns the units moved across all networks.
+    /// One transfer pass over seconds of time (#145): per network, the attached ports and process hosts (own-tile only) are
+    /// gathered in scan order and, under the network's one throughput budget: (#146) the draw phase fills each host's
+    /// demand from containers, then accumulator buffers above the reserve; the deposit phase moves held product into
+    /// containers that accept it; then the overflow phase: outputs (accumulators) push what's above the reserve into
+    /// inputs (containers) with room. Each host is then told what's stalling it, if anything (an input nothing on its
+    /// network can supply; product no connected store can take). Returns the units moved across all networks.
     /// </summary>
     public int TransferPass(float seconds)
     {
         Dictionary<Vector2Int, int> net = Networks();
+        var hostsBy = new Dictionary<int, List<ManaProcessor>>();
+        foreach (IManaProcessorHost host in Processors())
+        {
+            if (host.Processor == null) continue;
+            if (!net.TryGetValue(host.Tile, out int id))
+            {
+                // Not on a pipe: nothing can supply it and nothing can take its product.
+                host.Processor.SetStallVerdicts(FirstShortInput(host.Processor, null, null), true);
+                continue;
+            }
+            if (!hostsBy.TryGetValue(id, out List<ManaProcessor> h)) hostsBy[id] = h = new List<ManaProcessor>();
+            h.Add(host.Processor);
+        }
         if (net.Count == 0) return 0;
 
         var sourcesBy = new Dictionary<int, List<ManaStore>>();
@@ -744,10 +943,122 @@ public class ManaFlow : MonoBehaviour
             float carry = networkCarry.TryGetValue(id, out float c) ? c : 0f;
             int budget = Budget(carry, pipeThroughputPerSecond, seconds, out float nextCarry);
             networkCarry[id] = nextCarry;
-            if (!sourcesBy.TryGetValue(id, out List<ManaStore> sources) || !sinksBy.TryGetValue(id, out List<ManaStore> sinks)) continue;
+            sourcesBy.TryGetValue(id, out List<ManaStore> sources);
+            sinksBy.TryGetValue(id, out List<ManaStore> sinks);
+            if (hostsBy.TryGetValue(id, out List<ManaProcessor> hosts))
+            {
+                int drawn = Draw(hosts, sinks, sources, accumulatorReserve, budget);
+                int deposited = Deposit(hosts, sinks, budget - drawn);
+                budget -= drawn + deposited;
+                movedTotal += drawn + deposited;
+                foreach (ManaProcessor host in hosts)
+                    host.SetStallVerdicts(FirstShortInput(host, sinks, sources), !CanTakeAnyHeld(host, sinks));
+            }
+            if (sources == null || sinks == null) continue;
             movedTotal += Overflow(sources, sinks, accumulatorReserve, budget);
         }
         return movedTotal;
+    }
+
+    /// <summary>
+    /// The draw phase (#146, a static seam): each host in order, each input in row order, takes its demand from containers
+    /// (in order) holding that type, then from accumulator buffers holding it above reserve — never below — until budget
+    /// units have moved. Returns how many moved. Conserves mana: what leaves a store is staged in the host.
+    /// </summary>
+    public static int Draw(IList<ManaProcessor> hosts, IList<ManaStore> containers, IList<ManaStore> buffers, int reserve, int budget)
+    {
+        int moved = 0;
+        if (hosts == null) return 0;
+        foreach (ManaProcessor host in hosts)
+        {
+            if (host?.Row == null) continue;
+            foreach (ManaAmount input in host.Row.inputs)
+            {
+                if (input == null) continue;
+                moved += DrawFrom(host, input.type, containers, 0, budget - moved);
+                moved += DrawFrom(host, input.type, buffers, reserve, budget - moved);
+                if (moved >= budget) return moved;
+            }
+        }
+        return moved;
+    }
+
+    private static int DrawFrom(ManaProcessor host, string type, IList<ManaStore> stores, int keep, int budget)
+    {
+        int moved = 0;
+        if (stores == null) return 0;
+        foreach (ManaStore store in stores)
+        {
+            int want = Mathf.Min(host.Demand(type), budget - moved);
+            if (want <= 0) break;
+            if (store == null || store.Type != type) continue;
+            int spare = store.Amount - Mathf.Max(0, keep);
+            if (spare <= 0) continue;
+            int taken = store.Withdraw(Mathf.Min(want, spare));
+            int staged = host.Stage(type, taken);
+            if (staged < taken) store.Deposit(type, taken - staged); // Never lose a unit
+            moved += staged;
+        }
+        return moved;
+    }
+
+    /// <summary>
+    /// The deposit phase (#146, a static seam): each host's held product, type by type, goes into containers (in order)
+    /// that accept it — adopting the type if empty — until budget units have moved. Returns how many moved; the rest stays held.
+    /// </summary>
+    public static int Deposit(IList<ManaProcessor> hosts, IList<ManaStore> containers, int budget)
+    {
+        int moved = 0;
+        if (hosts == null || containers == null) return 0;
+        foreach (ManaProcessor host in hosts)
+        {
+            if (host == null) continue;
+            foreach (string type in host.HeldTypes())
+            {
+                foreach (ManaStore sink in containers)
+                {
+                    int amount = Mathf.Min(host.HeldOf(type), budget - moved);
+                    if (amount <= 0) break;
+                    if (sink == null || !sink.CanAccept(type)) continue;
+                    int put = sink.Deposit(type, Mathf.Min(amount, sink.Room));
+                    host.TakeHeld(type, put);
+                    moved += put;
+                }
+                if (moved >= budget) return moved;
+            }
+        }
+        return moved;
+    }
+
+    // The first input (row order) a host is still short of that nothing it reaches can supply: no container holding it,
+    // no buffer holding it above the reserve. Null when it's running, holding product, or every shortfall has a supply.
+    private string FirstShortInput(ManaProcessor host, IList<ManaStore> containers, IList<ManaStore> buffers)
+    {
+        if (host?.Row == null || host.IsRunning || host.IsHolding) return null;
+        foreach (ManaAmount input in host.Row.inputs)
+        {
+            if (input == null || host.Demand(input.type) <= 0) continue;
+            if (!HasSupply(input.type, containers, 0) && !HasSupply(input.type, buffers, accumulatorReserve)) return input.type;
+        }
+        return null;
+    }
+
+    private static bool HasSupply(string type, IList<ManaStore> stores, int keep)
+    {
+        if (stores == null) return false;
+        foreach (ManaStore store in stores)
+            if (store != null && store.Type == type && store.Amount > keep) return true;
+        return false;
+    }
+
+    // Whether any connected container could take some of a host's held product now.
+    private static bool CanTakeAnyHeld(ManaProcessor host, IList<ManaStore> containers)
+    {
+        if (containers == null) return false;
+        foreach (string type in host.HeldTypes())
+            foreach (ManaStore sink in containers)
+                if (sink != null && sink.CanAccept(type)) return true;
+        return false;
     }
 
     /// <summary>

@@ -186,7 +186,8 @@ public class BuildRailTests
         CollectionAssert.AreEqual(new[] { PlaceableType.MushroomPlot }, BuildPresentation.TypesInCategory(BuildCategory.Farming));
         CollectionAssert.AreEqual(new[] { PlaceableType.SpikeTrap }, BuildPresentation.TypesInCategory(BuildCategory.Defense));
         // #145 migration: Magic was empty and hidden; it now holds the two mana buildings, so every category shows.
-        CollectionAssert.AreEqual(new[] { PlaceableType.Accumulator, PlaceableType.ManaContainer },
+        // #146 migration: the Combination Chamber joins them.
+        CollectionAssert.AreEqual(new[] { PlaceableType.Accumulator, PlaceableType.ManaContainer, PlaceableType.CombinationChamber },
             BuildPresentation.TypesInCategory(BuildCategory.Magic));
         CollectionAssert.AreEqual(
             new[] { BuildCategory.Living, BuildCategory.Farming, BuildCategory.Defense, BuildCategory.Power, BuildCategory.Magic },

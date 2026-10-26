@@ -765,6 +765,7 @@ MonoBehaviour:
   growLampColor: {r: 1, g: 0.86, b: 0.45, a: 1}
   accumulatorColor: {r: 0.66, g: 0.48, b: 1, a: 1}
   manaContainerColor: {r: 0.34, g: 0.3, b: 0.44, a: 1}
+  combinationChamberColor: {r: 0.46, g: 0.44, b: 0.52, a: 1}
   placeableSize: 0.8
   mushroomGrowthSecondsPerFood: 30
   mushroomCapacity: 5
@@ -784,6 +785,7 @@ MonoBehaviour:
   growLampBuildSeconds: 5
   accumulatorBuildSeconds: 6
   manaContainerBuildSeconds: 6
+  combinationChamberBuildSeconds: 10
   costs:
   - type: 0
     material: 0
@@ -857,6 +859,15 @@ MonoBehaviour:
   - type: 7
     material: 2
     amount: 6
+  - type: 8
+    material: 0
+    amount: 8
+  - type: 8
+    material: 1
+    amount: 8
+  - type: 8
+    material: 2
+    amount: 8
   power:
   - type: 3
     role: 1
@@ -1145,6 +1156,8 @@ MonoBehaviour:
   toggleWidth: 110
   toggleHeight: 24
   toggleFontSize: 12
+  processButtonHeight: 22
+  processButtonGap: 3
   refreshSeconds: 0.25
   panelColor: {r: 0, g: 0, b: 0, a: 0.6}
   chipColor: {r: 0.25, g: 0.25, b: 0.3, a: 1}
@@ -1261,6 +1274,35 @@ MonoBehaviour:
   - id: Water
     displayName: Water Mana
     color: {r: 0.25, g: 0.6, b: 1, a: 1}
+  - id: Air
+    displayName: Air Mana
+    color: {r: 0.82, g: 0.94, b: 0.96, a: 1}
+  - id: Storm
+    displayName: Storm Mana
+    color: {r: 0.52, g: 0.48, b: 0.66, a: 1}
+  processes:
+  - host: 8
+    inputs:
+    - type: Fire
+      amount: 3
+    - type: Water
+      amount: 3
+    outputs:
+    - type: Air
+      amount: 1
+    cycleSeconds: 10
+    hostInputMultiplier: 2
+  - host: 8
+    inputs:
+    - type: Air
+      amount: 3
+    - type: Water
+      amount: 3
+    outputs:
+    - type: Storm
+      amount: 1
+    cycleSeconds: 10
+    hostInputMultiplier: 2
   maxManaPerTile: 5
   flowTickSeconds: 0.5
   flowSeed: 145

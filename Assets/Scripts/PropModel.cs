@@ -294,6 +294,34 @@ public static class PropModel
         new Part("Crate", Shape.Box,        new Vector3(0.3f * s, 0.1f, 0.28f * s),    new Vector3(0.18f, 0.18f, 0.18f), crate, new Vector3(0f, -12f, 0f)),
     };
 
+    // ---- Warren (#157): a goblin den — a packed-earth mound with a dark doorway on its camera-facing (−Z) side, framed
+    // by two stones and a lintel, and a stick with a rag planted on top ----
+
+    public static Part[] WarrenRecipe(float s, Color earth, Color stone, Color door, Color wood, Color banner)
+    {
+        float front = -0.36f * s;
+        return new[]
+        {
+            new Part("Mound",  Shape.Sphere,   new Vector3(0f, 0f, 0f),                     new Vector3(0.9f * s, 0.56f, 0.86f * s), earth), // Half sunk
+            new Part("Door",   Shape.Sphere,   new Vector3(0f, 0.02f, front),               new Vector3(0.3f * s, 0.32f, 0.14f), door),
+            new Part("Stone0", Shape.Sphere,   new Vector3(-0.2f * s, 0.06f, front - 0.01f), new Vector3(0.14f, 0.13f, 0.12f), stone),
+            new Part("Stone1", Shape.Sphere,   new Vector3(0.2f * s, 0.06f, front - 0.01f),  new Vector3(0.13f, 0.12f, 0.12f), stone),
+            new Part("Lintel", Shape.Box,      new Vector3(0f, 0.17f, front - 0.01f),       new Vector3(0.38f * s, 0.05f, 0.09f), stone, new Vector3(0f, 0f, -4f)),
+            new Part("Stick",  Shape.Cylinder, new Vector3(0.16f * s, 0.36f, 0.12f * s),    new Vector3(0.025f, 0.14f, 0.025f), wood),
+            new Part("Banner", Shape.Box,      new Vector3(0.16f * s + 0.06f, 0.44f, 0.12f * s), new Vector3(0.12f, 0.08f, 0.015f), banner, new Vector3(0f, 0f, -8f)),
+        };
+    }
+
+    /// <summary>Warren materials (#157): a heap of earth, two stones, a sack, a crate.</summary>
+    public static Part[] WarrenMaterialsRecipe(float s, Color earth, Color stone, Color sack, Color crate) => new[]
+    {
+        new Part("Heap",   Shape.Sphere, new Vector3(-0.12f * s, 0f, 0.06f * s),     new Vector3(0.5f * s, 0.24f, 0.46f * s), earth),
+        new Part("Stone0", Shape.Sphere, new Vector3(0.2f * s, 0.05f, -0.16f * s),   new Vector3(0.14f, 0.1f, 0.12f), stone),
+        new Part("Stone1", Shape.Sphere, new Vector3(0.06f * s, 0.05f, -0.26f * s),  new Vector3(0.12f, 0.1f, 0.12f), stone),
+        new Part("Sack",   Shape.Sphere, new Vector3(-0.26f * s, 0.08f, -0.2f * s),  new Vector3(0.16f, 0.16f, 0.14f), sack),
+        new Part("Crate",  Shape.Box,    new Vector3(0.26f * s, 0.09f, 0.22f * s),   new Vector3(0.18f, 0.18f, 0.18f), crate, new Vector3(0f, 14f, 0f)),
+    };
+
     // ---- Fire Vent (#145): a cracked rock mound around a glowing fissure (the Ember part glows) ----
 
     public static Part[] FireVentRecipe(Color rock, Color ember) => new[]

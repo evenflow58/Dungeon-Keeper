@@ -2,19 +2,24 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// A goblin's simplified utility AI (DESIGN §A.5). Strict priority: an opposing-team Health within
-/// aggroRange tiles → fight it; else Hunger below hungerThreshold → eat at the nearest stocked Mushroom
-/// Plot; else Energy below energyThreshold → claim the nearest free Lair Cot and sleep on it; else wander.
+/// A goblin's simplified utility AI (DESIGN §A.5). Strict priority: an opposing-team Health in range → fight it;
+/// else Hunger below hungerThreshold → eat at the nearest stocked Mushroom Plot; else Energy below energyThreshold →
+/// claim the nearest free Lair Cot and sleep on it; else wander.
 /// The Goblin component still owns movement and the needs clock; this driver only reads state and issues
 /// orders. It commits to one goal at a time (ImpDigger-shaped): needs are re-decided when a goal completes
 /// or drops, and on the decision poll during wander pauses and sleep — never mid-travel. Combat is the
 /// exception: a combat scan also runs on the poll during any other goal, and preempts it.
+/// Leashing (#157): a goblin assigned to a Warren defends the zone around it. It engages only heroes within
+/// leashedDetectRadius of the warren, fights on while the hero stays within leashRadius (the gap between the two is
+/// deliberate hysteresis), then walks home; its idle wander stays inside the detect zone. Both radii are Chebyshev
+/// from the warren tile. An unleashed goblin keeps the dungeon-wide wander and its own-tile Manhattan ranges, now
+/// unleashedDetectRange / unleashedDisengageRange.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Goblin))]
 public class GoblinAI : MonoBehaviour
 {
-    public enum Goal { None, Eat, Sleep, Wander, Fight }
+    public enum Goal { None, Eat, Sleep, Wander, Fight, Return } // Return (#157): a leashed goblin walking home after a leash break
 
     [Header("References")]
     [SerializeField] private Goblin goblin;
@@ -33,10 +38,15 @@ public class GoblinAI : MonoBehaviour
     [SerializeField] private float wanderPauseSeconds = 1.5f;       // Idle pause before each wander leg
 
     [Header("Combat (provisional until the hero's stats, Epic #5)")]
-    [SerializeField] private int aggroRange = 4;                // Tiles, Manhattan (DESIGN §A.5)
+    [SerializeField] private int unleashedDetectRange = 2;      // #157: tiles from the goblin, Manhattan (4 before leashing)
+    [SerializeField] private int unleashedDisengageRange = 2;   // #157: a fight breaks past this many tiles from the goblin, Manhattan
     [SerializeField] private float attackIntervalSeconds = 1f;  // Doubled while weakened (half attack rate)
     [SerializeField] private int attackDamage = 1;
     [SerializeField] private float weakenedAttackIntervalMultiplier = 2f; // DESIGN §A.5: half attack rate at Hunger 0
+
+    [Header("Leash (#157): Chebyshev from the assigned warren's tile")]
+    [SerializeField] private int leashedDetectRadius = 4; // Engages heroes inside this; idle wander stays inside it
+    [SerializeField] private int leashRadius = 8;         // Pursues while the hero stays inside this; past it, walks home
 
     public Goblin Goblin { get => goblin; set => goblin = value; }
     public PlacementManager PlacementManager { get => placementManager; set => placementManager = value; }
@@ -46,7 +56,10 @@ public class GoblinAI : MonoBehaviour
     public float SleepSecondsToFull { get => sleepSecondsToFull; set => sleepSecondsToFull = value; }
     public float DecisionIntervalSeconds { get => decisionIntervalSeconds; set => decisionIntervalSeconds = value; }
     public float WanderPauseSeconds { get => wanderPauseSeconds; set => wanderPauseSeconds = value; }
-    public int AggroRange { get => aggroRange; set => aggroRange = value; }
+    public int UnleashedDetectRange { get => unleashedDetectRange; set => unleashedDetectRange = value; }
+    public int UnleashedDisengageRange { get => unleashedDisengageRange; set => unleashedDisengageRange = value; }
+    public int LeashedDetectRadius { get => leashedDetectRadius; set => leashedDetectRadius = value; }
+    public int LeashRadius { get => leashRadius; set => leashRadius = value; }
     public float AttackIntervalSeconds { get => attackIntervalSeconds; set => attackIntervalSeconds = value; }
     public int AttackDamage { get => attackDamage; set => attackDamage = value; }
     public float WeakenedAttackIntervalMultiplier { get => weakenedAttackIntervalMultiplier; set => weakenedAttackIntervalMultiplier = value; }
@@ -68,9 +81,40 @@ public class GoblinAI : MonoBehaviour
     /// <summary>The hostile being fought (Fight goal only).</summary>
     public Health CurrentTarget { get; private set; }
 
+    /// <summary>
+    /// The warren this goblin is assigned to (#157), or null when unleashed. At most one: assigning again replaces it.
+    /// A warren that's been destroyed reads as unleashed.
+    /// </summary>
+    public Placeable Warren => warren != null ? warren : null; // Unity null: a destroyed warren is no warren
+
+    public bool IsLeashed => warren != null;
+
+    /// <summary>Where a Return walk ends (Return goal only).</summary>
+    public Vector2Int ReturnTile { get; private set; }
+
+    /// <summary>
+    /// How many times a leashed idle wander found no reachable tile in its zone and fell back to the dungeon-wide pick
+    /// (#157: noted, not expected in normal play).
+    /// </summary>
+    public int LeashedWanderFallbacks { get; private set; }
+
     /// <summary>The attack interval right now: attackIntervalSeconds, × weakenedAttackIntervalMultiplier while weakened.</summary>
     public float EffectiveAttackInterval =>
         goblin != null && goblin.IsWeakened ? attackIntervalSeconds * weakenedAttackIntervalMultiplier : attackIntervalSeconds;
+
+    /// <summary>
+    /// Assigns this goblin to a warren (#157; the player-facing assign UI is #158). Replaces any earlier assignment.
+    /// False, changing nothing, for null or a placeable that isn't a Warren.
+    /// </summary>
+    public bool SetLeash(Placeable newWarren)
+    {
+        if (newWarren == null || newWarren.Type != PlaceableType.Warren) return false;
+        warren = newWarren;
+        return true;
+    }
+
+    /// <summary>Unassigns this goblin (#157): back to the unleashed ranges and the dungeon-wide wander.</summary>
+    public void ClearLeash() => warren = null;
 
     private Vector2Int standPoint;   // Eat: the tile beside TargetPlot
     private bool wanderTraveling;    // Wander: false = pausing, true = walking the leg
@@ -79,6 +123,7 @@ public class GoblinAI : MonoBehaviour
     private float combatScanTimer;     // Combat poll during non-Fight goals; also Fight's range/re-path poll
     private float attackCooldown;      // Fight: ≤ 0 means the next attack lands as soon as the goblin is adjacent
     private Vector2Int pathedTargetTile;
+    private Placeable warren;
 
     private DungeonBoard Board => goblin.Board;
 
@@ -131,6 +176,7 @@ public class GoblinAI : MonoBehaviour
             case Goal.Sleep: TickSleep(deltaTime); break;
             case Goal.Wander: TickWander(deltaTime); break;
             case Goal.Fight: TickFight(deltaTime); break;
+            case Goal.Return: TickReturn(); break;
         }
     }
 
@@ -192,7 +238,9 @@ public class GoblinAI : MonoBehaviour
     /// </summary>
     private bool TryStartFight()
     {
-        Health target = TrySelectTarget(Board, goblin.CurrentTile, MyTeam, ScanCandidates(), aggroRange);
+        Health target = IsLeashed
+            ? TrySelectLeashedTarget(Board, goblin.CurrentTile, MyTeam, ScanCandidates(), warren.Tile, leashedDetectRadius)
+            : TrySelectTarget(Board, goblin.CurrentTile, MyTeam, ScanCandidates(), unleashedDetectRange);
         if (target == null) return false;
 
         ReleaseCot();
@@ -361,7 +409,16 @@ public class GoblinAI : MonoBehaviour
         if (poll)
         {
             combatScanTimer = 0f;
-            if (Manhattan(goblin.CurrentTile, targetTile) > aggroRange)
+            if (IsLeashed)
+            {
+                // Past the detect zone but inside the leash, the fight goes on: only the leash breaks it.
+                if (Chebyshev(warren.Tile, targetTile) > leashRadius)
+                {
+                    BreakLeash();
+                    return;
+                }
+            }
+            else if (Manhattan(goblin.CurrentTile, targetTile) > unleashedDisengageRange)
             {
                 Disengage(); // Left range
                 return;
@@ -413,7 +470,43 @@ public class GoblinAI : MonoBehaviour
         Decide();
     }
 
+    /// <summary>
+    /// The hero left the leash (#157): drop the fight as Disengage does, then walk back to the warren — unless the
+    /// goblin already stands inside the detect zone, where it carries straight on (re-decides) without a walk.
+    /// </summary>
+    private void BreakLeash()
+    {
+        if (goblin.IsMoving) goblin.SetDestination(goblin.NextTile); // Finish the step in progress only
+        EndGoal();
+
+        if (Chebyshev(warren.Tile, goblin.CurrentTile) <= leashedDetectRadius ||
+            !TryPickReturnTile(Board, goblin.CurrentTile, warren.Tile, leashedDetectRadius, IsExplored, out Vector2Int home) ||
+            !goblin.SetDestination(home))
+        {
+            Decide(); // Home already, or no way home: the needs AI (and so the leashed wander) takes over
+            return;
+        }
+
+        CurrentGoal = Goal.Return;
+        ReturnTile = home;
+    }
+
+    // Walking home. The combat poll still runs (a hero entering the zone is engaged on the way); when the walk ends the
+    // goblin re-decides at once — with no need pressing, that's the leashed wander.
+    private void TickReturn()
+    {
+        if (goblin.IsMoving) return;
+        EndGoal();
+        Decide();
+    }
+
     private static int Manhattan(Vector2Int a, Vector2Int b) => Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
+
+    /// <summary>Chebyshev distance (#157, the leash metric): a diagonal step counts as one.</summary>
+    public static int Chebyshev(Vector2Int a, Vector2Int b) => Mathf.Max(Mathf.Abs(a.x - b.x), Mathf.Abs(a.y - b.y));
+
+    // Fog (#131): with no renderer, or no fog wired to it, every tile counts as explored.
+    private bool IsExplored(Vector2Int tile) => goblin.Renderer == null || goblin.Renderer.IsExplored(tile.x, tile.y);
 
     private void TickWander(float deltaTime)
     {
@@ -433,13 +526,27 @@ public class GoblinAI : MonoBehaviour
         }
         if (wanderPauseTimer < wanderPauseSeconds) return;
 
-        Vector2Int target = PickWanderTarget(Board, goblin.CurrentTile, Rng);
+        Vector2Int target = PickWanderTargetForMe();
         if (target == goblin.CurrentTile || !goblin.SetDestination(target))
         {
             EndGoal(); // Nowhere to go this time: pause again and retry
             return;
         }
         wanderTraveling = true;
+    }
+
+    // Leashed (#157): a tile in the warren's detect zone. If the zone has no reachable tile, today's pick instead —
+    // counted and logged, since it isn't expected to happen.
+    private Vector2Int PickWanderTargetForMe()
+    {
+        if (!IsLeashed) return PickWanderTarget(Board, goblin.CurrentTile, Rng);
+        if (TryPickLeashedWanderTarget(Board, goblin.CurrentTile, Rng, warren.Tile, leashedDetectRadius, IsExplored, out Vector2Int pick))
+            return pick;
+
+        LeashedWanderFallbacks++;
+        Debug.LogWarning($"[GoblinAI] {name}: no reachable tile within {leashedDetectRadius} of its warren at {warren.Tile}; " +
+                         "wandering the dungeon this time", this);
+        return PickWanderTarget(Board, goblin.CurrentTile, Rng);
     }
 
     private bool HasReachableFood() =>
@@ -449,13 +556,26 @@ public class GoblinAI : MonoBehaviour
     // ---- selection (static for tests) ----
 
     /// <summary>
-    /// The nearest opposing-team, living Health within aggroRange (Manhattan) that can be stood beside.
+    /// The nearest opposing-team, living Health within range (Manhattan, from fromTile) that can be stood beside.
     /// A candidate's tile is its body's CurrentTile — a Goblin or a Hero (TryGetBodyTile); candidates without
     /// a body are skipped. Ties keep
     /// candidate order. Unreachable hostiles are skipped — noted, not acted on. Null when there's none.
     /// </summary>
     public static Health TrySelectTarget(DungeonBoard board, Vector2Int fromTile, HealthTeam myTeam,
-        IEnumerable<Health> candidates, int aggroRange)
+        IEnumerable<Health> candidates, int range) =>
+        SelectNearest(board, fromTile, myTeam, candidates, bodyTile => Manhattan(fromTile, bodyTile) <= range);
+
+    /// <summary>
+    /// A leashed goblin's pick (#157): TrySelectTarget's rule (strictly nearest to fromTile, ties keep candidate order,
+    /// unreachable skipped), but a candidate counts only while its tile is within detectRadius (Chebyshev) of the
+    /// warren — how near it is to the goblin doesn't matter.
+    /// </summary>
+    public static Health TrySelectLeashedTarget(DungeonBoard board, Vector2Int fromTile, HealthTeam myTeam,
+        IEnumerable<Health> candidates, Vector2Int warrenTile, int detectRadius) =>
+        SelectNearest(board, fromTile, myTeam, candidates, bodyTile => Chebyshev(warrenTile, bodyTile) <= detectRadius);
+
+    private static Health SelectNearest(DungeonBoard board, Vector2Int fromTile, HealthTeam myTeam,
+        IEnumerable<Health> candidates, System.Func<Vector2Int, bool> inRange)
     {
         Health best = null;
         int bestDistance = int.MaxValue;
@@ -466,7 +586,7 @@ public class GoblinAI : MonoBehaviour
             if (!TryGetBodyTile(candidate, out Vector2Int bodyTile) || IsBodyDead(candidate)) continue;
 
             int distance = Manhattan(fromTile, bodyTile);
-            if (distance > aggroRange || distance >= bestDistance) continue; // Out of range, or not strictly nearer
+            if (!inRange(bodyTile) || distance >= bestDistance) continue; // Out of range, or not strictly nearer
             if (Pathfinder.FindPathToNeighbor(board, fromTile, bodyTile).Count == 0) continue;
 
             best = candidate;
@@ -544,5 +664,79 @@ public class GoblinAI : MonoBehaviour
             if (Pathfinder.FindPath(board, fromTile, pick).Count > 0) return pick;
         }
         return fromTile;
+    }
+
+    /// <summary>
+    /// A leashed goblin's wander pick (#157): up to 32 random picks among the walkable, explored tiles within radius
+    /// (Chebyshev) of the warren, collected in scan order — the warren's own tile excluded (goblins stand around a den,
+    /// not on it) — returning the first with a path. False when the zone has none or none of the picks pans out.
+    /// </summary>
+    public static bool TryPickLeashedWanderTarget(DungeonBoard board, Vector2Int fromTile, System.Random rng,
+        Vector2Int warrenTile, int radius, System.Func<Vector2Int, bool> isExplored, out Vector2Int target)
+    {
+        target = fromTile;
+        List<Vector2Int> zone = ZoneTiles(board, warrenTile, radius, isExplored);
+        if (zone.Count == 0) return false;
+
+        for (int i = 0; i < 32; i++)
+        {
+            Vector2Int pick = zone[rng.Next(zone.Count)];
+            if (Pathfinder.FindPath(board, fromTile, pick).Count == 0) continue;
+            target = pick;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Where a leash-broken goblin walks home to (#157): the walkable, explored tile 4-adjacent to the warren that's
+    /// nearest the goblin by path; failing that, the reachable walkable, explored tile within detectRadius (Chebyshev)
+    /// nearest the warren — as close to home as it can get — with path length, then scan order, breaking ties. Never
+    /// the warren's own tile. False when neither is reachable.
+    /// </summary>
+    public static bool TryPickReturnTile(DungeonBoard board, Vector2Int fromTile, Vector2Int warrenTile, int detectRadius,
+        System.Func<Vector2Int, bool> isExplored, out Vector2Int tile)
+    {
+        List<Vector2Int> adjacent = ZoneTiles(board, warrenTile, 1, isExplored).FindAll(t => Manhattan(t, warrenTile) == 1);
+        return TryNearest(board, fromTile, adjacent, _ => 0, out tile) ||
+               TryNearest(board, fromTile, ZoneTiles(board, warrenTile, detectRadius, isExplored), t => Chebyshev(t, warrenTile), out tile);
+    }
+
+    // The reachable tile with the lowest rank, then the shortest path from fromTile; ties keep list (scan) order.
+    private static bool TryNearest(DungeonBoard board, Vector2Int fromTile, List<Vector2Int> tiles, System.Func<Vector2Int, int> rank,
+        out Vector2Int nearest)
+    {
+        nearest = fromTile;
+        bool found = false;
+        int bestRank = int.MaxValue, bestCost = int.MaxValue;
+        foreach (Vector2Int t in tiles)
+        {
+            int r = rank(t);
+            if (r > bestRank) continue;
+            List<Vector2Int> path = Pathfinder.FindPath(board, fromTile, t);
+            if (path.Count == 0 || (r == bestRank && path.Count >= bestCost)) continue;
+            bestRank = r;
+            bestCost = path.Count;
+            nearest = t;
+            found = true;
+        }
+        return found;
+    }
+
+    // Walkable, explored tiles within radius (Chebyshev) of center, the center itself excluded, in board scan order.
+    private static List<Vector2Int> ZoneTiles(DungeonBoard board, Vector2Int center, int radius, System.Func<Vector2Int, bool> isExplored)
+    {
+        var tiles = new List<Vector2Int>();
+        for (int x = Mathf.Max(0, center.x - radius); x <= Mathf.Min(board.Width - 1, center.x + radius); x++)
+        {
+            for (int y = Mathf.Max(0, center.y - radius); y <= Mathf.Min(board.Height - 1, center.y + radius); y++)
+            {
+                var t = new Vector2Int(x, y);
+                if (t == center || !board.IsWalkable(x, y)) continue;
+                if (isExplored != null && !isExplored(t)) continue;
+                tiles.Add(t);
+            }
+        }
+        return tiles;
     }
 }

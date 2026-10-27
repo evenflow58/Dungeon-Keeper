@@ -168,7 +168,7 @@ public class GoblinCombatTests
     public void EngageInRange_PathsBeside_AttacksToDeath_ThenResumesNeeds()
     {
         var (attacker, ai) = AddFighter(21, 16);
-        Health target = AddHostile(24, 16, maxHealth: 3); // distance 3
+        Health target = AddHostile(23, 16, maxHealth: 3); // distance 2 (#157 migration: was 3, past today's unleashed range of 2)
         Goblin targetBody = target.GetComponent<Goblin>();
 
         Step();
@@ -194,10 +194,11 @@ public class GoblinCombatTests
     }
 
     [Test]
-    public void RangeGate_DistanceFive_NeverEngaged()
+    public void RangeGate_DistanceThree_NeverEngaged()
     {
+        // #157 migration: the unleashed detect range dropped from 4 to 2, so the gate moved from 5/4 to 3/2.
         var (_, ai) = AddFighter(21, 13);
-        Health target = AddHostile(26, 13); // Manhattan 5
+        Health target = AddHostile(24, 13); // Manhattan 3
 
         StepFor(5f, () => Assert.AreNotEqual(GoblinAI.Goal.Fight, ai.CurrentGoal));
         Assert.AreEqual(100, target.CurrentHealth);
@@ -205,10 +206,10 @@ public class GoblinCombatTests
     }
 
     [Test]
-    public void RangeGate_DistanceFour_Engaged()
+    public void RangeGate_DistanceTwo_Engaged()
     {
         var (_, ai) = AddFighter(21, 13);
-        Health target = AddHostile(25, 13); // Manhattan 4
+        Health target = AddHostile(23, 13); // Manhattan 2
 
         Step();
         Assert.AreEqual(GoblinAI.Goal.Fight, ai.CurrentGoal);
@@ -220,8 +221,8 @@ public class GoblinCombatTests
     {
         var (attacker, ai) = AddFighter(21, 16);
         MushroomPlot plot = PlaceStockedPlot(21, 13, 2);
-        Health target = AddHostile(24, 16); // distance 3
-        Enclose(24, 16);
+        Health target = AddHostile(23, 16); // distance 2: in range (#157 migration: was 3, now past the unleashed range)
+        Enclose(23, 16);
         attacker.Hunger = 20f;
 
         StepUntil(() => plot.FoodCount == 1, 6f, "attacker to go and eat instead");

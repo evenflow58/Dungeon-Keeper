@@ -10,7 +10,8 @@ public enum PlaceableType
     GrowLamp,         // #143: appended
     Accumulator,      // #145: appended
     ManaContainer,    // #145: appended
-    CombinationChamber // #146: appended
+    CombinationChamber, // #146: appended
+    Warren              // #157: appended
 }
 
 /// <summary>
@@ -18,7 +19,7 @@ public enum PlaceableType
 /// the tile stays Floor and walkable; occupancy lives in PlacementManager's registry.
 /// Its look is a code-built model (ticket #77): a cot, a mushroom mound, a trap's base plate, (#142) an imp wheel, or
 /// (#143) a furnace with its chimney or a lamp on a post, (#145) an accumulator's basin or a mana container's tank, or
-/// (#146) a combination chamber's vessel.
+/// (#146) a combination chamber's vessel, or (#157) a warren's den.
 /// Placement is an order (#91): it starts as an inert construction site (a materials pile) until
 /// CompleteConstruction, which the builder calls (story #92; tests and staging call it directly).
 /// Orders cost materials (#104): an order records its requirement and waits UNFUNDED — showing an order marker (a
@@ -43,6 +44,9 @@ public class Placeable : MonoBehaviour
     [SerializeField] private Color containerGlassColor = new Color(0.70f, 0.55f, 1.00f, 1f);   // #145: the gauge
     [SerializeField] private Color chamberBandColor = new Color(0.24f, 0.22f, 0.28f, 1f);      // #146: plinth, collar, ports
     [SerializeField] private Color chamberCoreColor = new Color(0.85f, 0.95f, 1.00f, 1f);      // #146: the core crystal
+    [SerializeField] private Color warrenStoneColor = new Color(0.46f, 0.44f, 0.42f, 1f);      // #157: the doorway stones
+    [SerializeField] private Color warrenDoorColor = new Color(0.10f, 0.07f, 0.05f, 1f);       // #157: the dark way in
+    [SerializeField] private Color warrenBannerColor = new Color(0.62f, 0.78f, 0.30f, 1f);     // #157: a goblin-green rag on a stick
     [SerializeField] private float modelSmoothness = 0.2f;                              // A little sheen, less than creatures
 
     [Header("Construction Site (#91)")]
@@ -328,6 +332,7 @@ public class Placeable : MonoBehaviour
         : Type == PlaceableType.Accumulator ? PropModel.AccumulatorRecipe(size, accumulatorStoneColor, color)
         : Type == PlaceableType.ManaContainer ? PropModel.ManaContainerRecipe(size, color, containerBandColor, containerGlassColor)
         : Type == PlaceableType.CombinationChamber ? PropModel.CombinationChamberRecipe(size, color, chamberBandColor, chamberCoreColor)
+        : Type == PlaceableType.Warren ? PropModel.WarrenRecipe(size, color, warrenStoneColor, warrenDoorColor, cotFrameColor, warrenBannerColor)
         : PropModel.SpikeTrapPlateRecipe(size, color);
 
     private void CreateModel(Color color, float size)
@@ -419,6 +424,7 @@ public class Placeable : MonoBehaviour
             : Type == PlaceableType.Accumulator ? PropModel.AccumulatorMaterialsRecipe(size, accumulatorStoneColor, color, crateColor)
             : Type == PlaceableType.ManaContainer ? PropModel.ManaContainerMaterialsRecipe(size, color, containerBandColor, crateColor)
             : Type == PlaceableType.CombinationChamber ? PropModel.CombinationChamberMaterialsRecipe(size, color, chamberBandColor, chamberCoreColor, crateColor)
+            : Type == PlaceableType.Warren ? PropModel.WarrenMaterialsRecipe(size, color, warrenStoneColor, sackColor, crateColor)
             : PropModel.TrapMaterialsRecipe(size, color, Color.Lerp(color, Color.white, 0.45f), crateColor);
         MaterialsPile = CreatureModel.Build(transform, Type + "Materials", recipe, modelSmoothness);
     }

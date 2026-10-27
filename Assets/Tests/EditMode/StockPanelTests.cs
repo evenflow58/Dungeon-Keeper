@@ -312,9 +312,9 @@ public class StockPanelTests
         Assert.AreEqual("Source: Dug · entrance shallows", card.SourceLine);
         CollectionAssert.AreEqual(new[] { "Lair Cot rest ×1.25", "Lair Cot rests magical creatures" }, card.MaterialHighlights());
         // #142 migration: the Imp Wheel has a Glimmerstone row too. #143 migration: so do the furnace and the lamp.
-        // #145 migration: the accumulator and the mana container add their uses. #146 migration: so does the chamber.
+        // #145 migration: the accumulator and the mana container add their uses. #146 migration: so does the chamber. #157: and the warren.
         CollectionAssert.AreEqual(new[] { "Lair Cot · 3", "Mushroom Plot · 4", "Spike Trap · 2", "Imp Wheel · 4", "Furnace Generator · 6", "Grow-Lamp · 4",
-                "Accumulator · 5", "Mana Container · 6", "Combination Chamber · 8" },
+                "Accumulator · 5", "Mana Container · 6", "Combination Chamber · 8", "Warren · 6" },
             card.UseChipLabels());
         Assert.AreEqual("Waiting orders: 1", card.WaitingLine);
 

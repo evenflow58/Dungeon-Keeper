@@ -49,11 +49,11 @@ public class MaterialChoiceTests
     {
         // #142 migration: the Imp Wheel adds its three rows (9 → 12). #143 migration: the furnace and the lamp add three
         // each (12 → 18). #145 migration: the accumulator and the mana container add three each (18 → 24).
-        // #146 migration: the combination chamber adds three (24 → 27).
-        Assert.AreEqual(27, manager.Costs.Count, "Every type in Stone, (#114) Glimmerstone and (#111) Deepstone");
+        // #146 migration: the combination chamber adds three (24 → 27). #157 migration: the warren three more (→ 30).
+        Assert.AreEqual(30, manager.Costs.Count, "Every type in Stone, (#114) Glimmerstone and (#111) Deepstone");
         foreach (var (type, amount) in new[] { (PlaceableType.LairCot, 3), (PlaceableType.MushroomPlot, 4), (PlaceableType.SpikeTrap, 2), (PlaceableType.ImpWheel, 4),
                      (PlaceableType.FurnaceGenerator, 6), (PlaceableType.GrowLamp, 4), (PlaceableType.Accumulator, 5), (PlaceableType.ManaContainer, 6),
-                     (PlaceableType.CombinationChamber, 8) })
+                     (PlaceableType.CombinationChamber, 8), (PlaceableType.Warren, 6) })
         {
             Assert.IsTrue(manager.TryGetCost(type, MaterialType.Stone, out MaterialAmount cost), $"{type}");
             Assert.AreEqual(MaterialType.Stone, cost.type);

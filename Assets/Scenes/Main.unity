@@ -766,6 +766,7 @@ MonoBehaviour:
   accumulatorColor: {r: 0.66, g: 0.48, b: 1, a: 1}
   manaContainerColor: {r: 0.34, g: 0.3, b: 0.44, a: 1}
   combinationChamberColor: {r: 0.46, g: 0.44, b: 0.52, a: 1}
+  warrenColor: {r: 0.4, g: 0.3, b: 0.2, a: 1}
   placeableSize: 0.8
   mushroomGrowthSecondsPerFood: 30
   mushroomCapacity: 5
@@ -786,6 +787,7 @@ MonoBehaviour:
   accumulatorBuildSeconds: 6
   manaContainerBuildSeconds: 6
   combinationChamberBuildSeconds: 10
+  warrenBuildSeconds: 8
   costs:
   - type: 0
     material: 0
@@ -868,6 +870,15 @@ MonoBehaviour:
   - type: 8
     material: 2
     amount: 8
+  - type: 9
+    material: 0
+    amount: 6
+  - type: 9
+    material: 1
+    amount: 6
+  - type: 9
+    material: 2
+    amount: 6
   power:
   - type: 3
     role: 1
@@ -1472,10 +1483,13 @@ MonoBehaviour:
   sleepSecondsToFull: 10
   decisionIntervalSeconds: 0.25
   wanderPauseSeconds: 1.5
-  aggroRange: 4
+  unleashedDetectRange: 2
+  unleashedDisengageRange: 2
   attackIntervalSeconds: 1
   attackDamage: 1
   weakenedAttackIntervalMultiplier: 2
+  leashedDetectRadius: 4
+  leashRadius: 8
 --- !u!114 &708604857
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1673,10 +1687,13 @@ MonoBehaviour:
   sleepSecondsToFull: 10
   decisionIntervalSeconds: 0.25
   wanderPauseSeconds: 1.5
-  aggroRange: 4
+  unleashedDetectRange: 2
+  unleashedDisengageRange: 2
   attackIntervalSeconds: 1
   attackDamage: 1
   weakenedAttackIntervalMultiplier: 2
+  leashedDetectRadius: 4
+  leashRadius: 8
 --- !u!114 &1781885715
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1895,10 +1912,13 @@ MonoBehaviour:
   sleepSecondsToFull: 10
   decisionIntervalSeconds: 0.25
   wanderPauseSeconds: 1.5
-  aggroRange: 4
+  unleashedDetectRange: 2
+  unleashedDisengageRange: 2
   attackIntervalSeconds: 1
   attackDamage: 1
   weakenedAttackIntervalMultiplier: 2
+  leashedDetectRadius: 4
+  leashRadius: 8
 --- !u!114 &1974660360
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -29,12 +29,19 @@ public class Imp : MonoBehaviour
 
     public bool IsMoving => path.Count > 0;
 
+    /// <summary>
+    /// The imp's stats block (#161): carried over from the Heart candidate it was printed from; the starter has the
+    /// defaults. Data only in v1: every value is 1.0 and nothing reads them yet (stat variation is a follow-up).
+    /// </summary>
+    public ImpStats Stats { get; set; } = ImpStats.Default;
+
     // Waypoints still to visit; path[0] is the tile being walked toward (NextTile).
     private readonly List<Vector2Int> path = new List<Vector2Int>();
     private Vector2Int segmentStart;
     private GameObject model;
     private CreatureMotion poser;
     private ImpDigger digger;
+    private bool placed; // #161: an imp placed before its Start (a printed one) keeps that tile instead of spawning
 
     private void Start()
     {
@@ -42,7 +49,7 @@ public class Imp : MonoBehaviour
         boardRenderer ??= FindAnyObjectByType<BoardRenderer>();
 
         CreateModel();
-        Spawn();
+        if (!placed) Spawn();
     }
 
     private void Update()
@@ -67,6 +74,7 @@ public class Imp : MonoBehaviour
     public void PlaceOnTile(Vector2Int tile)
     {
         path.Clear();
+        placed = true;
         CurrentTile = tile;
         NextTile = tile;
         segmentStart = tile;

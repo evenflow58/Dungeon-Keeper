@@ -254,7 +254,14 @@ public class PlacementController : MonoBehaviour
         Placeable placeable = placementManager != null ? placementManager.GetAt(tile) : null;
         if (placeable != null && placeable.IsBuilt) SelectPlaced(placeable);
         else ClearPlacedSelection();
+        NeutralTileClicked?.Invoke(tile);
     }
+
+    /// <summary>
+    /// Raised after a Neutral board click is handled, with the clicked tile (#161: the Heart panel opens on a click on the
+    /// Heart's tile). Never raised outside Neutral.
+    /// </summary>
+    public event System.Action<Vector2Int> NeutralTileClicked;
 
     /// <summary>
     /// The materials the selected type can be ordered in (#109): its cost rows', limited to discovered materials when a

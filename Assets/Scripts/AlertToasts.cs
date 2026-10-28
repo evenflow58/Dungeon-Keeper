@@ -8,9 +8,12 @@ using UnityEngine.UI;
 /// a goblin becoming weakened (once per onset; re-arms when he eats), each hero spawn, and a spike trap going
 /// from armed to spent (once per spend; the imp's rearm is silent and re-arms it). The first poll only
 /// snapshots, so a staged or loaded state is never an "onset".
-/// Display: a top-right stack under the top bar, newest on top, each toast lasting toastVisibleSeconds.
-/// Display-only (no raycaster, raycastTarget off) and on unscaled time, so toasts never block board input and
-/// still expire while the game is paused.
+/// Heart printing (#161): one "Imps await at the Heart!" toast per cycle, when the Heart's new candidate list arrives
+/// (the game-start list included: this one isn't held back by the baseline), never repeated for a list that's ignored.
+/// It is the one clickable toast: a click opens the Heart panel and dismisses the toast.
+/// Display: a top-right stack under the top bar, newest on top, each toast lasting toastVisibleSeconds, on unscaled time
+/// so toasts still expire while the game is paused. Only a clickable toast is a raycast target; every other toast (and
+/// the stack) has raycastTarget off, so they never block board input.
 /// </summary>
 [DisallowMultipleComponent]
 public class AlertToasts : MonoBehaviour
@@ -18,10 +21,13 @@ public class AlertToasts : MonoBehaviour
     public const string StarvingMessage = "Goblin starving!";        // DESIGN §A.7, verbatim
     public const string HeroApproachingMessage = "Hero approaching!"; // DESIGN §A.7, verbatim
     public const string TrapSpentMessage = "Trap needs rearming.";    // DESIGN §A.7, verbatim
+    public const string ImpsAwaitMessage = "Imps await at the Heart!"; // #161: a new candidate list
 
     [Header("References")]
     [SerializeField] private PlacementManager placementManager; // Spike traps
     [SerializeField] private HeroSpawner heroSpawner;           // Optional: unwired = no hero toasts
+    [SerializeField] private HeartPrinting heartPrinting;       // #161, optional: unwired = no Heart toasts
+    [SerializeField] private HeartPanel heartPanel;             // #161: what the Heart toast opens
 
     [Header("Polling")]
     [SerializeField] private float pollIntervalSeconds = 0.25f;
@@ -38,6 +44,8 @@ public class AlertToasts : MonoBehaviour
 
     public PlacementManager PlacementManager { get => placementManager; set => placementManager = value; }
     public HeroSpawner HeroSpawner { get => heroSpawner; set => heroSpawner = value; }
+    public HeartPrinting HeartPrinting { get => heartPrinting; set => heartPrinting = value; }
+    public HeartPanel HeartPanel { get => heartPanel; set => heartPanel = value; }
     public float PollIntervalSeconds { get => pollIntervalSeconds; set => pollIntervalSeconds = value; }
     public float ToastVisibleSeconds { get => toastVisibleSeconds; set => toastVisibleSeconds = value; }
     public int MaxVisibleToasts { get => maxVisibleToasts; set => maxVisibleToasts = value; }
@@ -50,6 +58,7 @@ public class AlertToasts : MonoBehaviour
         public string Text;
         public float Age;
         public GameObject View; // null until the UI exists (e.g. EditMode tests)
+        public System.Action OnClick; // #161: null = display-only
     }
 
     private readonly List<Toast> toasts = new List<Toast>(); // Index 0 = newest
@@ -60,6 +69,7 @@ public class AlertToasts : MonoBehaviour
     private readonly Dictionary<Goblin, bool> goblinWeakened = new Dictionary<Goblin, bool>();
     private readonly Dictionary<SpikeTrap, bool> trapArmed = new Dictionary<SpikeTrap, bool>();
     private int lastHeroesSpawned;
+    private int lastAnnouncedCycle = -1; // #161: the Heart cycle whose list has had its toast
 
     private RectTransform stack;
     private Font font;
@@ -69,6 +79,8 @@ public class AlertToasts : MonoBehaviour
     {
         placementManager ??= FindAnyObjectByType<PlacementManager>();
         heroSpawner ??= FindAnyObjectByType<HeroSpawner>();
+        heartPrinting ??= FindAnyObjectByType<HeartPrinting>();
+        heartPanel ??= FindAnyObjectByType<HeartPanel>();
 
         CreateStack();
         CheckAlerts(); // Baseline only
@@ -97,7 +109,19 @@ public class AlertToasts : MonoBehaviour
         CheckGoblins(fire);
         CheckHeroes(fire);
         CheckTraps(fire);
+        CheckHeart();
     }
+
+    // #161: once per cycle, as soon as its list is up. Not gated on the baseline: the game-start list is news too.
+    private void CheckHeart()
+    {
+        if (heartPrinting == null || heartPrinting.Cycle < 0 || heartPrinting.Cycle == lastAnnouncedCycle) return;
+        lastAnnouncedCycle = heartPrinting.Cycle;
+        if (heartPrinting.State != HeartPrinting.CycleState.Open) return; // Already used (can't be, at a fresh boundary)
+        Show(ImpsAwaitMessage, OpenHeartPanel);
+    }
+
+    private void OpenHeartPanel() => heartPanel?.Open();
 
     private void CheckGoblins(bool fire)
     {
@@ -150,15 +174,38 @@ public class AlertToasts : MonoBehaviour
 
     // ---- toasts ----
 
-    /// <summary>Shows a toast on top of the stack; the oldest goes at once if the cap would be exceeded.</summary>
-    public void Show(string text)
+    /// <summary>
+    /// Shows a toast on top of the stack; the oldest goes at once if the cap would be exceeded. With onClick (#161) the
+    /// toast is a button: a click runs it and dismisses the toast.
+    /// </summary>
+    public void Show(string text, System.Action onClick = null)
     {
         while (toasts.Count >= Mathf.Max(1, maxVisibleToasts)) RemoveAt(toasts.Count - 1);
 
-        var toast = new Toast { Text = text, Age = 0f, View = CreateToastView(text) };
+        var toast = new Toast { Text = text, Age = 0f, OnClick = onClick };
+        toast.View = CreateToastView(toast);
         toasts.Insert(0, toast);
         Relayout();
     }
+
+    /// <summary>
+    /// Clicks the visible toast at this display index (0 = newest): runs its action and dismisses it. False (nothing
+    /// happens) for a display-only toast or an index out of range. The clickable toast's button calls this.
+    /// </summary>
+    public bool ClickToast(int index)
+    {
+        if (index < 0 || index >= toasts.Count || toasts[index].OnClick == null) return false;
+        System.Action onClick = toasts[index].OnClick;
+        RemoveAt(index);
+        onClick();
+        return true;
+    }
+
+    /// <summary>Whether the visible toast at this display index is clickable (tests).</summary>
+    public bool IsClickable(int index) => index >= 0 && index < toasts.Count && toasts[index].OnClick != null;
+
+    /// <summary>The visible toast's view at this display index (tests): null without UI.</summary>
+    public GameObject ToastView(int index) => index >= 0 && index < toasts.Count ? toasts[index].View : null;
 
     /// <summary>Ages every toast and removes the expired ones. Called each frame on unscaled time; public for tests.</summary>
     public void AgeToasts(float deltaSeconds)
@@ -206,7 +253,7 @@ public class AlertToasts : MonoBehaviour
         var canvas = canvasGo.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvasGo.AddComponent<CanvasScaler>();
-        // No GraphicRaycaster: toasts must never take input from the board under them.
+        canvasGo.AddComponent<GraphicRaycaster>(); // #161: for the clickable toast; every other graphic has raycastTarget off
 
         var stackGo = new GameObject("ToastStack", typeof(RectTransform));
         stackGo.transform.SetParent(canvasGo.transform, false);
@@ -219,15 +266,22 @@ public class AlertToasts : MonoBehaviour
         font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
     }
 
-    private GameObject CreateToastView(string text)
+    private GameObject CreateToastView(Toast toast)
     {
         if (stack == null) return null; // No UI (EditMode tests)
+        string text = toast.Text;
 
         var panelGo = new GameObject("Toast");
         panelGo.transform.SetParent(stack, false);
         var panel = panelGo.AddComponent<Image>();
         panel.color = panelColor;
-        panel.raycastTarget = false;
+        panel.raycastTarget = toast.OnClick != null; // Only a clickable toast takes the pointer
+        if (toast.OnClick != null)
+        {
+            var button = panelGo.AddComponent<Button>();
+            button.targetGraphic = panel;
+            button.onClick.AddListener(() => ClickToast(toasts.IndexOf(toast)));
+        }
         var rect = (RectTransform)panelGo.transform;
         rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
         rect.pivot = new Vector2(1f, 1f);

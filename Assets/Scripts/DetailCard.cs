@@ -25,6 +25,9 @@ using UnityEngine.UI;
 /// outlined); a click switches the chamber's process at once while it's idle and empty, otherwise once its current cycle
 /// is out (a line says so; clicking the running row cancels). Its lines carry the process, the cycle's state or stall
 /// reason, what's staged or held, and the stores on its network.
+/// Goblin assignment (#158): a Warren's placed card lists the goblins assigned to it (Unassign), the unassigned goblins
+/// (Assign) and, when there are any, the goblins at another warren (Move here). The lists are rebuilt from live GoblinAI
+/// state on every repaint, never cached, so a goblin moved on another warren's card is gone from this one next time.
 /// </summary>
 [DisallowMultipleComponent]
 public class DetailCard : MonoBehaviour
@@ -67,6 +70,9 @@ public class DetailCard : MonoBehaviour
     [SerializeField] private int toggleFontSize = 12;
     [SerializeField] private float processButtonHeight = 22f; // #146: one chamber process per button
     [SerializeField] private float processButtonGap = 3f;
+    [SerializeField] private float assignRowHeight = 22f;     // #158: one goblin per row on a warren's card
+    [SerializeField] private float assignRowGap = 3f;
+    [SerializeField] private float assignButtonWidth = 90f;
     [SerializeField] private float refreshSeconds = 0.25f;   // How often counts and affordability re-check (unscaled)
 
     [Header("Colors")]
@@ -129,6 +135,18 @@ public class DetailCard : MonoBehaviour
     private Text toggleText;
     private RectTransform processList; // #146: placed mode, chambers only
     private readonly List<(Button button, Image image, Text label)> processButtons = new List<(Button, Image, Text)>();
+    private RectTransform assignList; // #158: placed mode, warrens only
+    private readonly List<AssignRowView> assignRows = new List<AssignRowView>();
+
+    private sealed class AssignRowView
+    {
+        public RectTransform rect;
+        public Text name;
+        public Button button;
+        public Image image;
+        public Text buttonLabel;
+        public AssignmentRow row; // What the button acts on, as of the last repaint
+    }
 
     private sealed class ChipView
     {
@@ -736,6 +754,143 @@ public class DetailCard : MonoBehaviour
         return true;
     }
 
+    // ---- goblin assignment (#158) ----
+
+    /// <summary>What a row of the warren's assignment list does when its button is clicked.</summary>
+    public enum AssignAction { None, Unassign, Assign, MoveHere } // None: a section header
+
+    /// <summary>One row of a warren's assignment list: a section header (no goblin, no action) or a goblin and its button.</summary>
+    public readonly struct AssignmentRow
+    {
+        public readonly string text;
+        public readonly GoblinAI goblin;
+        public readonly AssignAction action;
+
+        public AssignmentRow(string text, GoblinAI goblin, AssignAction action)
+        {
+            this.text = text;
+            this.goblin = goblin;
+            this.action = action;
+        }
+
+        public bool IsHeader => action == AssignAction.None;
+    }
+
+    /// <summary>The shown placed building, when it's a Warren; null otherwise (and outside placed mode).</summary>
+    public Placeable ShownWarren => IsPlacedMode && ShownPlaceable.Type == PlaceableType.Warren ? ShownPlaceable : null;
+
+    /// <summary>The card carries the assignment list: placed mode on a warren.</summary>
+    public bool HasAssignment => ShownWarren != null;
+
+    /// <summary>
+    /// The goblins that can be assigned: living and active (a dead goblin is deactivated), ordered by name. Found fresh on
+    /// every call, so the card never works from a stale list.
+    /// </summary>
+    public static List<GoblinAI> LivingGoblins()
+    {
+        var living = new List<GoblinAI>();
+        foreach (GoblinAI ai in FindObjectsByType<GoblinAI>()) // Active only
+            if (IsAssignable(ai)) living.Add(ai);
+        living.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
+        return living;
+    }
+
+    private static bool IsAssignable(GoblinAI ai) =>
+        ai != null && ai.gameObject.activeInHierarchy && ai.Goblin != null && !ai.Goblin.IsDead;
+
+    /// <summary>The goblins among these assigned to this warren, in the given order.</summary>
+    public static List<GoblinAI> AssignedTo(Placeable warren, IEnumerable<GoblinAI> goblins)
+    {
+        var assigned = new List<GoblinAI>();
+        if (warren == null) return assigned;
+        foreach (GoblinAI ai in goblins) if (ai.Warren == warren) assigned.Add(ai);
+        return assigned;
+    }
+
+    /// <summary>The goblins among these assigned to no warren, in the given order.</summary>
+    public static List<GoblinAI> Unassigned(IEnumerable<GoblinAI> goblins)
+    {
+        var free = new List<GoblinAI>();
+        foreach (GoblinAI ai in goblins) if (!ai.IsLeashed) free.Add(ai);
+        return free;
+    }
+
+    /// <summary>The goblins among these assigned to some warren other than this one, in the given order.</summary>
+    public static List<GoblinAI> AssignedElsewhere(Placeable warren, IEnumerable<GoblinAI> goblins)
+    {
+        var elsewhere = new List<GoblinAI>();
+        foreach (GoblinAI ai in goblins) if (ai.IsLeashed && ai.Warren != warren) elsewhere.Add(ai);
+        return elsewhere;
+    }
+
+    /// <summary>
+    /// A warren's assignment list, from live goblin state: "Assigned (n)" (or "Assigned: none") then each goblin assigned
+    /// here with Unassign; "Unassigned (n)" (or "Unassigned: none") then each unassigned goblin with Assign; and, only
+    /// when there are any, "At another warren (n)" then each of those goblins with Move here. Empty for no warren.
+    /// </summary>
+    public static List<AssignmentRow> AssignmentRows(Placeable warren, List<GoblinAI> goblins)
+    {
+        var rows = new List<AssignmentRow>();
+        if (warren == null) return rows;
+
+        AddSection(rows, "Assigned", AssignedTo(warren, goblins), AssignAction.Unassign, showWhenEmpty: true);
+        AddSection(rows, "Unassigned", Unassigned(goblins), AssignAction.Assign, showWhenEmpty: true);
+        AddSection(rows, "At another warren", AssignedElsewhere(warren, goblins), AssignAction.MoveHere, showWhenEmpty: false);
+        return rows;
+    }
+
+    private static void AddSection(List<AssignmentRow> rows, string title, List<GoblinAI> goblins, AssignAction action, bool showWhenEmpty)
+    {
+        if (goblins.Count == 0 && !showWhenEmpty) return;
+        rows.Add(new AssignmentRow(goblins.Count == 0 ? $"{title}: none" : $"{title} ({goblins.Count})", null, AssignAction.None));
+        foreach (GoblinAI ai in goblins) rows.Add(new AssignmentRow(ai.name, ai, action));
+    }
+
+    /// <summary>The shown warren's assignment list, rebuilt from live state; empty with no warren shown.</summary>
+    public List<AssignmentRow> ShownAssignmentRows => AssignmentRows(ShownWarren, LivingGoblins());
+
+    /// <summary>A row button's label: "Unassign", "Assign" or "Move here"; empty for a header.</summary>
+    public static string AssignButtonLabel(AssignAction action) => action switch
+    {
+        AssignAction.Unassign => "Unassign",
+        AssignAction.Assign => "Assign",
+        AssignAction.MoveHere => "Move here",
+        _ => "",
+    };
+
+    /// <summary>
+    /// Assign or Move here: leashes the goblin to the shown warren (replacing any other warren: one per goblin) and
+    /// repaints. False, changing nothing, with no warren shown or a dead or inactive goblin.
+    /// </summary>
+    public bool AssignToShown(GoblinAI goblin)
+    {
+        Placeable warren = ShownWarren;
+        if (warren == null || !IsAssignable(goblin) || !goblin.SetLeash(warren)) return false;
+        Repaint();
+        return true;
+    }
+
+    /// <summary>
+    /// Unassign: returns a goblin assigned to the shown warren to unleashed and repaints. False, changing nothing, with no
+    /// warren shown or a goblin that isn't assigned to it (it may have been moved on another warren's card since).
+    /// </summary>
+    public bool UnassignFromShown(GoblinAI goblin)
+    {
+        Placeable warren = ShownWarren;
+        if (warren == null || goblin == null || goblin.Warren != warren) return false;
+        goblin.ClearLeash();
+        Repaint();
+        return true;
+    }
+
+    /// <summary>A row button's click: does the row's action on its goblin. False for a header or when the action can't apply.</summary>
+    public bool ClickAssignmentRow(AssignmentRow row) => row.action switch
+    {
+        AssignAction.Unassign => UnassignFromShown(row.goblin),
+        AssignAction.Assign or AssignAction.MoveHere => AssignToShown(row.goblin),
+        _ => false,
+    };
+
     /// <summary>
     /// One chip per material the armed type can be ordered in (the controller's AvailableMaterials, in that order):
     /// its cost for this type, the amount owned, whether it is the selected material and whether an order in it would
@@ -817,6 +972,10 @@ public class DetailCard : MonoBehaviour
         processGo.transform.SetParent(cardGo.transform, false);
         processList = (RectTransform)processGo.transform;
         processButtons.Clear();
+        var assignGo = new GameObject("Assignment", typeof(RectTransform)); // #158: the warren's goblin rows
+        assignGo.transform.SetParent(cardGo.transform, false);
+        assignList = (RectTransform)assignGo.transform;
+        assignRows.Clear();
 
         chromeWired = true; // Chips are built (and wired) later, by Repaint, under this same flag
         Repaint();
@@ -844,6 +1003,8 @@ public class DetailCard : MonoBehaviour
         toggleText = null;
         processList = null;
         processButtons.Clear();
+        assignList = null;
+        assignRows.Clear();
     }
 
     private static void DestroyChromeObject(Object target)
@@ -870,6 +1031,8 @@ public class DetailCard : MonoBehaviour
         if (toggleButton != null) toggleButton.gameObject.SetActive(hasToggle);
         bool hasProcesses = !materialMode && HasProcessSwitcher;
         if (processList != null) processList.gameObject.SetActive(hasProcesses);
+        bool hasAssignment = !materialMode && HasAssignment;
+        if (assignList != null) assignList.gameObject.SetActive(hasAssignment);
         if (onHandText != null) onHandText.gameObject.SetActive(materialMode);
         if (waitingText != null) waitingText.gameObject.SetActive(materialMode);
         if (hintText != null)
@@ -942,6 +1105,14 @@ public class DetailCard : MonoBehaviour
             float height = labels.Count * processButtonHeight + Mathf.Max(0, labels.Count - 1) * processButtonGap;
             PlaceTopLeft(processList, padding, y, inner, height);
             RepaintProcessButtons(labels, inner);
+            y += height + sectionGap;
+        }
+
+        if (hasAssignment && assignList != null)
+        {
+            List<AssignmentRow> rows = ShownAssignmentRows; // Live every repaint: never cached (#158)
+            float height = RepaintAssignRows(rows, inner);
+            PlaceTopLeft(assignList, padding, y, inner, height);
             y += height + sectionGap;
         }
 
@@ -1187,6 +1358,67 @@ public class DetailCard : MonoBehaviour
         Text label = CreateText(go.transform, "Label", toggleFontSize, Color.white, TextAnchor.MiddleCenter);
         Stretch(label.rectTransform, 0f, 0f, 0f, 0f);
         return (button, image, label);
+    }
+
+    // The warren's assignment rows (#158): a header is a plain line; a goblin row is its name with a button on the right.
+    // Returns the list's height.
+    private float RepaintAssignRows(List<AssignmentRow> rows, float width)
+    {
+        if (assignList == null) return 0f;
+        assignRows.RemoveAll(v => v.rect == null);
+        while (assignRows.Count < rows.Count) assignRows.Add(CreateAssignRow(assignRows.Count));
+
+        float y = 0f;
+        for (int i = 0; i < assignRows.Count; i++)
+        {
+            AssignRowView view = assignRows[i];
+            bool shown = i < rows.Count;
+            view.rect.gameObject.SetActive(shown);
+            if (!shown) continue;
+
+            AssignmentRow row = rows[i];
+            view.row = row;
+            if (i > 0) y += row.IsHeader ? sectionGap : assignRowGap;
+            float height = row.IsHeader ? statLineHeight : assignRowHeight;
+            PlaceTopLeft(view.rect, 0f, y, width, height);
+            y += height;
+
+            view.name.text = row.text;
+            view.name.color = row.IsHeader ? secondaryTextColor : Color.white;
+            view.button.gameObject.SetActive(!row.IsHeader);
+            if (row.IsHeader) continue;
+            view.buttonLabel.text = AssignButtonLabel(row.action);
+            view.image.color = row.action == AssignAction.Unassign ? chipColor : toggleOffColor; // Amber: a goblin to place
+        }
+        return y;
+    }
+
+    private AssignRowView CreateAssignRow(int index)
+    {
+        var view = new AssignRowView();
+        var go = new GameObject("AssignRow" + index);
+        go.transform.SetParent(assignList, false);
+        view.rect = go.AddComponent<RectTransform>();
+
+        view.name = CreateText(go.transform, "Name", statFontSize, Color.white, TextAnchor.MiddleLeft);
+        Stretch(view.name.rectTransform, 0f, 0f, assignButtonWidth + 4f, 0f);
+
+        var buttonGo = new GameObject("Button");
+        buttonGo.transform.SetParent(go.transform, false);
+        var buttonRect = buttonGo.AddComponent<RectTransform>();
+        buttonRect.anchorMin = new Vector2(1f, 0f);
+        buttonRect.anchorMax = Vector2.one;
+        buttonRect.pivot = new Vector2(1f, 0.5f);
+        buttonRect.offsetMin = new Vector2(-assignButtonWidth, 0f);
+        buttonRect.offsetMax = Vector2.zero;
+        view.image = buttonGo.AddComponent<Image>();
+        view.image.color = chipColor;
+        view.button = buttonGo.AddComponent<Button>();
+        view.button.targetGraphic = view.image;
+        view.button.onClick.AddListener(() => ClickAssignmentRow(view.row));
+        view.buttonLabel = CreateText(buttonGo.transform, "Label", toggleFontSize, Color.white, TextAnchor.MiddleCenter);
+        Stretch(view.buttonLabel.rectTransform, 0f, 0f, 0f, 0f);
+        return view;
     }
 
     // A material chip's name starts right of its swatch.

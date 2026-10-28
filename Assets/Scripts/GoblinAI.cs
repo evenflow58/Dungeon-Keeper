@@ -103,8 +103,9 @@ public class GoblinAI : MonoBehaviour
         goblin != null && goblin.IsWeakened ? attackIntervalSeconds * weakenedAttackIntervalMultiplier : attackIntervalSeconds;
 
     /// <summary>
-    /// Assigns this goblin to a warren (#157; the player-facing assign UI is #158). Replaces any earlier assignment.
-    /// False, changing nothing, for null or a placeable that isn't a Warren.
+    /// Assigns this goblin to a warren (#157; the warren's card calls it, #158). Replaces any earlier assignment.
+    /// False, changing nothing, for null or a placeable that isn't a Warren. Takes effect at the next poll: a fight in
+    /// progress goes on under the new leash, and a Return walk finishes, then the goblin re-decides under it.
     /// </summary>
     public bool SetLeash(Placeable newWarren)
     {

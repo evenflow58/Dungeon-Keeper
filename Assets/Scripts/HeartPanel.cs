@@ -53,7 +53,16 @@ public class HeartPanel : MonoBehaviour
     [SerializeField] private Color secondaryTextColor = new Color(0.82f, 0.82f, 0.82f, 1f);
 
     public HeartPrinting HeartPrinting { get => heartPrinting; set => heartPrinting = value; }
-    public PlacementController PlacementController { get => placementController; set => placementController = value; }
+    public PlacementController PlacementController
+    {
+        get => placementController;
+        set
+        {
+            Unsubscribe();
+            placementController = value;
+            Subscribe(); // The click hook follows the reference
+        }
+    }
     public Heart Heart { get => heart; set => heart = value; }
 
     public bool IsOpen { get; private set; }
@@ -115,7 +124,9 @@ public class HeartPanel : MonoBehaviour
         if (canvas != null) RewireButtons(); // #137: listeners added in code don't survive a domain reload
     }
 
-    private void OnDisable()
+    private void OnDisable() => Unsubscribe();
+
+    private void Unsubscribe()
     {
         if (subscribedTo != null) subscribedTo.NeutralTileClicked -= OnNeutralTileClicked;
         subscribedTo = null;

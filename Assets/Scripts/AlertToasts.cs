@@ -11,7 +11,8 @@ using UnityEngine.UI;
 /// Heart printing (#161): one "Imps await at the Heart!" toast per cycle, when the Heart's new candidate list arrives
 /// (the game-start list included: this one isn't held back by the baseline), never repeated for a list that's ignored.
 /// It is the one clickable toast: a click opens the Heart panel and dismisses the toast.
-/// Display: a top-right stack under the top bar, newest on top, each toast lasting toastVisibleSeconds, on unscaled time
+/// Display: a top-right stack under the top bar, newest on top, each toast lasting toastVisibleSeconds (a clickable one
+/// clickableToastVisibleSeconds, so there's time to reach it), on unscaled time
 /// so toasts still expire while the game is paused. Only a clickable toast is a raycast target; every other toast (and
 /// the stack) has raycastTarget off, so they never block board input.
 /// </summary>
@@ -34,6 +35,7 @@ public class AlertToasts : MonoBehaviour
 
     [Header("Toasts")]
     [SerializeField] private float toastVisibleSeconds = 4f;
+    [SerializeField] private float clickableToastVisibleSeconds = 12f; // #161: long enough to reach and click
     [SerializeField] private int maxVisibleToasts = 3;
     [SerializeField] private int fontSize = 18;                      // Above the build chrome's text (at most 15), below the top bar (20)
     [SerializeField] private Vector2 toastSize = new Vector2(240f, 30f);
@@ -48,6 +50,7 @@ public class AlertToasts : MonoBehaviour
     public HeartPanel HeartPanel { get => heartPanel; set => heartPanel = value; }
     public float PollIntervalSeconds { get => pollIntervalSeconds; set => pollIntervalSeconds = value; }
     public float ToastVisibleSeconds { get => toastVisibleSeconds; set => toastVisibleSeconds = value; }
+    public float ClickableToastVisibleSeconds { get => clickableToastVisibleSeconds; set => clickableToastVisibleSeconds = value; }
     public int MaxVisibleToasts { get => maxVisibleToasts; set => maxVisibleToasts = value; }
 
     /// <summary>The visible toasts' texts in display order: newest first (top of the stack).</summary>
@@ -214,7 +217,8 @@ public class AlertToasts : MonoBehaviour
         for (int i = toasts.Count - 1; i >= 0; i--)
         {
             toasts[i].Age += deltaSeconds;
-            if (toasts[i].Age < toastVisibleSeconds) continue;
+            float lifetime = toasts[i].OnClick != null ? clickableToastVisibleSeconds : toastVisibleSeconds;
+            if (toasts[i].Age < lifetime) continue;
             RemoveAt(i, relayout: false);
             changed = true;
         }

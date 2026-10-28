@@ -582,7 +582,12 @@ public class HeartPrintingTests
         Assert.IsTrue(alerts.IsClickable(0));
 
         for (int i = 0; i < 10; i++) alerts.CheckAlerts();
-        alerts.AgeToasts(alerts.ToastVisibleSeconds + 1f);
+        alerts.Show(AlertToasts.TrapSpentMessage);
+        alerts.AgeToasts(alerts.ToastVisibleSeconds + 0.5f);
+        CollectionAssert.AreEqual(new[] { AlertToasts.ImpsAwaitMessage }, alerts.ActiveToastTexts.ToArray(),
+            "The clickable toast outlasts a display-only one");
+        Assert.AreEqual(12f, alerts.ClickableToastVisibleSeconds, "Serialized default");
+        alerts.AgeToasts(alerts.ClickableToastVisibleSeconds);
         for (int i = 0; i < 10; i++) alerts.CheckAlerts();
         Assert.AreEqual(0, alerts.ActiveToastTexts.Count, "Ignored: expired, never repeated");
 

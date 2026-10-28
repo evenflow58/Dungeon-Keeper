@@ -559,6 +559,8 @@ GameObject:
   - component: {fileID: 565044538}
   - component: {fileID: 565044539}
   - component: {fileID: 565044540}
+  - component: {fileID: 565044542}
+  - component: {fileID: 565044541}
   m_Layer: 0
   m_Name: DungeonManager
   m_TagString: Untagged
@@ -1043,6 +1045,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: DungeonKeeper::AlertToasts
   placementManager: {fileID: 565044525}
   heroSpawner: {fileID: 565044527}
+  heartPrinting: {fileID: 0}
+  heartPanel: {fileID: 0}
   pollIntervalSeconds: 0.25
   toastVisibleSeconds: 4
   maxVisibleToasts: 3
@@ -1169,6 +1173,9 @@ MonoBehaviour:
   toggleFontSize: 12
   processButtonHeight: 22
   processButtonGap: 3
+  assignRowHeight: 22
+  assignRowGap: 3
+  assignButtonWidth: 90
   refreshSeconds: 0.25
   panelColor: {r: 0, g: 0, b: 0, a: 0.6}
   chipColor: {r: 0.25, g: 0.25, b: 0.3, a: 1}
@@ -1349,6 +1356,71 @@ MonoBehaviour:
   fogOfWar: {fileID: 565044536}
   layPreviewColor: {r: 0.7, g: 0.6, b: 1, a: 0.45}
   removePreviewColor: {r: 0.9, g: 0.3, b: 0.3, a: 0.45}
+--- !u!114 &565044541
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: efa38209d670ecb48afa6eacda2c0743, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::HeartPanel
+  heartPrinting: {fileID: 0}
+  placementController: {fileID: 0}
+  heart: {fileID: 0}
+  panelWidth: 300
+  rightOffset: 8
+  topOffset: 160
+  padding: 8
+  sectionGap: 6
+  headerHeight: 22
+  lineHeight: 16
+  rowHeight: 34
+  rowGap: 4
+  buttonWidth: 70
+  buttonHeight: 24
+  closeButtonWidth: 56
+  titleFontSize: 15
+  textFontSize: 12
+  statsFontSize: 10
+  buttonFontSize: 12
+  refreshSeconds: 0.25
+  panelColor: {r: 0, g: 0, b: 0, a: 0.6}
+  rowColor: {r: 1, g: 1, b: 1, a: 0.06}
+  pickColor: {r: 0.55, g: 0.42, b: 0.12, a: 1}
+  buttonColor: {r: 0.25, g: 0.25, b: 0.3, a: 1}
+  secondaryTextColor: {r: 0.82, g: 0.82, b: 0.82, a: 1}
+--- !u!114 &565044542
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5503083f4f71a824588aede68d8b89cd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::HeartPrinting
+  dungeonBoard: {fileID: 0}
+  boardRenderer: {fileID: 0}
+  heart: {fileID: 0}
+  templateImp: {fileID: 0}
+  placementManager: {fileID: 0}
+  stockpile: {fileID: 0}
+  powerGrid: {fileID: 0}
+  manaFlow: {fileID: 0}
+  fogOfWar: {fileID: 0}
+  cycleSeconds: 300
+  candidatesPerCycle: 3
+  namePrefix: Imp
+  candidateStats:
+    DigSpeed: 1
+    BuildSpeed: 1
+    MoveSpeed: 1
 --- !u!1 &708604853
 GameObject:
   m_ObjectHideFlags: 0

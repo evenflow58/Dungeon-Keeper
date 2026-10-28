@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
 /// Fog of war (#131): what the player has seen. A tile is explored once an imp's sight has covered it, and stays
-/// explored for the run (nothing un-reveals). Imps are the only revealers: each frame the imp's current tile is
-/// compared with the last one revealed from, and a move reveals the Chebyshev disc of impSightRange around it.
+/// explored for the run (nothing un-reveals). Imps are the only revealers: each frame each imp's current tile is
+/// compared with the last one revealed from, and a move reveals the Chebyshev disc of impSightRange around it. The wired
+/// imp is the starter; an imp the Heart prints (#161) joins through AddRevealer.
 /// Presentation only: pathing, AI, heroes and the economy never read it. Consumers (BoardRenderer, DigDesignator,
 /// TileHover) treat a missing FogOfWar as "everything explored" (IsSeen), which is the game without fog.
 /// </summary>
@@ -12,7 +14,7 @@ public class FogOfWar : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private DungeonBoard dungeonBoard;
-    [SerializeField] private Imp imp; // The revealer; a second imp later is another RevealAround caller
+    [SerializeField] private Imp imp; // The starter imp; printed imps join through AddRevealer (#161)
 
     [Header("Sight")]
     [SerializeField] private int impSightRange = 3; // Chebyshev tiles around the imp's tile
@@ -28,7 +30,8 @@ public class FogOfWar : MonoBehaviour
     public event Action<Vector2Int> TileRevealed;
 
     private bool[,] explored; // Sized from the board on first use; runtime state only
-    private Vector2Int? lastRevealCenter;
+    private readonly List<Imp> extraRevealers = new List<Imp>();                            // #161: printed imps
+    private readonly Dictionary<Imp, Vector2Int> lastRevealCenters = new Dictionary<Imp, Vector2Int>();
 
     private void Awake()
     {
@@ -43,16 +46,35 @@ public class FogOfWar : MonoBehaviour
     }
 
     /// <summary>
-    /// Reveals around the imp when its tile differs from the last one revealed from. Called from Update; public
-    /// so tests can step it deterministically.
+    /// Reveals around each imp (the wired starter, then every added revealer) whose tile differs from the last one
+    /// revealed from. Called from Update; public so tests can step it deterministically.
     /// </summary>
     public void RevealFromImp()
     {
-        if (imp == null) return;
+        RevealFrom(imp);
+        foreach (Imp extra in extraRevealers) RevealFrom(extra);
+    }
 
-        Vector2Int tile = imp.CurrentTile;
-        if (lastRevealCenter == tile) return;
-        lastRevealCenter = tile;
+    /// <summary>
+    /// Adds an imp whose sight reveals fog (#161: the Heart's printed imps). Ignored for null, the wired imp, or one
+    /// already added.
+    /// </summary>
+    public void AddRevealer(Imp revealer)
+    {
+        if (revealer == null || revealer == imp || extraRevealers.Contains(revealer)) return;
+        extraRevealers.Add(revealer);
+    }
+
+    /// <summary>The imps added through AddRevealer (the wired imp not included).</summary>
+    public IReadOnlyList<Imp> ExtraRevealers => extraRevealers;
+
+    private void RevealFrom(Imp source)
+    {
+        if (source == null) return; // Unity null: a destroyed imp reveals nothing
+
+        Vector2Int tile = source.CurrentTile;
+        if (lastRevealCenters.TryGetValue(source, out Vector2Int last) && last == tile) return;
+        lastRevealCenters[source] = tile;
         RevealAround(tile);
     }
 

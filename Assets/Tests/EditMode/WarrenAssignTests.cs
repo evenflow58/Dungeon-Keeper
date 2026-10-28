@@ -7,9 +7,9 @@ using UnityEngine.UI;
 using Object = UnityEngine.Object;
 
 /// <summary>
-/// #158: assigning goblins to a warren from its placed card — the live lists (assigned here, unassigned, at another
-/// warren), Assign / Unassign / Move here, one warren per goblin, nothing cached on the card, and what an assignment
-/// change does to a goblin mid-fight or mid-Return.
+/// #158: assigning goblins to a warren from its placed card — the live lists (assigned here, unassigned), Assign /
+/// Unassign, one warren per goblin (moving one is unassign there, then assign here), nothing cached on the card, and
+/// what an assignment change does to a goblin mid-fight or mid-Return.
 /// </summary>
 public class WarrenAssignTests
 {
@@ -179,12 +179,12 @@ public class WarrenAssignTests
         CollectionAssert.AreEqual(new[]
         {
             "Assigned: none",
-            "Unassigned (3)", "Goblin1:Assign", "Goblin2:Assign", "Goblin3:Assign", // By name; no "elsewhere" section
+            "Unassigned (3)", "Goblin1:Assign", "Goblin2:Assign", "Goblin3:Assign", // By name
         }, Describe(card.ShownAssignmentRows));
     }
 
     [Test]
-    public void TheLists_HoldExactlyAssignedHere_Unassigned_AndAtAnotherWarren_NeverTheDeadOrInactive()
+    public void TheLists_HoldExactlyAssignedHereAndUnassigned_NeverAnotherWarrensTheDeadOrInactive()
     {
         Placeable a = PlaceWarren(A);
         Placeable b = PlaceWarren(B);
@@ -213,8 +213,7 @@ public class WarrenAssignTests
         CollectionAssert.AreEqual(new[]
         {
             "Assigned (1)", "Goblin1:Unassign",
-            "Unassigned (1)", "Goblin2:Assign",
-            "At another warren (1)", "Goblin3:MoveHere",
+            "Unassigned (1)", "Goblin2:Assign", // Goblin3 is at B: on neither of A's lists
         }, Describe(card.ShownAssignmentRows));
 
         Open(b);
@@ -222,7 +221,6 @@ public class WarrenAssignTests
         {
             "Assigned (1)", "Goblin3:Unassign",
             "Unassigned (1)", "Goblin2:Assign",
-            "At another warren (1)", "Goblin1:MoveHere",
         }, Describe(card.ShownAssignmentRows));
     }
 
@@ -305,7 +303,7 @@ public class WarrenAssignTests
     // ---- one warren per goblin, nothing cached ----
 
     [Test]
-    public void MoveHere_OnASecondWarrensCard_ReleashesIt_AndTheFirstCardDropsIt()
+    public void Reassigning_IsUnassignOnTheFirstCard_ThenAssignOnTheSecond_AndTheFirstCardDropsIt()
     {
         Placeable a = PlaceWarren(A);
         Placeable b = PlaceWarren(B);
@@ -317,22 +315,26 @@ public class WarrenAssignTests
         Assert.AreSame(a, goblin.Warren);
 
         Open(b);
-        DetailCard.AssignmentRow move = RowFor(goblin);
-        Assert.AreEqual(DetailCard.AssignAction.MoveHere, move.action);
-        Assert.AreEqual("Move here", DetailCard.AssignButtonLabel(move.action));
-        Assert.IsTrue(card.ClickAssignmentRow(move));
-        Assert.AreSame(b, goblin.Warren, "One warren per goblin: B replaces A");
+        CollectionAssert.AreEqual(new[] { "Assigned: none", "Unassigned (1)", "Goblin2:Assign" },
+            Describe(card.ShownAssignmentRows), "A goblin at A isn't offered on B's card");
+        Assert.IsFalse(card.AssignToShown(goblin), "No one-click move: it must be unassigned at A first");
+        Assert.AreSame(a, goblin.Warren);
+
+        Open(a);
+        Assert.IsTrue(card.ClickAssignmentRow(RowFor(goblin)), "Unassign at A");
+        Assert.IsFalse(goblin.IsLeashed);
+
+        Open(b);
+        Assert.IsTrue(card.ClickAssignmentRow(RowFor(goblin)), "Then Assign at B");
+        Assert.AreSame(b, goblin.Warren, "One warren per goblin");
         CollectionAssert.AreEqual(new[] { "Assigned (1)", "Goblin1:Unassign", "Unassigned (1)", "Goblin2:Assign" },
             Describe(card.ShownAssignmentRows));
 
         Open(a); // Reopen: rebuilt from live state, not remembered from the first visit
-        CollectionAssert.AreEqual(new[]
-        {
-            "Assigned: none",
-            "Unassigned (1)", "Goblin2:Assign",
-            "At another warren (1)", "Goblin1:MoveHere",
-        }, Describe(card.ShownAssignmentRows));
+        CollectionAssert.AreEqual(new[] { "Assigned: none", "Unassigned (1)", "Goblin2:Assign" },
+            Describe(card.ShownAssignmentRows));
         Assert.IsFalse(card.UnassignFromShown(goblin), "Not assigned here any more: A's card can't unassign it");
+        Assert.IsFalse(card.AssignToShown(goblin), "Nor take it from B");
         Assert.AreSame(b, goblin.Warren);
     }
 
@@ -348,7 +350,11 @@ public class WarrenAssignTests
         Assert.AreEqual("Goblin1:Unassign", Describe(card.ShownAssignmentRows)[1]);
 
         Assert.IsTrue(goblin.SetLeash(b)); // Moved without this card hearing about it
-        CollectionAssert.AreEqual(new[] { "Assigned: none", "Unassigned: none", "At another warren (1)", "Goblin1:MoveHere" },
+        CollectionAssert.AreEqual(new[] { "Assigned: none", "Unassigned: none" }, Describe(card.ShownAssignmentRows),
+            "At B now: on neither of A's lists");
+
+        goblin.ClearLeash(); // Unassigned elsewhere: A's card offers it again
+        CollectionAssert.AreEqual(new[] { "Assigned: none", "Unassigned (1)", "Goblin1:Assign" },
             Describe(card.ShownAssignmentRows));
     }
 
@@ -505,8 +511,12 @@ public class WarrenAssignTests
         MoveTo(hero, T(12, 26)); // Far past A's leash (and nowhere near B's zone)
         StepUntil(() => goblin.CurrentGoal == GoblinAI.Goal.Return, 1f, "the leash breaks");
 
+        // Reassigned mid-Return, the two-step way: unassign at A, then assign at B.
+        Open(a);
+        Assert.IsTrue(card.ClickAssignmentRow(RowFor(goblin)), "Unassign at A, mid-Return");
+        Assert.AreEqual(GoblinAI.Goal.Return, goblin.CurrentGoal, "Unassigning doesn't stop the walk");
         Open(b);
-        Assert.IsTrue(card.ClickAssignmentRow(RowFor(goblin)), "Move here, mid-Return");
+        Assert.IsTrue(card.ClickAssignmentRow(RowFor(goblin)), "Assign at B, mid-Return");
         Assert.AreSame(b, goblin.Warren);
         goblin.WanderPauseSeconds = 0.5f;
 

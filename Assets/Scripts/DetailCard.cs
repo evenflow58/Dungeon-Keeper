@@ -25,9 +25,10 @@ using UnityEngine.UI;
 /// outlined); a click switches the chamber's process at once while it's idle and empty, otherwise once its current cycle
 /// is out (a line says so; clicking the running row cancels). Its lines carry the process, the cycle's state or stall
 /// reason, what's staged or held, and the stores on its network.
-/// Goblin assignment (#158): a Warren's placed card lists the goblins assigned to it (Unassign), the unassigned goblins
-/// (Assign) and, when there are any, the goblins at another warren (Move here). The lists are rebuilt from live GoblinAI
-/// state on every repaint, never cached, so a goblin moved on another warren's card is gone from this one next time.
+/// Goblin assignment (#158): a Warren's placed card lists the goblins assigned to it (Unassign) and the unassigned goblins
+/// (Assign). A goblin at another warren is on neither list: moving it means unassigning it there, then assigning it here.
+/// The lists are rebuilt from live GoblinAI state on every repaint, never cached, so a change made on another warren's
+/// card shows on this one the next time it's read.
 /// </summary>
 [DisallowMultipleComponent]
 public class DetailCard : MonoBehaviour
@@ -757,7 +758,7 @@ public class DetailCard : MonoBehaviour
     // ---- goblin assignment (#158) ----
 
     /// <summary>What a row of the warren's assignment list does when its button is clicked.</summary>
-    public enum AssignAction { None, Unassign, Assign, MoveHere } // None: a section header
+    public enum AssignAction { None, Unassign, Assign } // None: a section header
 
     /// <summary>One row of a warren's assignment list: a section header (no goblin, no action) or a goblin and its button.</summary>
     public readonly struct AssignmentRow
@@ -815,33 +816,23 @@ public class DetailCard : MonoBehaviour
         return free;
     }
 
-    /// <summary>The goblins among these assigned to some warren other than this one, in the given order.</summary>
-    public static List<GoblinAI> AssignedElsewhere(Placeable warren, IEnumerable<GoblinAI> goblins)
-    {
-        var elsewhere = new List<GoblinAI>();
-        foreach (GoblinAI ai in goblins) if (ai.IsLeashed && ai.Warren != warren) elsewhere.Add(ai);
-        return elsewhere;
-    }
-
     /// <summary>
     /// A warren's assignment list, from live goblin state: "Assigned (n)" (or "Assigned: none") then each goblin assigned
-    /// here with Unassign; "Unassigned (n)" (or "Unassigned: none") then each unassigned goblin with Assign; and, only
-    /// when there are any, "At another warren (n)" then each of those goblins with Move here. Empty for no warren.
+    /// here with Unassign; then "Unassigned (n)" (or "Unassigned: none") then each unassigned goblin with Assign. Goblins at
+    /// another warren aren't listed. Empty for no warren.
     /// </summary>
     public static List<AssignmentRow> AssignmentRows(Placeable warren, List<GoblinAI> goblins)
     {
         var rows = new List<AssignmentRow>();
         if (warren == null) return rows;
 
-        AddSection(rows, "Assigned", AssignedTo(warren, goblins), AssignAction.Unassign, showWhenEmpty: true);
-        AddSection(rows, "Unassigned", Unassigned(goblins), AssignAction.Assign, showWhenEmpty: true);
-        AddSection(rows, "At another warren", AssignedElsewhere(warren, goblins), AssignAction.MoveHere, showWhenEmpty: false);
+        AddSection(rows, "Assigned", AssignedTo(warren, goblins), AssignAction.Unassign);
+        AddSection(rows, "Unassigned", Unassigned(goblins), AssignAction.Assign);
         return rows;
     }
 
-    private static void AddSection(List<AssignmentRow> rows, string title, List<GoblinAI> goblins, AssignAction action, bool showWhenEmpty)
+    private static void AddSection(List<AssignmentRow> rows, string title, List<GoblinAI> goblins, AssignAction action)
     {
-        if (goblins.Count == 0 && !showWhenEmpty) return;
         rows.Add(new AssignmentRow(goblins.Count == 0 ? $"{title}: none" : $"{title} ({goblins.Count})", null, AssignAction.None));
         foreach (GoblinAI ai in goblins) rows.Add(new AssignmentRow(ai.name, ai, action));
     }
@@ -849,23 +840,23 @@ public class DetailCard : MonoBehaviour
     /// <summary>The shown warren's assignment list, rebuilt from live state; empty with no warren shown.</summary>
     public List<AssignmentRow> ShownAssignmentRows => AssignmentRows(ShownWarren, LivingGoblins());
 
-    /// <summary>A row button's label: "Unassign", "Assign" or "Move here"; empty for a header.</summary>
+    /// <summary>A row button's label: "Unassign" or "Assign"; empty for a header.</summary>
     public static string AssignButtonLabel(AssignAction action) => action switch
     {
         AssignAction.Unassign => "Unassign",
         AssignAction.Assign => "Assign",
-        AssignAction.MoveHere => "Move here",
         _ => "",
     };
 
     /// <summary>
-    /// Assign or Move here: leashes the goblin to the shown warren (replacing any other warren: one per goblin) and
-    /// repaints. False, changing nothing, with no warren shown or a dead or inactive goblin.
+    /// Assign: leashes an unassigned goblin to the shown warren and repaints. False, changing nothing, with no warren
+    /// shown, a dead or inactive goblin, or one already assigned to a warren (this one or another: it must be unassigned
+    /// there first, so a goblin is never moved from one warren to another in a single click).
     /// </summary>
     public bool AssignToShown(GoblinAI goblin)
     {
         Placeable warren = ShownWarren;
-        if (warren == null || !IsAssignable(goblin) || !goblin.SetLeash(warren)) return false;
+        if (warren == null || !IsAssignable(goblin) || goblin.IsLeashed || !goblin.SetLeash(warren)) return false;
         Repaint();
         return true;
     }
@@ -887,7 +878,7 @@ public class DetailCard : MonoBehaviour
     public bool ClickAssignmentRow(AssignmentRow row) => row.action switch
     {
         AssignAction.Unassign => UnassignFromShown(row.goblin),
-        AssignAction.Assign or AssignAction.MoveHere => AssignToShown(row.goblin),
+        AssignAction.Assign => AssignToShown(row.goblin),
         _ => false,
     };
 

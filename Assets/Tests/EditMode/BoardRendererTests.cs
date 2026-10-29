@@ -13,6 +13,7 @@ public class BoardRendererTests
         // Default board: 48x32 Rock with the 6x6 Floor cavern at (21,13)-(26,18) and the door at (24,31).
         managerGo = new GameObject("TestDungeonManager");
         board = managerGo.AddComponent<DungeonBoard>();
+        board.DoorStartsUndug = false; // #163: these tests are about the dug-out door
         board.InitializeBoard();
         boardRenderer = managerGo.AddComponent<BoardRenderer>();
         boardRenderer.Board = board;

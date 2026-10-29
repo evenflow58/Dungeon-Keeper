@@ -150,13 +150,14 @@ public class HeartPrinting : MonoBehaviour
     }
 
     /// <summary>
-    /// The highest imp number on the board, read live: a name "Imp7" is 7, and any other imp (the starter, "Imp") is 1.
-    /// 0 with no imps.
+    /// The highest imp number in the game, read live: a name "Imp7" is 7, and any other imp (the starter, "Imp") is 1.
+    /// 0 with no imps. #163: inactive imps count too: an imp away on an expedition is deactivated, not destroyed, and
+    /// comes back, so its number must never be offered again while it's gone.
     /// </summary>
     public int HighestImpNumber()
     {
         int highest = 0;
-        foreach (Imp imp in FindObjectsByType<Imp>()) highest = Mathf.Max(highest, NumberOf(imp.name));
+        foreach (Imp imp in FindObjectsByType<Imp>(FindObjectsInactive.Include)) highest = Mathf.Max(highest, NumberOf(imp.name));
         return highest;
     }
 
@@ -215,14 +216,28 @@ public class HeartPrinting : MonoBehaviour
         if (dungeonBoard == null) return false;
         if (IsFreeSpawnTile(tile)) return true;
 
-        Vector2Int origin = heart != null ? heart.Tile : tile;
+        return FindNearestFreeTile(dungeonBoard, heart != null ? heart.Tile : tile, IsFreeSpawnTile, out tile);
+    }
+
+    private static readonly Vector2Int[] Steps = { Vector2Int.right, Vector2Int.left, Vector2Int.up, Vector2Int.down };
+
+    /// <summary>
+    /// The tile nearest origin by walking distance for which isFree holds: breadth-first from origin (origin itself first,
+    /// whether or not it's walkable, then over walkable tiles, neighbours in +x, −x, +y, −y order). False when none is
+    /// reachable. Shared by Heart printing (#161) and the expedition's returning goblin (#163, from the door).
+    /// </summary>
+    public static bool FindNearestFreeTile(DungeonBoard board, Vector2Int origin, System.Func<Vector2Int, bool> isFree,
+        out Vector2Int tile)
+    {
+        tile = origin;
+        if (board == null || isFree == null) return false;
         var seen = new HashSet<Vector2Int> { origin };
         var queue = new Queue<Vector2Int>();
         queue.Enqueue(origin);
         while (queue.Count > 0)
         {
             Vector2Int current = queue.Dequeue();
-            if (IsFreeSpawnTile(current))
+            if (isFree(current))
             {
                 tile = current;
                 return true;
@@ -230,23 +245,28 @@ public class HeartPrinting : MonoBehaviour
             foreach (Vector2Int step in Steps)
             {
                 Vector2Int next = current + step;
-                if (!dungeonBoard.IsWalkable(next.x, next.y) || !seen.Add(next)) continue;
+                if (!board.IsWalkable(next.x, next.y) || !seen.Add(next)) continue;
                 queue.Enqueue(next);
             }
         }
         return false;
     }
 
-    private static readonly Vector2Int[] Steps = { Vector2Int.right, Vector2Int.left, Vector2Int.up, Vector2Int.down };
-
     /// <summary>
     /// A tile a printed imp may appear on: walkable Floor, explored, not the Heart's tile, with no placeable (site or
     /// built) on it and no living imp, goblin or hero standing on it.
     /// </summary>
-    public bool IsFreeSpawnTile(Vector2Int tile)
+    public bool IsFreeSpawnTile(Vector2Int tile) => IsFreeTile(dungeonBoard, fogOfWar, heart, placementManager, tile);
+
+    /// <summary>
+    /// The free-tile rules (#161, reused by #163): walkable Floor, explored (an unwired fog counts as explored), not the
+    /// Heart's tile, no placeable (site or built) on it, and no living (active) imp, goblin or hero standing on it.
+    /// </summary>
+    public static bool IsFreeTile(DungeonBoard board, FogOfWar fog, Heart heart, PlacementManager placementManager,
+        Vector2Int tile)
     {
-        if (dungeonBoard == null || !dungeonBoard.IsWalkable(tile.x, tile.y)) return false;
-        if (!FogOfWar.IsSeen(fogOfWar, tile)) return false;
+        if (board == null || !board.IsWalkable(tile.x, tile.y)) return false;
+        if (!FogOfWar.IsSeen(fog, tile)) return false;
         if (heart != null && heart.Tile == tile) return false;
         if (placementManager != null && placementManager.GetAt(tile) != null) return false;
         foreach (Imp imp in FindObjectsByType<Imp>())

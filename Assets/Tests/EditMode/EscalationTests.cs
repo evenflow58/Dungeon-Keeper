@@ -23,6 +23,7 @@ public class EscalationTests
     {
         managerGo = new GameObject("TestDungeonManager");
         board = managerGo.AddComponent<DungeonBoard>();
+        board.DoorStartsUndug = false; // #163: these tests are about the dug-out door
         board.InitializeBoard();
         boardRenderer = managerGo.AddComponent<BoardRenderer>();
         boardRenderer.Board = board;
@@ -244,6 +245,7 @@ public class EscalationTests
 
         // Move the door; regenerating the board wipes the dug route.
         board.EntranceTile = new Vector2Int(0, 16);
+        board.DoorStartsUndug = false; // #163: these tests are about the dug-out door
         board.InitializeBoard();
         spawner.EntranceTile = new Vector2Int(0, 16);
         Assert.IsFalse(spawner.RouteExists());

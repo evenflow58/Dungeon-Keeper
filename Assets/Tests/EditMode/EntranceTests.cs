@@ -25,6 +25,7 @@ public class EntranceTests
         // Default board: Rock, the 6x6 Floor cavern at (21,13)-(26,18), and the door at (24,31).
         managerGo = new GameObject("TestDungeonManager");
         board = managerGo.AddComponent<DungeonBoard>();
+        board.DoorStartsUndug = false; // #163: these tests are about the dug-out door
         board.InitializeBoard();
         boardRenderer = managerGo.AddComponent<BoardRenderer>();
         boardRenderer.Board = board;
@@ -132,7 +133,7 @@ public class EntranceTests
     public void EntranceTileSeam_MovesTheDoorOnRegeneration()
     {
         board.EntranceTile = new Vector2Int(0, 16);
-        board.InitializeBoard();
+        board.InitializeBoard(); // Still open (SetUp): the seam moves the door either way
 
         Assert.AreEqual(TileState.Entrance, board.GetTile(0, 16));
         Assert.AreEqual(TileState.Rock, board.GetTile(Door.x, Door.y));

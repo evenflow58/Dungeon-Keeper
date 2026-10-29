@@ -95,6 +95,31 @@ public class ImpDigger : MonoBehaviour
     /// <summary>True while stationary beside CurrentSite, writing progress onto it.</summary>
     public bool IsBuilding { get; private set; }
 
+    /// <summary>
+    /// #163: true from an expedition order until the imp is back: it holds no job and selects none (dig, build, conduit,
+    /// pipe, rearm or Operate). ImpExpedition sets and clears it.
+    /// </summary>
+    public bool OnExpedition { get; private set; }
+
+    /// <summary>
+    /// #163: commits the imp to an expedition. It drops whatever job it holds (the job itself stays in the pool: the
+    /// designation, site, conduit, pipe or trap is untouched, so another imp takes it) and selects nothing until
+    /// EndExpedition.
+    /// </summary>
+    public void BeginExpedition()
+    {
+        DropTarget();
+        OnExpedition = true;
+    }
+
+    /// <summary>#163: the imp is back: it selects work again on its next Tick.</summary>
+    public void EndExpedition()
+    {
+        OnExpedition = false;
+        idleTimer = 0f;
+        selectPending = true;
+    }
+
     private bool HasJob => CurrentTarget != null || CurrentTrap != null || CurrentSite != null || CurrentConduit != null
         || CurrentPipe != null;
 
@@ -125,6 +150,7 @@ public class ImpDigger : MonoBehaviour
     public void Tick(float deltaTime)
     {
         if (dungeonBoard == null || imp == null) return;
+        if (OnExpedition) return; // #163: walking out, away or not yet back: no jobs
 
         if (CurrentWheel != null)
             TickOperating(deltaTime);
@@ -287,7 +313,7 @@ public class ImpDigger : MonoBehaviour
         Vector2Int dug = CurrentTarget.Value;
         bool pays = TryGetTileYield(dug, out MaterialType material, out int amount); // Asked before the tile changes
         DropTarget();
-        dungeonBoard.SetTile(dug.x, dug.y, TileState.Floor);
+        dungeonBoard.SetTile(dug.x, dug.y, dungeonBoard.DugStateOf(dug)); // #163: the door digs out to the Entrance
         if (pays && stockpile != null) stockpile.Add(material, amount); // The only place digging earns (#103)
     }
 

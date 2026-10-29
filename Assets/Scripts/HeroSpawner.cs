@@ -2,12 +2,15 @@ using UnityEngine;
 
 /// <summary>
 /// The hero director (DESIGN §A.6): three escalating heroes, one at a time (§A.9).
-/// - Hero 1: once the player has placed requiredCots Lair Cots AND requiredPlots Mushroom Plots, or after
-///   firstHeroSeconds, a Fighter enters at the door.
+/// - The clock (#163): nothing happens until the door is dug out. The door starts undug; the moment its tile becomes the
+///   Entrance (DungeonBoard.OnTileChanged, an event, not a poll) the hero clock starts. Before that no hero arrives,
+///   however long the game runs. A board whose door is already open when the director first looks starts it at once.
+/// - Hero 1: firstHeroSeconds after the door was dug out, a Fighter enters at the door. Timer only: the cots-and-plots
+///   trigger is removed for now (Evan, #163), so building never brings him sooner.
 /// - When a hero is resolved (killed or escaped), the next is scheduled nextHeroDelaySeconds later. An escaped
 ///   hero reports back: the next comes after delay × escapedDelayMultiplier and carries the escape stat bonus.
 /// - Each wave adds heroHealthPerWave / heroDamagePerWave to the base stats. Later heroes don't re-check the
-///   building/time triggers; the first trigger started the sequence.
+///   first-hero timer; it started the sequence.
 /// - Every spawn is gated on a route from the door to beside the Heart (#58).
 /// - After totalHeroes resolutions it's done; GameManager reads HeroesResolved for Victory. Once the game is
 ///   over (GameManager not Playing) it goes quiet: no spawns, no countdown.
@@ -24,9 +27,7 @@ public class HeroSpawner : MonoBehaviour
     [SerializeField] private Heart heart; // The route gate's destination; no Heart = never spawn
     [SerializeField] private GameManager gameManager; // Optional: once the game is over, the director goes quiet
 
-    [Header("Trigger (DESIGN §A.6)")]
-    [SerializeField] private int requiredCots = 3;
-    [SerializeField] private int requiredPlots = 2;
+    [Header("Trigger (DESIGN §A.6: timer only)")]
     [SerializeField] private float firstHeroSeconds = 300f;           // 5 minutes
     [SerializeField] private Vector2Int entranceTile = new Vector2Int(24, 31); // The door (DungeonBoard.EntranceTile): must agree
 
@@ -52,8 +53,6 @@ public class HeroSpawner : MonoBehaviour
     public BoardRenderer Renderer { get => boardRenderer; set => boardRenderer = value; }
     public Heart Heart { get => heart; set => heart = value; }
     public GameManager GameManager { get => gameManager; set => gameManager = value; }
-    public int RequiredCots { get => requiredCots; set => requiredCots = value; }
-    public int RequiredPlots { get => requiredPlots; set => requiredPlots = value; }
     public float FirstHeroSeconds { get => firstHeroSeconds; set => firstHeroSeconds = value; }
     public Vector2Int EntranceTile { get => entranceTile; set => entranceTile = value; }
     public int HeroMaxHealth { get => heroMaxHealth; set => heroMaxHealth = value; }
@@ -91,8 +90,60 @@ public class HeroSpawner : MonoBehaviour
     /// <summary>True when the next scheduled hero will carry the escape bonus (the previous one escaped).</summary>
     public bool NextHeroHasEscapeBonus { get; private set; }
 
-    /// <summary>Game seconds counted toward the time trigger (stops once the hero has spawned).</summary>
+    /// <summary>
+    /// Game seconds counted toward the time trigger since the door was dug out (#163); stops once the first hero has
+    /// spawned.
+    /// </summary>
     public float ElapsedSeconds { get; private set; }
+
+    /// <summary>
+    /// #163: true once the door has been dug out. The first hero's triggers only run from then on. Reading it starts
+    /// watching the board (WatchDoor), so a reader never sees a stale value.
+    /// </summary>
+    public bool ClockStarted
+    {
+        get
+        {
+            WatchDoor();
+            return clockStarted;
+        }
+    }
+
+    private bool clockStarted;
+
+    // #163: the board whose OnTileChanged we listen to in this domain (a reload drops C# event subscriptions, #137).
+    [System.NonSerialized] private DungeonBoard watchedBoard;
+
+    private void OnEnable() => WatchDoor();
+
+    private void OnDisable() => UnwatchDoor();
+
+    /// <summary>
+    /// #163: listens for the door being dug out on the current board (idempotent; follows a changed Board). A door that
+    /// is already open starts the clock at once. Start, OnEnable and Tick call it, so tests that wire a board and tick
+    /// get it too.
+    /// </summary>
+    public void WatchDoor()
+    {
+        if (dungeonBoard == watchedBoard) return;
+        UnwatchDoor();
+        if (dungeonBoard == null) return;
+        dungeonBoard.OnTileChanged += OnBoardTileChanged;
+        watchedBoard = dungeonBoard;
+        if (dungeonBoard.IsDoorOpen) clockStarted = true;
+    }
+
+    private void UnwatchDoor()
+    {
+        if (watchedBoard != null) watchedBoard.OnTileChanged -= OnBoardTileChanged;
+        watchedBoard = null;
+    }
+
+    private void OnBoardTileChanged(int x, int y, TileState state)
+    {
+        if (state == TileState.Entrance && watchedBoard != null && new Vector2Int(x, y) == watchedBoard.EntranceTile)
+            clockStarted = true; // The door is dug out: the setup time is over
+    }
 
     private void Start()
     {
@@ -101,6 +152,7 @@ public class HeroSpawner : MonoBehaviour
         boardRenderer ??= FindAnyObjectByType<BoardRenderer>();
         heart ??= FindAnyObjectByType<Heart>();
         gameManager ??= FindAnyObjectByType<GameManager>();
+        WatchDoor();
     }
 
     private void Update()
@@ -119,11 +171,11 @@ public class HeroSpawner : MonoBehaviour
 
         if (HeroesSpawned == 0)
         {
+            if (!ClockStarted) return; // #163: the door is still undug: no hero, no countdown
             ElapsedSeconds += deltaTime;
-            // Both triggers are persistent (time only grows; buildings aren't removed in the slice), so a trigger
-            // that fired while the dungeon was sealed spawns him on the first poll after the route opens. The
-            // trigger is checked first so the path query only runs when it's hot.
-            if ((BuildingsTriggerMet() || ElapsedSeconds >= firstHeroSeconds) && RouteExists()) Spawn();
+            // The timer only grows, so if it ran out while the dungeon was sealed he spawns on the first poll after
+            // the route opens. The timer is checked first so the path query only runs when it's due.
+            if (FirstHeroDue && RouteExists()) Spawn();
             return;
         }
 
@@ -146,11 +198,8 @@ public class HeroSpawner : MonoBehaviour
         dungeonBoard != null && heart != null &&
         Pathfinder.FindPathToNeighbor(dungeonBoard, dungeonBoard.EntranceTile, heart.Tile).Count > 0;
 
-    /// <summary>True when requiredCots Lair Cots and requiredPlots Mushroom Plots are built (both); sites don't count.</summary>
-    public bool BuildingsTriggerMet() =>
-        placementManager != null &&
-        placementManager.CountBuilt(PlaceableType.LairCot) >= requiredCots &&
-        placementManager.CountBuilt(PlaceableType.MushroomPlot) >= requiredPlots;
+    /// <summary>True once firstHeroSeconds have passed since the door was dug out (hero 1's only trigger).</summary>
+    public bool FirstHeroDue => ElapsedSeconds >= firstHeroSeconds;
 
     private void PollOutcome()
     {

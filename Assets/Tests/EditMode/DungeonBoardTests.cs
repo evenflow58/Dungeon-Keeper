@@ -42,7 +42,7 @@ public class DungeonBoardTests
 
                 if (isDoor)
                 {
-                    Assert.AreEqual(TileState.Entrance, state, "The door at (24,31) should be Entrance");
+                    Assert.AreEqual(TileState.Rock, state, "The door at (24,31) starts undug (#163): Rock until dug out");
                 }
                 else if (inCavern)
                 {

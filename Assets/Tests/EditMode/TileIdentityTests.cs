@@ -29,10 +29,12 @@ public class TileIdentityTests
     {
         managerGo = new GameObject("TestDungeonManager");
         board = managerGo.AddComponent<DungeonBoard>();
+        board.DoorStartsUndug = false; // #163: these tests are about the dug-out door
         board.InitializeBoard();
         stockpile = managerGo.AddComponent<Stockpile>(); // 10 stone to start: Stone is the only discovered material
         fog = managerGo.AddComponent<FogOfWar>();
         fog.Board = board;
+        fog.DoorStartsExplored = false; // #163: keeps the fogged-door label case; the pre-explored door is in ImpExpeditionTests
         boardRenderer = managerGo.AddComponent<BoardRenderer>();
         boardRenderer.Board = board;
 

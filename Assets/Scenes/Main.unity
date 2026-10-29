@@ -561,6 +561,8 @@ GameObject:
   - component: {fileID: 565044540}
   - component: {fileID: 565044542}
   - component: {fileID: 565044541}
+  - component: {fileID: 565044544}
+  - component: {fileID: 565044543}
   m_Layer: 0
   m_Name: DungeonManager
   m_TagString: Untagged
@@ -662,6 +664,7 @@ MonoBehaviour:
   height: 32
   cavernSize: 6
   entranceTile: {x: 24, y: 31}
+  doorStartsUndug: 1
 --- !u!4 &565044521
 Transform:
   m_ObjectHideFlags: 0
@@ -1047,8 +1050,10 @@ MonoBehaviour:
   heroSpawner: {fileID: 565044527}
   heartPrinting: {fileID: 0}
   heartPanel: {fileID: 0}
+  impExpedition: {fileID: 565044544}
   pollIntervalSeconds: 0.25
   toastVisibleSeconds: 4
+  clickableToastVisibleSeconds: 12
   maxVisibleToasts: 3
   fontSize: 18
   toastSize: {x: 240, y: 30}
@@ -1239,6 +1244,7 @@ MonoBehaviour:
   dungeonBoard: {fileID: 565044520}
   imp: {fileID: 71735945}
   impSightRange: 3
+  doorStartsExplored: 1
 --- !u!114 &565044537
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1421,6 +1427,58 @@ MonoBehaviour:
     DigSpeed: 1
     BuildSpeed: 1
     MoveSpeed: 1
+--- !u!114 &565044543
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 87314f092f836fc4593434d21bc7ed2c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::ImpPanel
+  impExpedition: {fileID: 565044544}
+  placementController: {fileID: 565044524}
+  panelWidth: 260
+  rightOffset: 316
+  topOffset: 160
+  padding: 8
+  sectionGap: 6
+  headerHeight: 22
+  lineHeight: 16
+  buttonHeight: 24
+  closeButtonWidth: 56
+  titleFontSize: 15
+  textFontSize: 12
+  buttonFontSize: 12
+  refreshSeconds: 0.25
+  panelColor: {r: 0, g: 0, b: 0, a: 0.6}
+  sendColor: {r: 0.55, g: 0.42, b: 0.12, a: 1}
+  buttonColor: {r: 0.25, g: 0.25, b: 0.3, a: 1}
+  secondaryTextColor: {r: 0.82, g: 0.82, b: 0.82, a: 1}
+--- !u!114 &565044544
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a19ab8c432efa8d4c8771f9ac4abf8eb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::ImpExpedition
+  dungeonBoard: {fileID: 565044520}
+  boardRenderer: {fileID: 565044519}
+  placementManager: {fileID: 565044525}
+  heart: {fileID: 1804583410}
+  fogOfWar: {fileID: 565044536}
+  templateGoblin: {fileID: 1781885712}
+  expeditionSeconds: 120
+  successChance: 0.75
+  goblinNamePrefix: Goblin
 --- !u!1 &708604853
 GameObject:
   m_ObjectHideFlags: 0

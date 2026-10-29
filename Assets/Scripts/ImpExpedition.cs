@@ -115,8 +115,9 @@ public class ImpExpedition : MonoBehaviour
     /// </summary>
     public string UnavailableReason(Imp imp)
     {
-        if (imp == null || !imp.gameObject.activeInHierarchy) return NoImpReason;
-        if (IsActive) return AlreadyOutReason;
+        if (imp == null) return NoImpReason;
+        if (IsActive) return AlreadyOutReason; // Before the active check: the imp that's out is inactive, and that's why
+        if (!imp.gameObject.activeInHierarchy) return NoImpReason;
         if (dungeonBoard == null || !dungeonBoard.IsDoorOpen) return DoorSealedReason;
         if (!HasPathToDoor(imp)) return NoPathReason;
         return null;

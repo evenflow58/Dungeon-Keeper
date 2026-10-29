@@ -675,6 +675,7 @@ public class ImpExpeditionTests
         expedition.Tick(20f);
         panel.Repaint();
         Assert.AreEqual("On an expedition: back in 1:40.", panel.StatusText);
+        Assert.AreEqual(ImpExpedition.AlreadyOutReason, panel.ReasonLabel.text, "Away (inactive), the reason is still that it's out");
 
         panel.Close();
         Assert.IsFalse(panel.PanelObject.activeSelf);

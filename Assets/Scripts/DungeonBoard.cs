@@ -7,6 +7,7 @@ public class DungeonBoard : MonoBehaviour
     [SerializeField] private int height = 32;
     [SerializeField] private int cavernSize = 6;
     [SerializeField] private Vector2Int entranceTile = new Vector2Int(24, 31); // The door, on the top edge above the cavern
+    [SerializeField] private bool doorStartsUndug = true; // #163: the door is Rock until dug out; digging it makes the Entrance
 
     private TileState[,] tiles;
 
@@ -20,8 +21,32 @@ public class DungeonBoard : MonoBehaviour
     /// </summary>
     public Vector2Int EntranceTile { get => entranceTile; set => entranceTile = value; }
 
+    /// <summary>
+    /// #163: whether InitializeBoard leaves the door as undug Rock (the game) or opens it as the Entrance at once (staging
+    /// and tests that need an open door). Takes effect on the next InitializeBoard.
+    /// </summary>
+    public bool DoorStartsUndug { get => doorStartsUndug; set => doorStartsUndug = value; }
+
     /// <summary>True for the door tile (TileState.Entrance).</summary>
     public bool IsEntrance(Vector2Int tile) => GetTile(tile.x, tile.y) == TileState.Entrance;
+
+    /// <summary>
+    /// #163: true once the door has been dug out, i.e. the door tile is the Entrance. Until then there is no way in or out:
+    /// no hero arrives and no imp leaves on an expedition.
+    /// </summary>
+    public bool IsDoorOpen => IsEntrance(entranceTile);
+
+    /// <summary>
+    /// #163: what a dug-out tile becomes: the door tile becomes the Entrance, every other tile Floor. The dig pipeline
+    /// asks this at conversion.
+    /// </summary>
+    public TileState DugStateOf(Vector2Int tile) => tile == entranceTile ? TileState.Entrance : TileState.Floor;
+
+    /// <summary>
+    /// #163: opens the door at once (the door tile becomes the Entrance, raising OnTileChanged as a dig would). Staging and
+    /// tests; the game opens it by digging.
+    /// </summary>
+    public void OpenDoor() => SetTile(entranceTile.x, entranceTile.y, TileState.Entrance);
 
     public event Action<int, int, TileState> OnTileChanged;
 
@@ -58,10 +83,11 @@ public class DungeonBoard : MonoBehaviour
             }
         }
 
-        // 3. The door. It sits on the board edge, outside the cavern, so the carve order doesn't interact.
+        // 3. The door. It sits on the board edge, outside the cavern, so the carve order doesn't interact. #163: it starts
+        //    undug (Rock, like its neighbours) and becomes the Entrance when an imp digs it out (DugStateOf).
         if (IsInBounds(entranceTile.x, entranceTile.y))
         {
-            tiles[entranceTile.x, entranceTile.y] = TileState.Entrance;
+            tiles[entranceTile.x, entranceTile.y] = doorStartsUndug ? TileState.Rock : TileState.Entrance;
         }
 
         return tiles;
@@ -78,7 +104,10 @@ public class DungeonBoard : MonoBehaviour
     /// </summary>
     public bool IsWalkable(int x, int y) => IsInBounds(x, y) && GetTile(x, y) == TileState.Floor;
 
-    /// <summary>Undesignated diggable terrain: in-bounds Rock. (Dig work items are Designated tiles; the Entrance isn't diggable.)</summary>
+    /// <summary>
+    /// Undesignated diggable terrain: in-bounds Rock. (Dig work items are Designated tiles; the Entrance isn't diggable,
+    /// but the undug door is Rock like any other, #163.)
+    /// </summary>
     public bool IsDiggable(int x, int y) => IsInBounds(x, y) && GetTile(x, y) == TileState.Rock;
 
     public TileState GetTile(int x, int y)

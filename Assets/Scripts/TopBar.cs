@@ -22,6 +22,7 @@ using UnityEngine.UI;
 public class TopBar : MonoBehaviour
 {
     public const string Dash = "—";
+    public const string DoorSealedText = "Next hero: door sealed"; // #163: no hero clock until the door is dug out
 
     [Header("References")]
     [SerializeField] private PlacementManager placementManager;
@@ -390,7 +391,8 @@ public class TopBar : MonoBehaviour
     /// <summary>
     /// The next-hero readout, by phase (first match wins):
     /// game ended or all heroes dealt with → "Next hero: —"; a hero in the dungeon → "Hero in the dungeon";
-    /// between heroes → the live countdown; before hero 1 → "needs a route" if a trigger is met but the dungeon
+    /// between heroes → the live countdown; before the door is dug out (#163) → "door sealed" (the clock hasn't started);
+    /// before hero 1 → "needs a route" if a trigger is met but the dungeon
     /// is sealed, else the countdown to the time trigger (the building trigger may bring him sooner).
     /// </summary>
     public static string NextHeroReadout(HeroSpawner spawner, GameManager game)
@@ -402,6 +404,7 @@ public class TopBar : MonoBehaviour
 
         if (spawner.HeroesSpawned > spawner.HeroesResolved) return "Hero in the dungeon";
         if (spawner.NextHeroScheduled) return $"Next hero: {FormatCountdown(spawner.SecondsUntilNextHero)}";
+        if (spawner.HeroesSpawned == 0 && !spawner.ClockStarted) return DoorSealedText; // #163: setup time
 
         bool triggerMet = spawner.BuildingsTriggerMet() || spawner.ElapsedSeconds >= spawner.FirstHeroSeconds;
         if (triggerMet && !spawner.RouteExists()) return "Next hero: needs a route";

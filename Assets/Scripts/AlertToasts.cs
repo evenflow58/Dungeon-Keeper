@@ -11,6 +11,7 @@ using UnityEngine.UI;
 /// Heart printing (#161): one "Imps await at the Heart!" toast per cycle, when the Heart's new candidate list arrives
 /// (the game-start list included: this one isn't held back by the baseline), never repeated for a list that's ignored.
 /// It is the one clickable toast: a click opens the Heart panel and dismisses the toast.
+/// Imp expeditions (#163): one toast per return, "Imp3 back with Goblin4!" or "Imp3 back empty-handed."
 /// Display: a top-right stack under the top bar, newest on top, each toast lasting toastVisibleSeconds (a clickable one
 /// clickableToastVisibleSeconds, so there's time to reach it), on unscaled time
 /// so toasts still expire while the game is paused. Only a clickable toast is a raycast target; every other toast (and
@@ -29,6 +30,7 @@ public class AlertToasts : MonoBehaviour
     [SerializeField] private HeroSpawner heroSpawner;           // Optional: unwired = no hero toasts
     [SerializeField] private HeartPrinting heartPrinting;       // #161, optional: unwired = no Heart toasts
     [SerializeField] private HeartPanel heartPanel;             // #161: what the Heart toast opens
+    [SerializeField] private ImpExpedition impExpedition;       // #163, optional: unwired = no return toasts
 
     [Header("Polling")]
     [SerializeField] private float pollIntervalSeconds = 0.25f;
@@ -48,6 +50,7 @@ public class AlertToasts : MonoBehaviour
     public HeroSpawner HeroSpawner { get => heroSpawner; set => heroSpawner = value; }
     public HeartPrinting HeartPrinting { get => heartPrinting; set => heartPrinting = value; }
     public HeartPanel HeartPanel { get => heartPanel; set => heartPanel = value; }
+    public ImpExpedition ImpExpedition { get => impExpedition; set => impExpedition = value; }
     public float PollIntervalSeconds { get => pollIntervalSeconds; set => pollIntervalSeconds = value; }
     public float ToastVisibleSeconds { get => toastVisibleSeconds; set => toastVisibleSeconds = value; }
     public float ClickableToastVisibleSeconds { get => clickableToastVisibleSeconds; set => clickableToastVisibleSeconds = value; }
@@ -73,6 +76,7 @@ public class AlertToasts : MonoBehaviour
     private readonly Dictionary<SpikeTrap, bool> trapArmed = new Dictionary<SpikeTrap, bool>();
     private int lastHeroesSpawned;
     private int lastAnnouncedCycle = -1; // #161: the Heart cycle whose list has had its toast
+    private int lastReturnCount;         // #163: expedition returns already announced
 
     private RectTransform stack;
     private Font font;
@@ -84,6 +88,7 @@ public class AlertToasts : MonoBehaviour
         heroSpawner ??= FindAnyObjectByType<HeroSpawner>();
         heartPrinting ??= FindAnyObjectByType<HeartPrinting>();
         heartPanel ??= FindAnyObjectByType<HeartPanel>();
+        impExpedition ??= FindAnyObjectByType<ImpExpedition>();
 
         CreateStack();
         CheckAlerts(); // Baseline only
@@ -113,6 +118,15 @@ public class AlertToasts : MonoBehaviour
         CheckHeroes(fire);
         CheckTraps(fire);
         CheckHeart();
+        CheckExpedition();
+    }
+
+    // #163: once per return. Counting returns (not the baseline) means a return between polls is never missed.
+    private void CheckExpedition()
+    {
+        if (impExpedition == null || impExpedition.ReturnCount == lastReturnCount) return;
+        lastReturnCount = impExpedition.ReturnCount;
+        Show(impExpedition.LastReturnMessage);
     }
 
     // #161: once per cycle, as soon as its list is up. Not gated on the baseline: the game-start list is news too.

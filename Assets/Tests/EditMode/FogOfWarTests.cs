@@ -22,9 +22,11 @@ public class FogOfWarTests
         // Default board: 48x32 Rock, the 6x6 Floor cavern at (21,13)-(26,18), the door at (24,31).
         managerGo = new GameObject("TestDungeonManager");
         board = managerGo.AddComponent<DungeonBoard>();
-        board.InitializeBoard();
+        board.DoorStartsUndug = false; // #163: this fixture covers the generic record and the fogged door as before;
+        board.InitializeBoard();       // the undug, pre-explored door is covered in ImpExpeditionTests
         fog = managerGo.AddComponent<FogOfWar>();
         fog.Board = board;
+        fog.DoorStartsExplored = false;
     }
 
     [TearDown]

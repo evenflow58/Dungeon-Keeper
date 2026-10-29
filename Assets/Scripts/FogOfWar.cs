@@ -6,7 +6,9 @@ using UnityEngine;
 /// Fog of war (#131): what the player has seen. A tile is explored once an imp's sight has covered it, and stays
 /// explored for the run (nothing un-reveals). Imps are the only revealers: each frame each imp's current tile is
 /// compared with the last one revealed from, and a move reveals the Chebyshev disc of impSightRange around it. The wired
-/// imp is the starter; an imp the Heart prints (#161) joins through AddRevealer.
+/// imp is the starter; an imp the Heart prints (#161) joins through AddRevealer. The door's own tile starts explored
+/// (#163), so the player can designate it before any imp has seen it. An imp away on an expedition (#163) is deactivated
+/// and its tile doesn't change, so it reveals nothing until it's back and moving.
 /// Presentation only: pathing, AI, heroes and the economy never read it. Consumers (BoardRenderer, DigDesignator,
 /// TileHover) treat a missing FogOfWar as "everything explored" (IsSeen), which is the game without fog.
 /// </summary>
@@ -18,10 +20,17 @@ public class FogOfWar : MonoBehaviour
 
     [Header("Sight")]
     [SerializeField] private int impSightRange = 3; // Chebyshev tiles around the imp's tile
+    [SerializeField] private bool doorStartsExplored = true; // #163: the door's own tile is known from the start
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
     public Imp Imp { get => imp; set => imp = value; }
     public int ImpSightRange { get => impSightRange; set => impSightRange = value; }
+
+    /// <summary>
+    /// #163: whether the door's own tile starts explored (so it can be designated at once). Read when the record is first
+    /// created, so set it before the first query.
+    /// </summary>
+    public bool DoorStartsExplored { get => doorStartsExplored; set => doorStartsExplored = value; }
 
     /// <summary>
     /// Raised once per newly explored tile, after it's recorded. BoardRenderer restyles that tile from it, the same
@@ -143,7 +152,13 @@ public class FogOfWar : MonoBehaviour
         dungeonBoard ??= GetComponent<DungeonBoard>();
         if (dungeonBoard == null) return false;
 
-        explored ??= new bool[dungeonBoard.Width, dungeonBoard.Height];
+        if (explored == null)
+        {
+            explored = new bool[dungeonBoard.Width, dungeonBoard.Height];
+            // #163: the door is known from the start (just its own tile), so it can be designated and dug out at once.
+            Vector2Int door = dungeonBoard.EntranceTile;
+            if (doorStartsExplored && dungeonBoard.IsInBounds(door.x, door.y)) explored[door.x, door.y] = true;
+        }
         return true;
     }
 }

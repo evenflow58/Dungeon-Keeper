@@ -22,6 +22,7 @@ public class HeroSpawnerTests
         // Default board: Rock, the 6x6 Floor cavern at (21,13)-(26,18), the door at (24,31). Sealed: no route yet.
         managerGo = new GameObject("TestDungeonManager");
         board = managerGo.AddComponent<DungeonBoard>();
+        board.DoorStartsUndug = false; // #163: these tests are about the dug-out door
         board.InitializeBoard();
         boardRenderer = managerGo.AddComponent<BoardRenderer>();
         boardRenderer.Board = board;
@@ -134,6 +135,7 @@ public class HeroSpawnerTests
         // A custom door at (0,16): moved on the board (the door's source of truth) and on the spawner, which
         // must agree. The route is a row dug from beside the door into the cavern.
         board.EntranceTile = new Vector2Int(0, 16);
+        board.DoorStartsUndug = false; // #163: these tests are about the dug-out door
         board.InitializeBoard();
         for (int x = 1; x <= 20; x++) board.SetTile(x, 16, TileState.Floor);
 
@@ -258,6 +260,7 @@ public class HeroSpawnerTests
     public void RouteExists_StartsAtTheBoardsDoor()
     {
         board.EntranceTile = new Vector2Int(0, 16);
+        board.DoorStartsUndug = false; // #163: these tests are about the dug-out door
         board.InitializeBoard();
 
         DigColumnToDoor(); // a route from the old door spot (24,31) only

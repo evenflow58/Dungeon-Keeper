@@ -87,16 +87,35 @@ public class Imp : MonoBehaviour
     /// center it has left). If no path exists the request is ignored: an idle imp stays
     /// put, a moving imp keeps its current orders. Returns whether a path was found.
     /// </summary>
-    public bool SetDestination(Vector2Int tile)
+    public bool SetDestination(Vector2Int tile) =>
+        dungeonBoard != null && FollowPath(origin => Pathfinder.FindPath(dungeonBoard, origin, tile));
+
+    /// <summary>
+    /// #163: walks out through a non-walkable exit tile (the door): paths to a walkable tile beside it, then steps onto it
+    /// as the last waypoint. SetDestination's mid-move semantics; false (orders unchanged) when no tile beside the exit is
+    /// reachable. Standing on the exit already is a trivial success.
+    /// </summary>
+    public bool SetExitDestination(Vector2Int exit)
     {
         if (dungeonBoard == null) return false;
+        if (!IsMoving && CurrentTile == exit) return true;
+        return FollowPath(origin =>
+        {
+            List<Vector2Int> toThreshold = Pathfinder.FindPathToNeighbor(dungeonBoard, origin, exit);
+            if (toThreshold.Count > 0) toThreshold.Add(exit);
+            return toThreshold;
+        });
+    }
 
+    // Replaces the path with one found from the imp's committed origin (see SetDestination). False when none is found.
+    private bool FollowPath(System.Func<Vector2Int, List<Vector2Int>> find)
+    {
         // Between tile centers, the imp is committed to the waypoint ahead; otherwise it
         // stands on segmentStart's center (which is CurrentTile).
         bool betweenTiles = IsMoving && transform.position != TileCenter(segmentStart);
         Vector2Int origin = betweenTiles ? NextTile : segmentStart;
 
-        List<Vector2Int> newPath = Pathfinder.FindPath(dungeonBoard, origin, tile);
+        List<Vector2Int> newPath = find(origin);
         if (newPath.Count == 0) return false;
 
         path.Clear();

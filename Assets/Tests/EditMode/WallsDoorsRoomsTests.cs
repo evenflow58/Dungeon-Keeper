@@ -274,6 +274,30 @@ public class WallsDoorsRoomsTests
         Assert.AreEqual(1, spawner.HeroesSpawned, "He comes in on the next poll");
     }
 
+    [Test]
+    public void RouteGate_ALaterHero_DooredOut_WaitsAndTheTopBarSaysNeedsARoute()
+    {
+        DigTunnelAndOpenDoor();
+        HeroSpawner spawner = AddSpawner(SpawnHeart());
+        spawner.Tick(300f);
+        Assert.AreEqual(1, spawner.HeroesSpawned);
+        Hero first = spawner.ActiveHero;
+        first.Health.TakeDamage(10000);
+        first.Tick(Dt);
+        spawner.Tick(0f);
+        Assert.IsTrue(spawner.NextHeroScheduled);
+        Assert.AreEqual("Next hero: 2:00", TopBar.NextHeroReadout(spawner, null), "Counting down while the way is open");
+
+        Build(PlaceableType.Door, T(24, 22));
+        spawner.Tick(spawner.NextHeroDelaySeconds + 1f);
+        Assert.AreEqual(1, spawner.HeroesSpawned, "Time's up, but no route: he waits");
+        Assert.AreEqual("Next hero: needs a route", TopBar.NextHeroReadout(spawner, null));
+
+        Assert.IsTrue(manager.TryRemovePartition(T(24, 22)));
+        spawner.Tick(Dt);
+        Assert.AreEqual(2, spawner.HeroesSpawned, "Door gone: he comes in");
+    }
+
     private static string TopBarAfter(HeroSpawner spawner, float seconds)
     {
         spawner.Tick(seconds);

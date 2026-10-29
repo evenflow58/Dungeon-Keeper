@@ -403,7 +403,7 @@ public class TopBar : MonoBehaviour
     /// <summary>
     /// The next-hero readout, by phase (first match wins):
     /// game ended or all heroes dealt with → "Next hero: —"; a hero in the dungeon → "Hero in the dungeon";
-    /// between heroes → the live countdown; before the door is dug out (#163) → "door sealed" (the clock hasn't started);
+    /// between heroes → the live countdown ("needs a route" once it's up with no route in, #165); before the door is dug out (#163) → "door sealed" (the clock hasn't started);
     /// before hero 1 → "needs a route" if the timer has run out but the dungeon
     /// is sealed, else the countdown to the first hero.
     /// </summary>
@@ -415,7 +415,10 @@ public class TopBar : MonoBehaviour
         if (gameEnded || allDealtWith) return $"Next hero: {Dash}";
 
         if (spawner.HeroesSpawned > spawner.HeroesResolved) return "Hero in the dungeon";
-        if (spawner.NextHeroScheduled) return $"Next hero: {FormatCountdown(spawner.SecondsUntilNextHero)}";
+        if (spawner.NextHeroScheduled) // #165: a later hero whose time is up but whose way in is walled or doored off waits too
+            return spawner.SecondsUntilNextHero <= 0f && !spawner.RouteExists()
+                ? "Next hero: needs a route"
+                : $"Next hero: {FormatCountdown(spawner.SecondsUntilNextHero)}";
         if (spawner.HeroesSpawned == 0 && !spawner.ClockStarted) return DoorSealedText; // #163: setup time
 
         if (spawner.FirstHeroDue && !spawner.RouteExists()) return "Next hero: needs a route";

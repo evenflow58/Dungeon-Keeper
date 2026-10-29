@@ -227,13 +227,11 @@ public class ImpExpeditionTests
     // ---- 2. The hero clock ----
 
     [Test]
-    public void DoorUndug_NoHeroEver_AcrossALongRun_EvenWithEveryTriggerMetAndARouteToTheDoor()
+    public void DoorUndug_NoHeroEver_AcrossALongRun_EvenWithARouteToTheDoor()
     {
         DigTunnel(); // A tunnel right up to the door
         HeroSpawner spawner = AddSpawner();
-        spawner.RequiredCots = 0;  // The buildings trigger is met from the start…
-        spawner.RequiredPlots = 0;
-        Assert.IsTrue(spawner.RouteExists(), "…and a hero could walk in from the door tile: only the gate stops him");
+        Assert.IsTrue(spawner.RouteExists(), "A hero could walk in from the door tile: only the gate stops him");
 
         for (int i = 0; i < 7200; i++) spawner.Tick(1f); // Two hours
 
@@ -248,7 +246,6 @@ public class ImpExpeditionTests
     {
         DigTunnel();
         HeroSpawner spawner = AddSpawner();
-        spawner.RequiredCots = 99; // Time trigger only
         for (int i = 0; i < 600; i++) spawner.Tick(1f); // Ten minutes of setup time
         Assert.IsFalse(spawner.ClockStarted);
 

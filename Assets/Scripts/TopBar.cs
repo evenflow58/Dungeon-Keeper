@@ -392,8 +392,8 @@ public class TopBar : MonoBehaviour
     /// The next-hero readout, by phase (first match wins):
     /// game ended or all heroes dealt with → "Next hero: —"; a hero in the dungeon → "Hero in the dungeon";
     /// between heroes → the live countdown; before the door is dug out (#163) → "door sealed" (the clock hasn't started);
-    /// before hero 1 → "needs a route" if a trigger is met but the dungeon
-    /// is sealed, else the countdown to the time trigger (the building trigger may bring him sooner).
+    /// before hero 1 → "needs a route" if the timer has run out but the dungeon
+    /// is sealed, else the countdown to the first hero.
     /// </summary>
     public static string NextHeroReadout(HeroSpawner spawner, GameManager game)
     {
@@ -406,8 +406,7 @@ public class TopBar : MonoBehaviour
         if (spawner.NextHeroScheduled) return $"Next hero: {FormatCountdown(spawner.SecondsUntilNextHero)}";
         if (spawner.HeroesSpawned == 0 && !spawner.ClockStarted) return DoorSealedText; // #163: setup time
 
-        bool triggerMet = spawner.BuildingsTriggerMet() || spawner.ElapsedSeconds >= spawner.FirstHeroSeconds;
-        if (triggerMet && !spawner.RouteExists()) return "Next hero: needs a route";
+        if (spawner.FirstHeroDue && !spawner.RouteExists()) return "Next hero: needs a route";
         return $"Next hero: {FormatCountdown(spawner.FirstHeroSeconds - spawner.ElapsedSeconds)}";
     }
 

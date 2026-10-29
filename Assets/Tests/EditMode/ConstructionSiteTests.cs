@@ -232,30 +232,4 @@ public class ConstructionSiteTests
         sitePlot.GetComponent<MushroomPlot>().Tick(3f);
         Assert.AreEqual(3, manager.TotalFood, "Food totals count built plots only");
     }
-
-    [Test]
-    public void HeroTrigger_TwoBuiltCotsAndACotSite_NotMet_CompletingTheSiteMeetsIt()
-    {
-        Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.LairCot, new Vector2Int(21, 13), PlaceFrom, out _));
-        Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.LairCot, new Vector2Int(22, 13), PlaceFrom, out _));
-        Placeable third = PlaceSite(PlaceableType.LairCot, 23, 13);
-        Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.MushroomPlot, new Vector2Int(21, 18), PlaceFrom, out _));
-        Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.MushroomPlot, new Vector2Int(22, 18), PlaceFrom, out _));
-
-        Assert.IsFalse(spawner.BuildingsTriggerMet(), "An unbuilt third cot doesn't advance the trigger");
-        third.CompleteConstruction();
-        Assert.IsTrue(spawner.BuildingsTriggerMet(), "Built: three cots and two plots");
-    }
-
-    [Test]
-    public void HeroTrigger_PlotSitesDontCountEither()
-    {
-        for (int x = 21; x <= 23; x++) Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.LairCot, new Vector2Int(x, 13), PlaceFrom, out _));
-        Assert.IsTrue(manager.TryPlaceBuilt(PlaceableType.MushroomPlot, new Vector2Int(21, 18), PlaceFrom, out _));
-        Placeable plotSite = PlaceSite(PlaceableType.MushroomPlot, 22, 18);
-
-        Assert.IsFalse(spawner.BuildingsTriggerMet());
-        plotSite.CompleteConstruction();
-        Assert.IsTrue(spawner.BuildingsTriggerMet());
-    }
 }

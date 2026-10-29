@@ -516,7 +516,7 @@ The Director's objective function is **drama, not slaughter**. It composes raids
 
 ### A.6 The hero & the Heart
 
-- Trigger: player has placed ≥3 cots and ≥2 farm plots, or 5 minutes elapsed. Then the first hero spawns at the board edge: a Fighter, fixed stats.
+- Trigger: 5 minutes after the door is dug out (#163; the earlier "≥3 cots and ≥2 farm plots" alternative is removed for now: the hero comes on the timer only). Then the first hero spawns at the board edge: a Fighter, fixed stats.
 - Simplified hero AI: A* path to the Heart; attacks minions and traps blocking the path; at 30% HP flees toward the entrance. If it escapes, it *reports back* — the next hero comes sooner and tougher (a teaser of the Director, §17.2).
 - The Heart: 100 HP. The hero attacks it on arrival. Heart destroyed → game-over screen ("The dark goes quiet.").
 - Three heroes, escalating. Survive all three → victory screen. That's the slice.

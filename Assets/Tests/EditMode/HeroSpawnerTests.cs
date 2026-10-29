@@ -57,7 +57,8 @@ public class HeroSpawnerTests
     private void Place(PlaceableType type, int x, int y) =>
         Assert.IsTrue(manager.TryPlaceBuilt(type, new Vector2Int(x, y), PlaceFrom, out _));
 
-    private void PlaceBuildingTrigger()
+    // The old §A.6 buildings trigger: three cots and two plots. Removed for now (#163); it no longer brings a hero.
+    private void PlaceCotsAndPlots()
     {
         Place(PlaceableType.LairCot, 21, 13);
         Place(PlaceableType.LairCot, 22, 13);
@@ -80,8 +81,6 @@ public class HeroSpawnerTests
     [Test]
     public void Defaults_MatchDesign()
     {
-        Assert.AreEqual(3, spawner.RequiredCots);
-        Assert.AreEqual(2, spawner.RequiredPlots);
         Assert.AreEqual(300f, spawner.FirstHeroSeconds);
         Assert.AreEqual(new Vector2Int(24, 31), spawner.EntranceTile);
     }
@@ -89,20 +88,18 @@ public class HeroSpawnerTests
     // --- Triggers (route dug, so only the trigger decides) ---
 
     [Test]
-    public void TwoCotsTwoPlots_NoSpawn_ThirdCot_SpawnsOnNextTick()
+    public void CotsAndPlotsBuilt_NoEarlyHero_TimerAloneBringsHim()
     {
         DigColumnToDoor();
-        Place(PlaceableType.LairCot, 21, 13);
-        Place(PlaceableType.LairCot, 22, 13);
-        Place(PlaceableType.MushroomPlot, 21, 18);
-        Place(PlaceableType.MushroomPlot, 22, 18);
+        PlaceCotsAndPlots();
 
-        TickFor(100);
-        Assert.AreEqual(0, spawner.HeroesSpawned);
+        spawner.Tick(299f);
+        Assert.AreEqual(0, spawner.HeroesSpawned, "Buildings don't bring him sooner: timer only");
         Assert.IsNull(spawner.ActiveHero);
+        Assert.IsFalse(spawner.FirstHeroDue);
 
-        Place(PlaceableType.LairCot, 23, 13);
-        spawner.Tick(Dt);
+        spawner.Tick(1f);
+        Assert.IsTrue(spawner.FirstHeroDue);
 
         Assert.AreEqual(1, spawner.HeroesSpawned);
         Hero hero = spawner.ActiveHero;
@@ -163,19 +160,6 @@ public class HeroSpawnerTests
     }
 
     [Test]
-    public void ThreeCotsOnePlot_NoSpawn_BothConditionsNeeded()
-    {
-        Place(PlaceableType.LairCot, 21, 13);
-        Place(PlaceableType.LairCot, 22, 13);
-        Place(PlaceableType.LairCot, 23, 13);
-        Place(PlaceableType.MushroomPlot, 21, 18);
-
-        TickFor(100);
-        Assert.AreEqual(0, spawner.HeroesSpawned);
-        Assert.IsFalse(spawner.BuildingsTriggerMet());
-    }
-
-    [Test]
     public void NoBuildings_SpawnsWhenTimeReachesFiveMinutes()
     {
         DigColumnToDoor();
@@ -200,19 +184,6 @@ public class HeroSpawnerTests
     }
 
     // --- The route gate (#58) ---
-
-    [Test]
-    public void BuildTrigger_SealedDungeon_NoSpawn()
-    {
-        PlaceBuildingTrigger();
-        Assert.IsTrue(spawner.BuildingsTriggerMet());
-        Assert.IsFalse(spawner.RouteExists());
-
-        TickFor(500);
-        Assert.AreEqual(0, spawner.HeroesSpawned);
-        Assert.IsNull(spawner.ActiveHero);
-        Assert.AreEqual(0, Object.FindObjectsByType<Hero>().Length);
-    }
 
     [Test]
     public void TimeTrigger_SealedDungeon_NoSpawn_ClockKeepsCounting()
@@ -243,9 +214,8 @@ public class HeroSpawnerTests
     public void TriggerFirst_RouteLater_SpawnsOnTheNextTick_AtTheDoor()
     {
         spawner.Tick(300f);
-        PlaceBuildingTrigger();
         TickFor(50);
-        Assert.AreEqual(0, spawner.HeroesSpawned, "Both triggers fired, still sealed");
+        Assert.AreEqual(0, spawner.HeroesSpawned, "The timer ran out, still sealed");
 
         DigColumnToDoor();
         Assert.IsTrue(spawner.RouteExists());

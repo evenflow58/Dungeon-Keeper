@@ -172,18 +172,18 @@ public class TopBarTests
     }
 
     [Test]
-    public void TriggerMetButSealed_SaysNeedsARoute()
+    public void CotsAndPlotsBuilt_StillCountsDown()
     {
         Place(PlaceableType.LairCot, 21, 13);
         Place(PlaceableType.LairCot, 22, 13);
         Place(PlaceableType.LairCot, 23, 13);
         Place(PlaceableType.MushroomPlot, 21, 18);
         Place(PlaceableType.MushroomPlot, 22, 18);
-        spawner.Tick(Dt);
+        spawner.Tick(60f);
 
         bar.Refresh();
         Assert.AreEqual(0, spawner.HeroesSpawned);
-        Assert.AreEqual("Next hero: needs a route", bar.NextHeroText);
+        Assert.AreEqual("Next hero: 4:00", bar.NextHeroText, "Buildings don't bring him: the timer runs on");
     }
 
     [Test]

@@ -196,7 +196,7 @@ public class HeroSpawner : MonoBehaviour
     /// </summary>
     public bool RouteExists() =>
         dungeonBoard != null && heart != null &&
-        Pathfinder.FindPathToNeighbor(dungeonBoard, dungeonBoard.EntranceTile, heart.Tile).Count > 0;
+        Pathfinder.FindPathToNeighbor(dungeonBoard, dungeonBoard.EntranceTile, heart.Tile, Mover.Hero).Count > 0; // #165: hero rules
 
     /// <summary>True once firstHeroSeconds have passed since the door was dug out (hero 1's only trigger).</summary>
     public bool FirstHeroDue => ElapsedSeconds >= firstHeroSeconds;

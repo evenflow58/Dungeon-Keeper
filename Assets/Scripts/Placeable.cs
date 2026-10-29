@@ -11,7 +11,9 @@ public enum PlaceableType
     Accumulator,      // #145: appended
     ManaContainer,    // #145: appended
     CombinationChamber, // #146: appended
-    Warren              // #157: appended
+    Warren,             // #157: appended
+    Wall,               // #165: appended
+    Door                // #165: appended
 }
 
 /// <summary>
@@ -19,7 +21,7 @@ public enum PlaceableType
 /// the tile stays Floor and walkable; occupancy lives in PlacementManager's registry.
 /// Its look is a code-built model (ticket #77): a cot, a mushroom mound, a trap's base plate, (#142) an imp wheel, or
 /// (#143) a furnace with its chimney or a lamp on a post, (#145) an accumulator's basin or a mana container's tank, or
-/// (#146) a combination chamber's vessel, or (#157) a warren's den.
+/// (#146) a combination chamber's vessel, or (#157) a warren's den, or (#165) a wall's stone block or a door in its frame.
 /// Placement is an order (#91): it starts as an inert construction site (a materials pile) until
 /// CompleteConstruction, which the builder calls (story #92; tests and staging call it directly).
 /// Orders cost materials (#104): an order records its requirement and waits UNFUNDED — showing an order marker (a
@@ -47,6 +49,9 @@ public class Placeable : MonoBehaviour
     [SerializeField] private Color warrenStoneColor = new Color(0.46f, 0.44f, 0.42f, 1f);      // #157: the doorway stones
     [SerializeField] private Color warrenDoorColor = new Color(0.10f, 0.07f, 0.05f, 1f);       // #157: the dark way in
     [SerializeField] private Color warrenBannerColor = new Color(0.62f, 0.78f, 0.30f, 1f);     // #157: a goblin-green rag on a stick
+    [SerializeField] private Color wallCapColor = new Color(0.30f, 0.29f, 0.31f, 1f);          // #165: the wall's darker cap and course
+    [SerializeField] private Color doorStoneColor = new Color(0.42f, 0.40f, 0.40f, 1f);        // #165: jambs and lintel
+    [SerializeField] private Color doorIronColor = new Color(0.20f, 0.20f, 0.22f, 1f);         // #165: the leaf's bands
     [SerializeField] private float modelSmoothness = 0.2f;                              // A little sheen, less than creatures
 
     [Header("Construction Site (#91)")]
@@ -79,6 +84,9 @@ public class Placeable : MonoBehaviour
     /// Only CompleteConstruction makes it true.
     /// </summary>
     public bool IsBuilt { get; private set; }
+
+    /// <summary>#165: raised once when the site completes (PlacementManager re-raises it as PlaceablesChanged).</summary>
+    public event System.Action<Placeable> Constructed;
 
     /// <summary>Construction progress 0–1, for the builder (#92). Storage only: reaching 1 doesn't complete the site.</summary>
     public float BuildProgress
@@ -235,6 +243,8 @@ public class Placeable : MonoBehaviour
         if (TryGetComponent(out Accumulator accumulator)) accumulator.OnConstructed(); // #145: joins the mana service
         if (TryGetComponent(out ManaContainer container)) container.OnConstructed();
         if (TryGetComponent(out CombinationChamber chamber)) chamber.OnConstructed(); // #146
+        if (TryGetComponent(out Partition partition)) partition.OnConstructed();     // #165: the wall or door goes on the board
+        Constructed?.Invoke(this);
     }
 
     private void Update()
@@ -333,6 +343,8 @@ public class Placeable : MonoBehaviour
         : Type == PlaceableType.ManaContainer ? PropModel.ManaContainerRecipe(size, color, containerBandColor, containerGlassColor)
         : Type == PlaceableType.CombinationChamber ? PropModel.CombinationChamberRecipe(size, color, chamberBandColor, chamberCoreColor)
         : Type == PlaceableType.Warren ? PropModel.WarrenRecipe(size, color, warrenStoneColor, warrenDoorColor, cotFrameColor, warrenBannerColor)
+        : Type == PlaceableType.Wall ? PropModel.WallRecipe(color, wallCapColor)            // #165: fills its tile
+        : Type == PlaceableType.Door ? PropModel.DoorRecipe(doorStoneColor, color, doorIronColor)
         : PropModel.SpikeTrapPlateRecipe(size, color);
 
     private void CreateModel(Color color, float size)
@@ -425,6 +437,8 @@ public class Placeable : MonoBehaviour
             : Type == PlaceableType.ManaContainer ? PropModel.ManaContainerMaterialsRecipe(size, color, containerBandColor, crateColor)
             : Type == PlaceableType.CombinationChamber ? PropModel.CombinationChamberMaterialsRecipe(size, color, chamberBandColor, chamberCoreColor, crateColor)
             : Type == PlaceableType.Warren ? PropModel.WarrenMaterialsRecipe(size, color, warrenStoneColor, sackColor, crateColor)
+            : Type == PlaceableType.Wall ? PropModel.WallMaterialsRecipe(size, color, crateColor)     // #165
+            : Type == PlaceableType.Door ? PropModel.DoorMaterialsRecipe(size, doorStoneColor, color, crateColor)
             : PropModel.TrapMaterialsRecipe(size, color, Color.Lerp(color, Color.white, 0.45f), crateColor);
         MaterialsPile = CreatureModel.Build(transform, Type + "Materials", recipe, modelSmoothness);
     }

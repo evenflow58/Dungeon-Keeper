@@ -75,6 +75,7 @@ public class Accumulator : MonoBehaviour, IManaPort
         Vector2Int[] scan = { tile, tile + Vector2Int.left, tile + Vector2Int.down, tile + Vector2Int.up, tile + Vector2Int.right };
         foreach (Vector2Int neighbor in scan)
         {
+            if (!flow.IsOpen(neighbor)) continue; // #165: ManaFlow's one openness rule: never through a wall or shut door
             while (taken < max)
             {
                 string type = flow.TypeAt(neighbor);

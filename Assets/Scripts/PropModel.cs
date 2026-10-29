@@ -322,6 +322,66 @@ public static class PropModel
         new Part("Crate",  Shape.Box,    new Vector3(0.26f * s, 0.09f, 0.22f * s),   new Vector3(0.18f, 0.18f, 0.18f), crate, new Vector3(0f, 14f, 0f)),
     };
 
+    // ---- Wall (#165): a dressed-stone block filling its whole tile, so a run of walls reads as one wall ----
+
+    /// <summary>Height of a wall's top above the ground: a little under the rock's, so walls read as built, not dug around.</summary>
+    public const float WallHeight = 0.5f;
+
+    public static Part[] WallRecipe(Color stone, Color cap) => new[]
+    {
+        new Part("Block",  Shape.Box, new Vector3(0f, WallHeight * 0.5f - 0.02f, 0f), new Vector3(1f, WallHeight - 0.04f, 1f), stone),
+        new Part("Cap",    Shape.Box, new Vector3(0f, WallHeight - 0.02f, 0f),        new Vector3(0.96f, 0.04f, 0.96f), cap),
+        new Part("Course", Shape.Box, new Vector3(0f, WallHeight * 0.45f, 0f),        new Vector3(1.01f, 0.03f, 1.01f), cap),
+    };
+
+    /// <summary>Wall materials (#165): stacked stone blocks.</summary>
+    public static Part[] WallMaterialsRecipe(float s, Color stone, Color crate) => new[]
+    {
+        new Part("Block0", Shape.Box, new Vector3(-0.14f * s, 0.07f, -0.08f * s), new Vector3(0.3f * s, 0.14f, 0.22f * s), stone),
+        new Part("Block1", Shape.Box, new Vector3(0.16f * s, 0.07f, -0.06f * s),  new Vector3(0.3f * s, 0.14f, 0.22f * s), stone, new Vector3(0f, 8f, 0f)),
+        new Part("Block2", Shape.Box, new Vector3(0f, 0.21f, -0.07f * s),         new Vector3(0.3f * s, 0.14f, 0.22f * s), stone, new Vector3(0f, -6f, 0f)),
+        new Part("Crate",  Shape.Box, new Vector3(0.12f * s, 0.08f, 0.24f * s),   new Vector3(0.16f, 0.16f, 0.16f), crate, new Vector3(0f, 18f, 0f)),
+    };
+
+    // ---- Door (#165): two stone jambs and a lintel across the tile, with a plank leaf (DoorLeafPart) that swings open on
+    // its hinge while a minion passes. The frame spans X; Partition turns the model 90° when the passage runs along X ----
+
+    public const string DoorLeafPart = "Leaf";
+    public const float DoorLeafWidth = 0.78f;  // Hinge to latch, in tiles
+    public const float DoorLeafHeight = 0.62f;
+    public const float DoorLeafThickness = 0.07f;
+
+    public static Part[] DoorRecipe(Color stone, Color wood, Color iron) => new[]
+    {
+        new Part("JambL",  Shape.Box, new Vector3(-0.45f, 0.36f, 0f), new Vector3(0.1f, 0.72f, 0.24f), stone),
+        new Part("JambR",  Shape.Box, new Vector3(0.45f, 0.36f, 0f),  new Vector3(0.1f, 0.72f, 0.24f), stone),
+        new Part("Lintel", Shape.Box, new Vector3(0f, 0.76f, 0f),     new Vector3(1f, 0.1f, 0.26f), stone),
+        new Part(DoorLeafPart, Shape.Box, new Vector3(0f, DoorLeafHeight * 0.5f + 0.02f, 0f),
+            new Vector3(DoorLeafWidth, DoorLeafHeight, DoorLeafThickness), wood),
+        new Part("Band0",  Shape.Box, new Vector3(0f, 0.18f, 0f),     new Vector3(DoorLeafWidth * 0.9f, 0.04f, DoorLeafThickness + 0.02f), iron),
+        new Part("Band1",  Shape.Box, new Vector3(0f, 0.48f, 0f),     new Vector3(DoorLeafWidth * 0.9f, 0.04f, DoorLeafThickness + 0.02f), iron),
+    };
+
+    /// <summary>The door leaf's local position and yaw at an opening angle (degrees, 0 = shut), swinging on its left hinge.</summary>
+    public static void DoorLeafPose(float openDegrees, out Vector3 position, out Quaternion rotation)
+    {
+        float half = DoorLeafWidth * 0.5f;
+        float rad = openDegrees * Mathf.Deg2Rad;
+        Vector3 hinge = new Vector3(-half, DoorLeafHeight * 0.5f + 0.02f, 0f);
+        position = hinge + new Vector3(half * Mathf.Cos(rad), 0f, half * Mathf.Sin(rad));
+        rotation = Quaternion.Euler(0f, -openDegrees, 0f);
+    }
+
+    /// <summary>Door materials (#165): planks leaning on a crate, a stone block.</summary>
+    public static Part[] DoorMaterialsRecipe(float s, Color stone, Color wood, Color crate) => new[]
+    {
+        new Part("Plank0", Shape.Box, new Vector3(-0.1f * s, 0.05f, 0f),        new Vector3(0.12f, 0.06f, 0.6f * s), wood, new Vector3(0f, 6f, 0f)),
+        new Part("Plank1", Shape.Box, new Vector3(0.05f * s, 0.05f, 0.02f * s), new Vector3(0.12f, 0.06f, 0.6f * s), wood, new Vector3(0f, -4f, 0f)),
+        new Part("Plank2", Shape.Box, new Vector3(-0.02f * s, 0.11f, 0f),       new Vector3(0.12f, 0.06f, 0.58f * s), wood, new Vector3(0f, 2f, 0f)),
+        new Part("Block",  Shape.Box, new Vector3(0.26f * s, 0.07f, -0.2f * s), new Vector3(0.2f, 0.14f, 0.16f), stone),
+        new Part("Crate",  Shape.Box, new Vector3(0.24f * s, 0.08f, 0.24f * s), new Vector3(0.16f, 0.16f, 0.16f), crate, new Vector3(0f, 12f, 0f)),
+    };
+
     // ---- Fire Vent (#145): a cracked rock mound around a glowing fissure (the Ember part glows) ----
 
     public static Part[] FireVentRecipe(Color rock, Color ember) => new[]

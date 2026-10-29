@@ -159,7 +159,7 @@ public class WarrenLeashTests
             Assert.AreEqual(material, cost.type);
             Assert.AreEqual(6, cost.amount);
         }
-        Assert.AreEqual(30, manager.Costs.Count, "One row per material: 27 → 30");
+        Assert.AreEqual(36, manager.Costs.Count, "One row per material: 27 → 30 (#165: the wall and the door, → 36)");
         Assert.AreEqual(8f, manager.BuildSecondsFor(PlaceableType.Warren), 1e-6f);
         Assert.IsTrue(BuildPresentation.TryGet(PlaceableType.Warren, out BuildPresentation.Entry entry));
         Assert.AreEqual(BuildCategory.Living, entry.category, "Beside the cot");

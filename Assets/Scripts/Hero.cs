@@ -99,7 +99,7 @@ public class Hero : MonoBehaviour
         bool betweenTiles = IsMoving && transform.position != TileCenter(segmentStart);
         Vector2Int origin = betweenTiles ? NextTile : segmentStart;
 
-        List<Vector2Int> newPath = Pathfinder.FindPath(dungeonBoard, origin, tile);
+        List<Vector2Int> newPath = Pathfinder.FindPath(dungeonBoard, origin, tile, Mover.Hero); // #165: doors and walls stop him
         if (newPath.Count == 0) return false;
 
         path.Clear();

@@ -1,6 +1,10 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>
+/// A* over the board's walkable tiles, shared by minions and heroes. #165: every query takes the mover (minion by default),
+/// because walls block everyone and doors block heroes only (DungeonBoard.IsWalkable(x, y, mover)).
+/// </summary>
 public static class Pathfinder
 {
     // Fixed neighbor order for determinism: right, up, left, down
@@ -15,15 +19,15 @@ public static class Pathfinder
     /// Returns the shortest path from start to goal (both endpoints included),
     /// or an empty list if no path exists or the goal is not a walkable Floor tile.
     /// </summary>
-    public static List<Vector2Int> FindPath(DungeonBoard board, Vector2Int start, Vector2Int goal)
+    public static List<Vector2Int> FindPath(DungeonBoard board, Vector2Int start, Vector2Int goal, Mover mover = Mover.Minion)
     {
-        if (!board.IsWalkable(goal.x, goal.y))
+        if (!board.IsWalkable(goal.x, goal.y, mover))
             return new List<Vector2Int>();
 
         if (start == goal)
             return new List<Vector2Int> { start };
 
-        return Search(board, start, goal);
+        return Search(board, start, goal, mover);
     }
 
     /// <summary>
@@ -32,12 +36,13 @@ public static class Pathfinder
     /// If start is already adjacent to target, returns the trivial one-tile path [start].
     /// Returns an empty list when no reachable neighbor exists.
     /// </summary>
-    public static List<Vector2Int> FindPathToAdjacent(DungeonBoard board, Vector2Int start, Vector2Int target)
+    public static List<Vector2Int> FindPathToAdjacent(DungeonBoard board, Vector2Int start, Vector2Int target,
+        Mover mover = Mover.Minion)
     {
-        if (board.IsWalkable(target.x, target.y))
-            return FindPath(board, start, target);
+        if (board.IsWalkable(target.x, target.y, mover))
+            return FindPath(board, start, target, mover);
 
-        return FindPathToNeighbor(board, start, target);
+        return FindPathToNeighbor(board, start, target, mover);
     }
 
     /// <summary>
@@ -46,14 +51,15 @@ public static class Pathfinder
     /// If start is already adjacent to target, returns the trivial one-tile path [start].
     /// Returns an empty list when no reachable neighbor exists.
     /// </summary>
-    public static List<Vector2Int> FindPathToNeighbor(DungeonBoard board, Vector2Int start, Vector2Int target)
+    public static List<Vector2Int> FindPathToNeighbor(DungeonBoard board, Vector2Int start, Vector2Int target,
+        Mover mover = Mover.Minion)
     {
         // Collect walkable neighbors in fixed direction order
         var candidates = new List<Vector2Int>();
         foreach (var dir in Dirs)
         {
             var n = target + dir;
-            if (board.IsWalkable(n.x, n.y))
+            if (board.IsWalkable(n.x, n.y, mover))
                 candidates.Add(n);
         }
 
@@ -68,7 +74,7 @@ public static class Pathfinder
         List<Vector2Int> best = null;
         foreach (var c in candidates)
         {
-            var path = Search(board, start, c);
+            var path = Search(board, start, c, mover);
             if (path.Count > 0 && (best == null || path.Count < best.Count))
                 best = path;
         }
@@ -78,7 +84,7 @@ public static class Pathfinder
 
     // ---- internal ----
 
-    private static List<Vector2Int> Search(DungeonBoard board, Vector2Int start, Vector2Int goal)
+    private static List<Vector2Int> Search(DungeonBoard board, Vector2Int start, Vector2Int goal, Mover mover)
     {
         var openSet  = new List<Vector2Int> { start };
         var cameFrom = new Dictionary<Vector2Int, Vector2Int>();
@@ -94,7 +100,7 @@ public static class Pathfinder
             foreach (var dir in Dirs)
             {
                 var nb = current + dir;
-                if (!Walkable(board, nb, start)) continue;
+                if (!Walkable(board, nb, start, mover)) continue;
 
                 int g = gScore[current] + 1;
                 if (!gScore.TryGetValue(nb, out int existing) || g < existing)
@@ -109,11 +115,11 @@ public static class Pathfinder
         return new List<Vector2Int>();
     }
 
-    private static bool Walkable(DungeonBoard board, Vector2Int pos, Vector2Int start)
+    private static bool Walkable(DungeonBoard board, Vector2Int pos, Vector2Int start, Mover mover)
     {
         if (!board.IsInBounds(pos.x, pos.y)) return false;
         if (pos == start) return true; // mover is always on their start tile
-        return board.IsWalkable(pos.x, pos.y);
+        return board.IsWalkable(pos.x, pos.y, mover);
     }
 
     private static Vector2Int PickLowestF(List<Vector2Int> openSet, Dictionary<Vector2Int, int> f)

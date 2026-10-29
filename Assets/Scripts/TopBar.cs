@@ -164,6 +164,7 @@ public class TopBar : MonoBehaviour
         // #126: V types into a focused field; it doesn't flip the overlay.
         if (!TextInputFocus.IsTyping && (input?.TogglePowerView.WasPressedThisFrame() ?? false)) TogglePowerOverlay();
         if (!TextInputFocus.IsTyping && (input?.ToggleMagicView.WasPressedThisFrame() ?? false)) ToggleMagicOverlay(); // #145
+        if (!TextInputFocus.IsTyping && (input?.ToggleRoomView.WasPressedThisFrame() ?? false)) ToggleRoomView();      // #165
 
         pollTimer += Time.unscaledDeltaTime; // Keeps refreshing while paused (e.g. a building placed mid-pause)
         if (pollTimer < pollIntervalSeconds) return;
@@ -252,6 +253,17 @@ public class TopBar : MonoBehaviour
     {
         if (boardRenderer == null) return;
         boardRenderer.ToggleViewMode(ViewMode.Magic);
+        RefreshSegmentTint();
+    }
+
+    /// <summary>
+    /// Flips the Room view (#165: the ToggleRoomView key, R). Like the other overlays it changes only the view mode and
+    /// replaces whichever overlay is showing; it has no top-bar segment.
+    /// </summary>
+    public void ToggleRoomView()
+    {
+        if (boardRenderer == null) return;
+        boardRenderer.ToggleViewMode(ViewMode.Room);
         RefreshSegmentTint();
     }
 

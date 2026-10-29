@@ -446,7 +446,7 @@ public class ManaChromeTests
         Assert.AreEqual("Lay pipe", verb.displayName);
         Assert.AreEqual("Imp time only", verb.costLine);
 
-        Assert.AreEqual(30, manager.Costs.Count, "#146 migration: the chamber adds three rows (24 → 27); #157: the warren three more (→ 30)");
+        Assert.AreEqual(36, manager.Costs.Count, "#146 migration: the chamber adds three rows (24 → 27); #157: the warren three more (→ 30); #165: the wall and the door three each (→ 36)");
         foreach (MaterialType material in new[] { MaterialType.Stone, MaterialType.Glimmerstone, MaterialType.Deepstone })
         {
             Assert.IsTrue(manager.TryGetCost(PlaceableType.Accumulator, material, out MaterialAmount a));

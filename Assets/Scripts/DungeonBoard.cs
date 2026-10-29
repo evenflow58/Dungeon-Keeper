@@ -1,6 +1,24 @@
 using System;
 using UnityEngine;
 
+/// <summary>
+/// #165: what stands on a Floor tile as a partition. Walls and doors are placeables (PlacementManager owns them); the board
+/// holds only the built ones' footprint, so pathing, mana and room detection read one place. Sites and orders don't count.
+/// </summary>
+public enum TileFeature
+{
+    None,
+    Wall, // Blocks everyone, and mana
+    Door  // Minions pass, heroes never do; blocks mana while shut
+}
+
+/// <summary>#165: who is walking, for the pathing rules: walls block everyone, doors block heroes only.</summary>
+public enum Mover
+{
+    Minion, // Imps and goblins (and the default for every caller that isn't a hero)
+    Hero
+}
+
 public class DungeonBoard : MonoBehaviour
 {
     [SerializeField] private int width = 48;
@@ -10,6 +28,8 @@ public class DungeonBoard : MonoBehaviour
     [SerializeField] private bool doorStartsUndug = true; // #163: the door is Rock until dug out; digging it makes the Entrance
 
     private TileState[,] tiles;
+    private TileFeature[,] features; // #165: built walls and doors; all None after InitializeBoard
+    private bool[,] innerDoorOpen;   // #165: a built door's open state (its Partition drives it while a minion passes)
 
     public int Width => width;
     public int Height => height;
@@ -50,6 +70,9 @@ public class DungeonBoard : MonoBehaviour
 
     public event Action<int, int, TileState> OnTileChanged;
 
+    /// <summary>#165: raised when a tile's partition changes (a wall or door is built or removed), with its coordinates.</summary>
+    public event Action<int, int> OnFeatureChanged;
+
     private void Awake()
     {
         tiles ??= InitializeBoard();
@@ -58,6 +81,8 @@ public class DungeonBoard : MonoBehaviour
     public TileState[,] InitializeBoard()
     {
         tiles = new TileState[width, height];
+        features = new TileFeature[width, height];
+        innerDoorOpen = new bool[width, height];
 
         // 1. Initialize all tiles to Rock
         for (int x = 0; x < width; x++)
@@ -99,10 +124,58 @@ public class DungeonBoard : MonoBehaviour
     }
 
     /// <summary>
-    /// Terrain a unit can stand on and path through: in-bounds Floor. The Entrance isn't walkable: only a hero
-    /// stands on it (spawned there; Pathfinder's start-tile exception lets him step off it).
+    /// Terrain a minion can stand on and path through: in-bounds Floor without a wall (#165; a door is passable). The
+    /// Entrance isn't walkable: only a hero stands on it (spawned there; Pathfinder's start-tile exception lets him step
+    /// off it). Every caller that isn't a hero uses this rule.
     /// </summary>
-    public bool IsWalkable(int x, int y) => IsInBounds(x, y) && GetTile(x, y) == TileState.Floor;
+    public bool IsWalkable(int x, int y) => IsWalkable(x, y, Mover.Minion);
+
+    /// <summary>#165: walkability by mover: in-bounds Floor, never a wall; a door only for minions (heroes never pass one).</summary>
+    public bool IsWalkable(int x, int y, Mover mover)
+    {
+        if (!IsInBounds(x, y) || GetTile(x, y) != TileState.Floor) return false;
+        TileFeature feature = GetFeature(x, y);
+        return feature == TileFeature.None || (feature == TileFeature.Door && mover == Mover.Minion);
+    }
+
+    // ---- partitions (#165) ----
+
+    /// <summary>The built wall or door on a tile (None out of bounds, or with none).</summary>
+    public TileFeature GetFeature(int x, int y)
+    {
+        tiles ??= InitializeBoard();
+        return IsInBounds(x, y) ? features[x, y] : TileFeature.None;
+    }
+
+    /// <summary>
+    /// Sets a tile's partition (a wall or door calls this when it's built and when it's removed). A new door starts shut.
+    /// Raises OnFeatureChanged when it changes.
+    /// </summary>
+    public void SetFeature(int x, int y, TileFeature feature)
+    {
+        tiles ??= InitializeBoard();
+        if (!IsInBounds(x, y) || features[x, y] == feature) return;
+        features[x, y] = feature;
+        innerDoorOpen[x, y] = false;
+        OnFeatureChanged?.Invoke(x, y);
+    }
+
+    /// <summary>Whether a built door on this tile stands open (a minion passing through). False for any other tile.</summary>
+    public bool IsInnerDoorOpen(int x, int y) => GetFeature(x, y) == TileFeature.Door && innerDoorOpen[x, y];
+
+    /// <summary>Opens or shuts the door on this tile (the door's own driver, and a seam for tests). No-op without a door.</summary>
+    public void SetInnerDoorOpen(int x, int y, bool open)
+    {
+        if (GetFeature(x, y) != TileFeature.Door) return;
+        innerDoorOpen[x, y] = open;
+    }
+
+    /// <summary>#165: whether the tile's partition closes it to mana: a wall always, a door while shut.</summary>
+    public bool BlocksMana(int x, int y)
+    {
+        TileFeature feature = GetFeature(x, y);
+        return feature == TileFeature.Wall || (feature == TileFeature.Door && !innerDoorOpen[x, y]);
+    }
 
     /// <summary>
     /// Undesignated diggable terrain: in-bounds Rock. (Dig work items are Designated tiles; the Entrance isn't diggable,

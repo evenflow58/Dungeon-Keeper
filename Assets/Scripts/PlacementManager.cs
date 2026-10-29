@@ -15,6 +15,9 @@ using UnityEngine;
 /// wired, every order funds at once (an unwired system degrades, never blocks). Placing is never blocked by cost.
 /// Power (#142): the power table gives each type a role (none, producer, consumer), its watts and per-type params; a type
 /// with a role gets a PowerNode at placement, which joins the PowerGrid once built.
+/// Walls and doors (#165) are placeables like any other (ordered, funded, imp-built) with a Partition that puts them on the
+/// board once built. They are the only removable placeables: TryRemovePartition takes one out instantly, any state, with no
+/// refund (conduit removal's precedent). PlaceablesChanged fires on every placement, completion and removal.
 /// #143: a power row with a fuel id makes its type a fueled producer (a FurnaceGenerator burning that fuel); the Grow-Lamp
 /// speeds up plots near it while powered. This is also the fuel store: "mushrooms" are the food stored in built plots (the
 /// top bar's Food), and a fuel id naming a material is that material's Stockpile count — global stock, never hauled.
@@ -43,6 +46,8 @@ public class PlacementManager : MonoBehaviour, IFuelStore
     [SerializeField] private Color manaContainerColor = new Color(0.34f, 0.30f, 0.44f, 1f); // #145: the tank's dark body
     [SerializeField] private Color combinationChamberColor = new Color(0.46f, 0.44f, 0.52f, 1f); // #146: the vessel's stone
     [SerializeField] private Color warrenColor = new Color(0.40f, 0.30f, 0.20f, 1f);        // #157: the den's packed earth
+    [SerializeField] private Color wallColor = new Color(0.50f, 0.48f, 0.47f, 1f);          // #165: dressed stone
+    [SerializeField] private Color doorColor = new Color(0.55f, 0.36f, 0.18f, 1f);          // #165: the plank leaf
     [SerializeField] private float placeableSize = 0.8f;                                    // Fraction of a tile
 
     // Placeables are runtime-created (no Inspector presence), so their behavior config lives here.
@@ -64,6 +69,11 @@ public class PlacementManager : MonoBehaviour, IFuelStore
     [Header("Mana Container (#145)")]
     [SerializeField] private int manaContainerCapacity = 100;
 
+    [Header("Door (#165)")]
+    [SerializeField] private float doorLingerSeconds = 0.5f;          // How long a door stays open after the last minion leaves it
+    [SerializeField] private float doorSwingDegrees = 80f;            // The leaf's open angle (visual only)
+    [SerializeField] private float doorSwingDegreesPerSecond = 360f;  // How fast the leaf swings (visual only)
+
     [Header("Grow-Lamp (#143)")]
     [SerializeField] private int lampRadius = 2;              // Chebyshev: plots within this many tiles, diagonals in
     [SerializeField] private float lampGrowthMultiplier = 2f; // Covered plots grow this much faster while it's lit
@@ -80,6 +90,8 @@ public class PlacementManager : MonoBehaviour, IFuelStore
     [SerializeField] private float manaContainerBuildSeconds = 6f; // #145
     [SerializeField] private float combinationChamberBuildSeconds = 10f; // #146
     [SerializeField] private float warrenBuildSeconds = 8f;              // #157 (provisional)
+    [SerializeField] private float wallBuildSeconds = 2f;                // #165: per tile
+    [SerializeField] private float doorBuildSeconds = 5f;                // #165
 
     // What an order costs (#104), per type AND material (#109): a type is orderable in a material exactly when a row
     // exists. Ships with every type in Stone, Glimmerstone (#114) and Deepstone (#111); later materials add rows, not fields.
@@ -116,6 +128,12 @@ public class PlacementManager : MonoBehaviour, IFuelStore
         new PlaceableCost(PlaceableType.Warren, MaterialType.Stone, 6),               // #157 (provisional)
         new PlaceableCost(PlaceableType.Warren, MaterialType.Glimmerstone, 6),
         new PlaceableCost(PlaceableType.Warren, MaterialType.Deepstone, 6),
+        new PlaceableCost(PlaceableType.Wall, MaterialType.Stone, 1),                 // #165: per tile
+        new PlaceableCost(PlaceableType.Wall, MaterialType.Glimmerstone, 1),
+        new PlaceableCost(PlaceableType.Wall, MaterialType.Deepstone, 1),
+        new PlaceableCost(PlaceableType.Door, MaterialType.Stone, 2),                 // #165
+        new PlaceableCost(PlaceableType.Door, MaterialType.Glimmerstone, 2),
+        new PlaceableCost(PlaceableType.Door, MaterialType.Deepstone, 2),
     };
 
     // What each type does on a power grid (#142), the same row-table pattern as the costs: a type with no row has no role.
@@ -158,6 +176,12 @@ public class PlacementManager : MonoBehaviour, IFuelStore
     public float ManaContainerBuildSeconds { get => manaContainerBuildSeconds; set => manaContainerBuildSeconds = value; }
     public float CombinationChamberBuildSeconds { get => combinationChamberBuildSeconds; set => combinationChamberBuildSeconds = value; }
     public float WarrenBuildSeconds { get => warrenBuildSeconds; set => warrenBuildSeconds = value; }
+    public float WallBuildSeconds { get => wallBuildSeconds; set => wallBuildSeconds = value; }
+    public float DoorBuildSeconds { get => doorBuildSeconds; set => doorBuildSeconds = value; }
+    public float DoorLingerSeconds { get => doorLingerSeconds; set => doorLingerSeconds = value; }
+
+    /// <summary>#165: raised after any placement, construction completion or removal (room typing listens).</summary>
+    public event Action PlaceablesChanged;
     public float ImpWheelBuildSeconds { get => impWheelBuildSeconds; set => impWheelBuildSeconds = value; }
     public float FurnaceBuildSeconds { get => furnaceBuildSeconds; set => furnaceBuildSeconds = value; }
     public float GrowLampBuildSeconds { get => growLampBuildSeconds; set => growLampBuildSeconds = value; }
@@ -304,6 +328,8 @@ public class PlacementManager : MonoBehaviour, IFuelStore
             case PlaceableType.ManaContainer: return manaContainerBuildSeconds;
             case PlaceableType.CombinationChamber: return combinationChamberBuildSeconds;
             case PlaceableType.Warren: return warrenBuildSeconds;
+            case PlaceableType.Wall: return wallBuildSeconds;
+            case PlaceableType.Door: return doorBuildSeconds;
             default: return 0f;
         }
     }
@@ -615,6 +641,9 @@ public class PlacementManager : MonoBehaviour, IFuelStore
             go.AddComponent<ManaContainer>().Initialize(manaFlow, manaContainerCapacity);
         else if (type == PlaceableType.CombinationChamber) // #146: runs its first table row; no power row
             go.AddComponent<CombinationChamber>().Initialize(manaFlow);
+        else if (IsPartition(type)) // #165: on the board once built
+            go.AddComponent<Partition>().Initialize(dungeonBoard, doorLingerSeconds, doorSwingDegrees, doorSwingDegreesPerSecond);
+        placeable.Constructed += HandleConstructed;
         if (TryGetPower(type, out PlaceablePower powerRow) && powerRow.role != PowerRole.None)
         {
             var node = go.AddComponent<PowerNode>();
@@ -639,7 +668,60 @@ public class PlacementManager : MonoBehaviour, IFuelStore
             RunFundingPass();
         }
         if (boardRenderer != null && boardRenderer.Mode != ViewMode.Normal) RefreshSeeThrough(); // Placed mid-overlay
+        PlaceablesChanged?.Invoke();
         return true;
+    }
+
+    private void HandleConstructed(Placeable placeable) => PlaceablesChanged?.Invoke();
+
+    // ---- walls and doors (#165) ----
+
+    /// <summary>Whether a type is a partition: a wall or a door (#165), the removable placeables.</summary>
+    public static bool IsPartition(PlaceableType type) => type == PlaceableType.Wall || type == PlaceableType.Door;
+
+    /// <summary>
+    /// Removes the wall or door on a tile instantly, whatever its state (order, site or built), with no refund (#165,
+    /// conduit removal's precedent): it leaves the funding line and the board at once, so pathing, mana and rooms update
+    /// immediately. False when the tile holds no partition (other placeables can't be removed).
+    /// </summary>
+    public bool TryRemovePartition(Vector2Int tile)
+    {
+        Placeable placeable = GetAt(tile);
+        if (placeable == null || !IsPartition(placeable.Type)) return false;
+        placed.Remove(tile);
+        awaitingFunding.Remove(placeable);
+        placeable.Constructed -= HandleConstructed;
+        if (placeable.TryGetComponent(out Partition partition)) partition.OnRemoved();
+        if (Application.isPlaying)
+        {
+            placeable.gameObject.SetActive(false); // Out of sight and out of Find's reach at once; Destroy is deferred
+            Destroy(placeable.gameObject);
+        }
+        else DestroyImmediate(placeable.gameObject);
+        PlaceablesChanged?.Invoke();
+        return true;
+    }
+
+    /// <summary>Removes every wall and door in the rect (#165). Returns how many it removed.</summary>
+    public int RemovePartitionsInRect(RectInt rect)
+    {
+        int count = 0;
+        for (int x = rect.x; x < rect.xMax; x++)
+            for (int y = rect.y; y < rect.yMax; y++)
+                if (TryRemovePartition(new Vector2Int(x, y))) count++;
+        return count;
+    }
+
+    /// <summary>Whether the rect holds any wall or door (#165): the removal drag's preview.</summary>
+    public bool AnyPartition(RectInt rect)
+    {
+        for (int x = rect.x; x < rect.xMax; x++)
+            for (int y = rect.y; y < rect.yMax; y++)
+            {
+                Placeable p = GetAt(new Vector2Int(x, y));
+                if (p != null && IsPartition(p.Type)) return true;
+            }
+        return false;
     }
 
     /// <summary>
@@ -689,6 +771,8 @@ public class PlacementManager : MonoBehaviour, IFuelStore
             case PlaceableType.ManaContainer: return manaContainerColor;
             case PlaceableType.CombinationChamber: return combinationChamberColor;
             case PlaceableType.Warren: return warrenColor;
+            case PlaceableType.Wall: return wallColor;
+            case PlaceableType.Door: return doorColor;
             default: return Color.magenta;
         }
     }

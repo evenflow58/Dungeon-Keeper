@@ -14,6 +14,7 @@ public class TileHover : MonoBehaviour
     [SerializeField] private Stockpile stockpile; // Optional (#132): the catalog's display names; unwired, enum names
     [SerializeField] private PowerGrid powerGrid; // Optional (#144): the conduit line; unwired, found at Start (none in a scene without power)
     [SerializeField] private ManaFlow manaFlow;   // Optional (#145): point-of-interest, mana and pipe lines; unwired, found at Start
+    [SerializeField] private RoomMap roomMap;     // Optional (#165): the room line; unwired, found at Start (none: no room line)
 
     [Header("Highlight")]
     [SerializeField] private Color highlightColor = new Color(1f, 1f, 1f, 0.35f);
@@ -31,6 +32,7 @@ public class TileHover : MonoBehaviour
     public Stockpile Stockpile { get => stockpile; set => stockpile = value; }
     public PowerGrid Grid { get => powerGrid; set => powerGrid = value; }
     public ManaFlow Mana { get => manaFlow; set => manaFlow = value; }
+    public RoomMap Rooms { get => roomMap; set => roomMap = value; }
 
     private SpriteRenderer highlightSprite;
     private Canvas tooltipCanvas;
@@ -63,6 +65,7 @@ public class TileHover : MonoBehaviour
     {
         powerGrid ??= FindAnyObjectByType<PowerGrid>();
         manaFlow ??= FindAnyObjectByType<ManaFlow>();
+        roomMap ??= FindAnyObjectByType<RoomMap>();
         CreateHighlight();
         CreateTooltipUI();
     }
@@ -173,6 +176,7 @@ public class TileHover : MonoBehaviour
 
         // Unexplored (#131): the highlight still marks the position, but no tooltip, so hovering can't probe the fog.
         string label = TooltipLabel(fogOfWar, TileIdentity.Of(dungeonBoard, impDigger, coords), coords, stockpile,
+            RoomLine(roomMap, coords), PartitionLine(dungeonBoard, coords),
             ConduitLine(powerGrid, coords), PointOfInterestLine(manaFlow, coords), ManaLine(manaFlow, coords), PipeLine(manaFlow, coords));
         if (label == null)
         {
@@ -211,6 +215,18 @@ public class TileHover : MonoBehaviour
             if (!string.IsNullOrEmpty(line)) label += "\n" + line;
         return label;
     }
+
+    /// <summary>The room line (#165): the type of the room the tile is in ("Bedroom", "Room"), or null outside any room.</summary>
+    public static string RoomLine(Room room) => room?.DisplayName;
+
+    public static string RoomLine(RoomMap rooms, Vector2Int tile) => rooms != null ? RoomLine(rooms.RoomAt(tile)) : null;
+
+    /// <summary>The partition line (#165): "Wall", "Door", "Door (open)"; null on a tile with neither (sites don't count).</summary>
+    public static string PartitionLine(TileFeature feature, bool open) =>
+        feature == TileFeature.Wall ? "Wall" : feature == TileFeature.Door ? (open ? "Door (open)" : "Door") : null;
+
+    public static string PartitionLine(DungeonBoard board, Vector2Int tile) =>
+        board != null ? PartitionLine(board.GetFeature(tile.x, tile.y), board.IsInnerDoorOpen(tile.x, tile.y)) : null;
 
     /// <summary>A point of interest's line (#145, #150): "Fire Vent · Emitting", "Spring · Dormant".</summary>
     public static string PointOfInterestLine(string displayName, bool dormant) =>

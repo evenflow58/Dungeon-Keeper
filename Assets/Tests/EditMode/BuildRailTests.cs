@@ -183,7 +183,8 @@ public class BuildRailTests
             new[] { BuildCategory.Living, BuildCategory.Farming, BuildCategory.Defense, BuildCategory.Power, BuildCategory.Magic },
             BuildPresentation.CategoryOrder);
         // #157 migration: the Warren joins the cot in Living.
-        CollectionAssert.AreEqual(new[] { PlaceableType.LairCot, PlaceableType.Warren }, BuildPresentation.TypesInCategory(BuildCategory.Living));
+        CollectionAssert.AreEqual(new[] { PlaceableType.LairCot, PlaceableType.Warren, PlaceableType.Wall, PlaceableType.Door }, // #165: walls and doors
+            BuildPresentation.TypesInCategory(BuildCategory.Living));
         CollectionAssert.AreEqual(new[] { PlaceableType.MushroomPlot }, BuildPresentation.TypesInCategory(BuildCategory.Farming));
         CollectionAssert.AreEqual(new[] { PlaceableType.SpikeTrap }, BuildPresentation.TypesInCategory(BuildCategory.Defense));
         // #145 migration: Magic was empty and hidden; it now holds the two mana buildings, so every category shows.

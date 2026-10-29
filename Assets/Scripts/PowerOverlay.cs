@@ -10,7 +10,8 @@ public enum ViewMode
 {
     Normal,
     Power,
-    Magic // #145: mana by type, the vent, pipes and stores
+    Magic, // #145: mana by type, the vent, pipes and stores
+    Room   // #165: rooms tinted by type, everything else dimmed
 }
 
 /// <summary>How a built power node reads in the power overlay (#144).</summary>

@@ -25,6 +25,8 @@ using UnityEngine;
 /// a short cadence for live state (tending, fuel, toggles); in Normal it doesn't poll. Non-power placeables turn
 /// see-through in the power overlay so conduit under them shows (PlacementManager applies it on ViewModeChanged and
 /// OverlayRepainted, at overlayPropAlpha).
+/// Room view (#165): each detected room's floor leans to its type's color, every other explored tile dims; it reads the
+/// RoomMap (found on this object) and repaints when the rooms are invalidated as well as on the overlay cadence.
 /// </summary>
 public class BoardRenderer : MonoBehaviour
 {
@@ -38,6 +40,7 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private ImpDigger impDigger; // Optional (#132): the band seam rock is tinted by; unwired, all rock is rockColor
     [SerializeField] private PowerGrid powerGrid; // Optional (#142): the conduit layer drawn on the floor; unwired, none
     [SerializeField] private ManaFlow manaFlow;   // Optional (#145): points of interest, mana units and pipes; unwired, none (found on this object)
+    [SerializeField] private RoomMap roomMap;     // Optional (#165): the Room view's rooms; unwired, found on this object (none: nothing tints)
 
     [Header("Tile Shapes")]
     [SerializeField] private float rockHeight = 0.6f;     // Rock and designated blocks, in tiles
@@ -111,6 +114,15 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private float manaTileTint = 0.6f;            // How far a mana tile's floor leans to its type's color
     [SerializeField] private float pipeTileTint = 0.45f;           // How far the floor under built pipe leans to the pipe tint
 
+    [Header("Room View (#165)")]
+    [SerializeField] private Color genericRoomColor = new Color(0.75f, 0.75f, 0.70f, 1f); // A room of no particular type
+    [SerializeField] private Color bedroomColor = new Color(0.45f, 0.62f, 0.95f, 1f);
+    [SerializeField] private Color farmColor = new Color(0.45f, 0.85f, 0.40f, 1f);
+    [SerializeField] private Color commonRoomColor = new Color(0.95f, 0.75f, 0.35f, 1f);
+    [SerializeField] private Color diningHallColor = new Color(0.95f, 0.50f, 0.35f, 1f);
+    [SerializeField] private Color infirmaryColor = new Color(0.90f, 0.45f, 0.70f, 1f);
+    [SerializeField] private float roomTileTint = 0.55f; // How far a room tile's floor leans to its type's color
+
     [Header("Door (Placeholder Art)")]
     [SerializeField] private float doorHeight = 0.9f;  // Taller than the rock so the entrance reads from afar
     [SerializeField] private float doorPostWidth = 0.12f;
@@ -119,6 +131,18 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private float surfaceSmoothness = 0f; // Lit materials: matte rock and earth (no highlights, no reflections)
 
     public DungeonBoard Board { get => dungeonBoard; set => dungeonBoard = value; }
+
+    /// <summary>The rooms the Room view tints (#165). Setting it moves the subscription.</summary>
+    public RoomMap Rooms
+    {
+        get => roomMap;
+        set
+        {
+            UnsubscribeRooms();
+            roomMap = value;
+            if (isActiveAndEnabled) SubscribeRooms();
+        }
+    }
 
     /// <summary>The conduit layer this view draws (#142). Setting it moves the subscription and redraws every conduit tile.</summary>
     public PowerGrid Grid
@@ -237,6 +261,7 @@ public class BoardRenderer : MonoBehaviour
         SubscribeFog();
         SubscribeGrid();
         SubscribeMana();
+        SubscribeRooms();
     }
 
     private void OnDisable()
@@ -248,6 +273,25 @@ public class BoardRenderer : MonoBehaviour
         UnsubscribeFog();
         UnsubscribeGrid();
         UnsubscribeMana();
+        UnsubscribeRooms();
+    }
+
+    // #165: the Room view repaints as soon as the rooms change (a wall finished, a gap dug), not just on the cadence.
+    private void SubscribeRooms()
+    {
+        if (roomMap == null) return;
+        roomMap.Invalidated -= HandleRoomsInvalidated;
+        roomMap.Invalidated += HandleRoomsInvalidated;
+    }
+
+    private void UnsubscribeRooms()
+    {
+        if (roomMap != null) roomMap.Invalidated -= HandleRoomsInvalidated;
+    }
+
+    private void HandleRoomsInvalidated()
+    {
+        if (viewMode == ViewMode.Room) RepaintOverlay();
     }
 
     // Unsubscribe first so a repeated OnEnable never doubles the handlers (#139 posture).
@@ -327,6 +371,7 @@ public class BoardRenderer : MonoBehaviour
     {
         dungeonBoard ??= GetComponent<DungeonBoard>() ?? FindAnyObjectByType<DungeonBoard>();
         manaFlow ??= GetComponent<ManaFlow>(); // #145: the service lives on the DungeonManager beside this view
+        if (roomMap == null && TryGetComponent(out RoomMap rooms)) Rooms = rooms; // #165: likewise
     }
 
     // ---- shapes and colors (pure: what each state looks like) ----
@@ -472,6 +517,7 @@ public class BoardRenderer : MonoBehaviour
     private Color? OverlayColorAt(Vector2Int tile, Color normal)
     {
         if (viewMode == ViewMode.Magic) return MagicOverlayColorAt(tile, normal);
+        if (viewMode == ViewMode.Room) return RoomOverlayColorAt(tile, normal);
         if (viewMode != ViewMode.Power || powerGrid == null) return null;
         PowerNode node = powerGrid.NodeAt(tile);
         if (node != null) return NodeColor(LookOfNode(node));
@@ -538,6 +584,30 @@ public class BoardRenderer : MonoBehaviour
             }
         }
         OverlayRepainted?.Invoke();
+    }
+
+    // ---- the room view (#165) ----
+
+    // A room tile leans to its type's color; any other explored tile has no override (it dims).
+    private Color? RoomOverlayColorAt(Vector2Int tile, Color normal)
+    {
+        Room room = roomMap != null ? roomMap.RoomAt(tile) : null;
+        if (room == null) return null;
+        return Color.Lerp(normal, RoomColor(room.Type), roomTileTint);
+    }
+
+    /// <summary>A room type's tint in the Room view.</summary>
+    public Color RoomColor(RoomType type)
+    {
+        switch (type)
+        {
+            case RoomType.Bedroom: return bedroomColor;
+            case RoomType.Farm: return farmColor;
+            case RoomType.CommonRoom: return commonRoomColor;
+            case RoomType.DiningHall: return diningHallColor;
+            case RoomType.Infirmary: return infirmaryColor;
+            default: return genericRoomColor;
+        }
     }
 
     // ---- the magic overlay (#145) ----

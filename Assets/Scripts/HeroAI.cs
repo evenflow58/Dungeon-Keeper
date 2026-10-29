@@ -144,7 +144,7 @@ public class HeroAI : MonoBehaviour
 
         if (poll || repathNow)
         {
-            delvePath = Pathfinder.FindPathToNeighbor(Board, hero.CurrentTile, heart.Tile);
+            delvePath = Pathfinder.FindPathToNeighbor(Board, hero.CurrentTile, heart.Tile, Mover.Hero);
             if (poll && TryStartFight()) return;
         }
 
@@ -197,7 +197,7 @@ public class HeroAI : MonoBehaviour
         {
             // Only blockers are worth fighting: one that stepped aside (off the route) and isn't attacking
             // him is left alone.
-            if (heart != null) delvePath = Pathfinder.FindPathToNeighbor(Board, hero.CurrentTile, heart.Tile);
+            if (heart != null) delvePath = Pathfinder.FindPathToNeighbor(Board, hero.CurrentTile, heart.Tile, Mover.Hero);
             if (!delvePath.Contains(targetTile))
             {
                 BackToDelve();
@@ -218,7 +218,7 @@ public class HeroAI : MonoBehaviour
             bool replan = repathNow || targetTile != pathedTargetTile;
             if (!replan) return;
             repathNow = false;
-            List<Vector2Int> path = Pathfinder.FindPathToNeighbor(Board, hero.CurrentTile, targetTile);
+            List<Vector2Int> path = Pathfinder.FindPathToNeighbor(Board, hero.CurrentTile, targetTile, Mover.Hero);
             if (path.Count == 0)
             {
                 BackToDelve(); // Can't stand beside it
@@ -276,7 +276,7 @@ public class HeroAI : MonoBehaviour
 
         if (!(poll || repathNow || !hero.IsMoving)) return;
         repathNow = false;
-        List<Vector2Int> path = Pathfinder.FindPathToNeighbor(Board, hero.CurrentTile, entranceTile);
+        List<Vector2Int> path = Pathfinder.FindPathToNeighbor(Board, hero.CurrentTile, entranceTile, Mover.Hero);
         if (path.Count == 0) return; // Cut off: wait and re-check on the poll
         GoTo(path[path.Count - 1]);
     }

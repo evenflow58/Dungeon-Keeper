@@ -19,6 +19,8 @@ using UnityEngine.InputSystem.UI;
 /// Placed selection (#142): in Neutral only, a left-click on a built placeable's tile selects it (the detail card's placed
 /// mode); a click on any other board tile clears it, and so do Esc (its own press: the rail and the STOCK panel leave that
 /// press alone), leaving Neutral, and the STOCK panel selecting a material (most recent wins).
+/// Walls and doors (#165): with either armed, a right-drag removes every wall and door in the rect instantly, no refund
+/// (conduit removal's precedent); a right-click that removes nothing still exits the tool, as for any armed type.
 /// </summary>
 [DisallowMultipleComponent]
 public class PlacementController : MonoBehaviour
@@ -37,6 +39,7 @@ public class PlacementController : MonoBehaviour
     [SerializeField] private Color validPreviewColor = new Color(0.4f, 0.9f, 0.4f, 0.35f);
     [SerializeField] private Color invalidPreviewColor = new Color(0.9f, 0.3f, 0.3f, 0.35f);
     [SerializeField] private Color unaffordablePreviewColor = new Color(0.95f, 0.45f, 0.2f, 0.35f); // Placeable, but it will wait (#104)
+    [SerializeField] private Color removePreviewColor = new Color(0.90f, 0.20f, 0.20f, 0.45f);      // #165: walls and doors will come out
 
     [SerializeField] private float feedbackFlashSeconds = 0.25f;
 
@@ -58,6 +61,12 @@ public class PlacementController : MonoBehaviour
     public MaterialType SelectedMaterial { get; private set; } = MaterialType.Stone;
     public bool IsPlacing => SelectedType != null;
     public bool IsDragging => isDragging;
+
+    /// <summary>#165: true while the live drag is a wall/door removal (right-drag with a partition armed).</summary>
+    public bool IsRemoving => isDragging && isRemoving;
+
+    /// <summary>How many walls and doors the last removal drag took out (#165).</summary>
+    public int LastRemoveCount { get; private set; }
 
     public enum ToolMode { Neutral, Dig, Armed, Wire, Pipe }
 
@@ -104,6 +113,7 @@ public class PlacementController : MonoBehaviour
 
     // ---- drag state ----
     private bool isDragging;
+    private bool isRemoving;       // #165: the live drag removes walls and doors instead of placing
     private bool dragEnteredBoard; // true once the cursor enters the board; gates apply & preview
     private Vector2Int dragAnchor;
     private Vector2Int dragCurrent;
@@ -435,6 +445,15 @@ public class PlacementController : MonoBehaviour
         bool leftPressed  = input?.Designate.WasPressedThisFrame() ?? false;
         bool rightPressed = input?.ClearOrAbort.WasPressedThisFrame() ?? false;
 
+        // #165: with a wall or door armed, a right press on the board starts a removal drag (its release decides whether it
+        // was a removal or the usual exit click).
+        if (rightPressed && !esc && hitGround && !IsPointerOverUI() && SelectedType is PlaceableType armed
+            && PlacementManager.IsPartition(armed))
+        {
+            StartDrag(worldPos, removing: true);
+            return;
+        }
+
         if (esc || rightPressed)
         {
             ExitFromBoardInput();
@@ -445,10 +464,11 @@ public class PlacementController : MonoBehaviour
         if (leftPressed && hitGround && !IsPointerOverUI()) StartDrag(worldPos);
     }
 
-    private void StartDrag(Vector3 worldPos)
+    private void StartDrag(Vector3 worldPos, bool removing = false)
     {
         Vector2Int coords = boardRenderer.WorldToBoardCoords(worldPos);
         isDragging       = true;
+        isRemoving       = removing;
         feedbackTimer    = 0f;
         previewValid     = null;
         dragAnchor       = DigDesignator.ClampToBoard(coords, dungeonBoard.Width, dungeonBoard.Height);
@@ -461,10 +481,12 @@ public class PlacementController : MonoBehaviour
     private void HandleDragInput(bool hitGround, Vector3 worldPos)
     {
         bool esc = input?.Abort.WasPressedThisFrame() ?? false;
-        bool rightPressed = input?.ClearOrAbort.WasPressedThisFrame() ?? false;
+        bool otherPressed = isRemoving
+            ? input?.Designate.WasPressedThisFrame() ?? false
+            : input?.ClearOrAbort.WasPressedThisFrame() ?? false;
 
-        // During a drag, Esc / right-click abort the drag only (the type stays armed).
-        if (esc || rightPressed)
+        // During a drag, Esc / the other button abort the drag only (the type stays armed).
+        if (esc || otherPressed)
         {
             CancelDrag();
             return;
@@ -481,8 +503,36 @@ public class PlacementController : MonoBehaviour
 
         UpdatePreview();
 
+        if (isRemoving)
+        {
+            if (input?.ClearOrAbort.WasReleasedThisFrame() ?? false) EndRemoveDrag();
+            return;
+        }
         bool leftReleased = input?.Designate.WasReleasedThisFrame() ?? false;
         if (leftReleased) EndDrag();
+    }
+
+    // #165: removes the rect's walls and doors. A plain right-click (one tile) that removed nothing is the usual exit.
+    private void EndRemoveDrag()
+    {
+        isDragging = false;
+        isRemoving = false;
+        HidePreview();
+        if (!dragEnteredBoard) return;
+        RectInt rect = DigDesignator.NormalizeRect(dragAnchor, dragCurrent);
+        LastRemoveCount = placementManager != null ? placementManager.RemovePartitionsInRect(rect) : 0;
+        if (LastRemoveCount == 0 && rect.width == 1 && rect.height == 1) ExitFromBoardInput();
+    }
+
+    /// <summary>
+    /// The removal a right-drag over this rect would do (#165), without input: removes the rect's walls and doors when a
+    /// wall or door is armed. Tests and staging call it; returns how many came out.
+    /// </summary>
+    public int RemovePartitions(RectInt rect)
+    {
+        if (placementManager == null || !(SelectedType is PlaceableType armed) || !PlacementManager.IsPartition(armed)) return 0;
+        LastRemoveCount = placementManager.RemovePartitionsInRect(rect);
+        return LastRemoveCount;
     }
 
     private void EndDrag()
@@ -517,6 +567,7 @@ public class PlacementController : MonoBehaviour
     private void CancelDrag()
     {
         isDragging = false;
+        isRemoving = false;
         HidePreview();
     }
 
@@ -536,7 +587,9 @@ public class PlacementController : MonoBehaviour
         if (!dragEnteredBoard) { previewSprite.enabled = false; return; }
 
         RectInt rect = DigDesignator.NormalizeRect(dragAnchor, dragCurrent);
-        previewValid ??= placementManager != null && imp != null && placementManager.AnyPlaceable(rect, imp.CurrentTile);
+        previewValid ??= isRemoving
+            ? placementManager != null && placementManager.AnyPartition(rect)
+            : placementManager != null && imp != null && placementManager.AnyPlaceable(rect, imp.CurrentTile);
 
         Vector3 minCenter = boardRenderer.GetTileCenterWorldPosition(rect.x, rect.y);
         Vector3 maxCenter = boardRenderer.GetTileCenterWorldPosition(rect.xMax - 1, rect.yMax - 1);
@@ -546,7 +599,8 @@ public class PlacementController : MonoBehaviour
         previewSprite.transform.position   = new Vector3(center.x, boardRenderer.OverlayLift, center.z);
         previewSprite.transform.localScale = new Vector3(rect.width, rect.height, 1f);
         bool affordable = SelectedType == null || placementManager == null || placementManager.WouldFundNow(SelectedType.Value, SelectedMaterial);
-        previewSprite.color   = !previewValid.Value ? invalidPreviewColor : affordable ? validPreviewColor : unaffordablePreviewColor;
+        previewSprite.color   = isRemoving ? (previewValid.Value ? removePreviewColor : invalidPreviewColor)
+            : !previewValid.Value ? invalidPreviewColor : affordable ? validPreviewColor : unaffordablePreviewColor;
         previewSprite.enabled = true;
     }
 

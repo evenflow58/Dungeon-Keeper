@@ -354,12 +354,15 @@ public class ManaFlow : MonoBehaviour
     // ---- occupancy ----
 
     /// <summary>
-    /// Open to mana: in-bounds Floor or Entrance. Rock and Designated are walls; placeables never block. A point of
-    /// interest's own tile is never open: the point stands there and emits beside it.
+    /// Open to mana: in-bounds Floor or Entrance, with no built wall and no shut door (#165). Rock and Designated are
+    /// closed; other placeables never block. A point of interest's own tile is never open: the point stands there and emits
+    /// beside it. The one openness rule: flow, emission, map combination and accumulator collection all ask it. A tile
+    /// that closes while holding units (a door shutting on them, a wall finished over them) never takes more, and its
+    /// units flow back out the normal way.
     /// </summary>
     public bool IsOpen(Vector2Int tile) =>
         dungeonBoard != null && dungeonBoard.IsInBounds(tile.x, tile.y) && !IsPointOfInterestTile(tile)
-        && IsOpenState(dungeonBoard.GetTile(tile.x, tile.y));
+        && IsOpenState(dungeonBoard.GetTile(tile.x, tile.y)) && !dungeonBoard.BlocksMana(tile.x, tile.y);
 
     public static bool IsOpenState(TileState state) => state == TileState.Floor || state == TileState.Entrance;
 
@@ -569,9 +572,10 @@ public class ManaFlow : MonoBehaviour
         if (!types.Contains(TypeAt(tile))) return false; // The centre holds an input: whatever else counts touches it
 
         // The plus: the centre, then its 4-neighbours not yet used this tick. Each input is taken from it in that order.
+        if (!IsOpen(tile)) return false; // #165: a closed tile (a shut door holding units) never reacts
         var plus = new List<Vector2Int> { tile };
         foreach (Vector2Int d in Neighbors)
-            if (!used.Contains(tile + d)) plus.Add(tile + d);
+            if (!used.Contains(tile + d) && IsOpen(tile + d)) plus.Add(tile + d); // #165: nothing reacts across a wall
         var after = new Dictionary<Vector2Int, Cell>(); // What the board would hold after; committed only if all fits
         foreach (string type in types)
         {

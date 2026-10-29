@@ -563,6 +563,7 @@ GameObject:
   - component: {fileID: 565044541}
   - component: {fileID: 565044544}
   - component: {fileID: 565044543}
+  - component: {fileID: 565044545}
   m_Layer: 0
   m_Name: DungeonManager
   m_TagString: Untagged
@@ -587,6 +588,7 @@ MonoBehaviour:
   impDigger: {fileID: 71735947}
   powerGrid: {fileID: 565044537}
   manaFlow: {fileID: 565044539}
+  roomMap: {fileID: 565044545}
   rockHeight: 0.6
   floorThickness: 0.1
   overlayLift: 0.01
@@ -645,6 +647,13 @@ MonoBehaviour:
   springDormantOverlayColor: {r: 0.14, g: 0.24, b: 0.4, a: 1}
   manaTileTint: 0.6
   pipeTileTint: 0.45
+  genericRoomColor: {r: 0.75, g: 0.75, b: 0.7, a: 1}
+  bedroomColor: {r: 0.45, g: 0.62, b: 0.95, a: 1}
+  farmColor: {r: 0.45, g: 0.85, b: 0.4, a: 1}
+  commonRoomColor: {r: 0.95, g: 0.75, b: 0.35, a: 1}
+  diningHallColor: {r: 0.95, g: 0.5, b: 0.35, a: 1}
+  infirmaryColor: {r: 0.9, g: 0.45, b: 0.7, a: 1}
+  roomTileTint: 0.55
   doorHeight: 0.9
   doorPostWidth: 0.12
   surfaceSmoothness: 0
@@ -700,6 +709,7 @@ MonoBehaviour:
   stockpile: {fileID: 565044532}
   powerGrid: {fileID: 0}
   manaFlow: {fileID: 565044539}
+  roomMap: {fileID: 565044545}
   highlightColor: {r: 1, g: 1, b: 1, a: 0.35}
   tooltipOffset: {x: 15, y: -30}
   tooltipMinWidth: 160
@@ -744,6 +754,7 @@ MonoBehaviour:
   validPreviewColor: {r: 0.4, g: 0.9, b: 0.4, a: 0.35}
   invalidPreviewColor: {r: 0.9, g: 0.3, b: 0.3, a: 0.35}
   unaffordablePreviewColor: {r: 0.95, g: 0.45, b: 0.2, a: 0.35}
+  removePreviewColor: {r: 0.9, g: 0.2, b: 0.2, a: 0.45}
   feedbackFlashSeconds: 0.25
 --- !u!114 &565044525
 MonoBehaviour:
@@ -772,6 +783,8 @@ MonoBehaviour:
   manaContainerColor: {r: 0.34, g: 0.3, b: 0.44, a: 1}
   combinationChamberColor: {r: 0.46, g: 0.44, b: 0.52, a: 1}
   warrenColor: {r: 0.4, g: 0.3, b: 0.2, a: 1}
+  wallColor: {r: 0.5, g: 0.48, b: 0.47, a: 1}
+  doorColor: {r: 0.55, g: 0.36, b: 0.18, a: 1}
   placeableSize: 0.8
   mushroomGrowthSecondsPerFood: 30
   mushroomCapacity: 5
@@ -781,6 +794,9 @@ MonoBehaviour:
   accumulatorCollectSeconds: 1
   accumulatorCollectPerCycle: 1
   manaContainerCapacity: 100
+  doorLingerSeconds: 0.5
+  doorSwingDegrees: 80
+  doorSwingDegreesPerSecond: 360
   lampRadius: 2
   lampGrowthMultiplier: 2
   lairCotBuildSeconds: 4
@@ -793,6 +809,8 @@ MonoBehaviour:
   manaContainerBuildSeconds: 6
   combinationChamberBuildSeconds: 10
   warrenBuildSeconds: 8
+  wallBuildSeconds: 2
+  doorBuildSeconds: 5
   costs:
   - type: 0
     material: 0
@@ -884,6 +902,24 @@ MonoBehaviour:
   - type: 9
     material: 2
     amount: 6
+  - type: 10
+    material: 0
+    amount: 1
+  - type: 10
+    material: 1
+    amount: 1
+  - type: 10
+    material: 2
+    amount: 1
+  - type: 11
+    material: 0
+    amount: 2
+  - type: 11
+    material: 1
+    amount: 2
+  - type: 11
+    material: 2
+    amount: 2
   power:
   - type: 3
     role: 1
@@ -960,8 +996,6 @@ MonoBehaviour:
   boardRenderer: {fileID: 565044519}
   heart: {fileID: 1804583410}
   gameManager: {fileID: 565044526}
-  requiredCots: 3
-  requiredPlots: 2
   firstHeroSeconds: 300
   entranceTile: {x: 24, y: 31}
   heroMaxHealth: 30
@@ -1479,6 +1513,20 @@ MonoBehaviour:
   expeditionSeconds: 120
   successChance: 0.75
   goblinNamePrefix: Goblin
+--- !u!114 &565044545
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 565044518}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0cefaa2812813eb4fbb8ac419db8eaf6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DungeonKeeper::RoomMap
+  dungeonBoard: {fileID: 565044520}
+  placementManager: {fileID: 565044525}
 --- !u!1 &708604853
 GameObject:
   m_ObjectHideFlags: 0
